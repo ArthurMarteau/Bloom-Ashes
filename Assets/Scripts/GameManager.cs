@@ -2,6 +2,7 @@ using UnityEngine;
 
 public class GameManager : MonoBehaviour
 {
+    // test
     public static GameManager Instance;
     private UnitSelector selectedUnit;
     void Awake()
