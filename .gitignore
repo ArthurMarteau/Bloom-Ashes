@@ -394,3 +394,6 @@ sysinfo.txt
 
 # Windows specific
 Thumbs.db
+
+# === External assets stockés sur Drive ===
+Assets/ExternalAssets/
