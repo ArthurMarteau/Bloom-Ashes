@@ -361,3 +361,36 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+
+# === UNITY ADDITIONS ===
+
+# Unity build folders
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+UserSettings/
+MemoryCaptures/
+
+# Unity auto-generated files
+*.pidb
+*.booproj
+*.svd
+*.unityproj
+
+# Unity crash logs (optional)
+sysinfo.txt
+
+# Rider / JetBrains IDEs
+.idea/
+*.sln.iml
+
+# VS Code settings
+.vscode/
+
+# Mac specific
+.DS_Store
+
+# Windows specific
+Thumbs.db

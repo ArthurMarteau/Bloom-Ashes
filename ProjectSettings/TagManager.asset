@@ -1,0 +1,60 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags: []
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - Trails
+  - Water
+  - UI
+  - Environnment
+  - Environnment_Walkable
+  - Units
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: Trails
+    uniqueID: 3237316205
+    locked: 0
+  - name: Environnment
+    uniqueID: 1271899921
+    locked: 0
+  - name: Environnment Walkable
+    uniqueID: 3759810521
+    locked: 0
+  - name: Units
+    uniqueID: 2016719739
+    locked: 0
+  - name: UI
+    uniqueID: 2884809151
+    locked: 0
+  m_RenderingLayers:
+  - Default
