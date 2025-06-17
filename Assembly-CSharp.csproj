@@ -61,16 +61,19 @@
     <Analyzer Include="D:\Logiciel\UnityHub\6000.0.31f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Assets\Scripts\GridManager.cs" />
-    <Compile Include="Assets\Scripts\UnitHaloEffect.cs" />
-    <Compile Include="Assets\Scripts\Move_Anim_Script.cs" />
-    <Compile Include="Assets\Scripts\UnitAnimatorController.cs" />
-    <Compile Include="Assets\Scripts\UnitSelector.cs" />
-    <Compile Include="Assets\Scripts\HealthManager.cs" />
-    <Compile Include="Assets\Scripts\UnitClickMover.cs" />
-    <Compile Include="Assets\Scripts\GameManager.cs" />
-    <Compile Include="Assets\Scripts\UnitMover.cs" />
-    <Compile Include="Assets\Scripts\NewMonoBehaviourScript.cs" />
+    <Compile Include="Assets\Scripts\Units\UnitHaloEffect.cs" />
+    <Compile Include="Assets\Scripts\Units\UnitClickMover.cs" />
+    <Compile Include="Assets\Scripts\Core\GridManager.cs" />
+    <Compile Include="Assets\Scripts\Core\Pathfinding.cs" />
+    <Compile Include="Assets\Scripts\Units\UnitMover.cs" />
+    <Compile Include="Assets\Scripts\Units\Rootborn.cs" />
+    <Compile Include="Assets\Scripts\Core\HealthManager.cs" />
+    <Compile Include="Assets\Scripts\Animation\UnitAnimatorController.cs" />
+    <Compile Include="Assets\Scripts\Units\UnitSelector.cs" />
+    <Compile Include="Assets\Scripts\Utilities\PriorityQueue.cs" />
+    <Compile Include="Assets\Scripts\Core\GridObstacle.cs" />
+    <Compile Include="Assets\Scripts\Core\GameManager.cs" />
+    <Compile Include="Assets\Scripts\Utilities\PathNode.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
