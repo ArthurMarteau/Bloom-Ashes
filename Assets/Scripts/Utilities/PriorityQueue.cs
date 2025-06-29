@@ -6,6 +6,7 @@ public class PriorityQueue<T> where T : System.IComparable<T>
 
     public int Count => items.Count;
 
+    // Ajoute un élément à la file de priorité, tout en maintenant l’ordre du tas binaire min.
     public void Enqueue(T item)
     {
         items.Add(item);
@@ -21,6 +22,7 @@ public class PriorityQueue<T> where T : System.IComparable<T>
         }
     }
 
+    // Retire et retourne l’élément de plus haute priorité (le plus petit F) de la file.
     public T Dequeue()
     {
         int li = items.Count - 1;
@@ -48,6 +50,7 @@ public class PriorityQueue<T> where T : System.IComparable<T>
         return frontItem;
     }
 
+    // Vérifie si l’élément est dans la file de priorité et s’il est meilleur ou égal à l’élément donné.
     public bool ContainsBetter(T item)
     {
         foreach (var i in items)
@@ -58,11 +61,13 @@ public class PriorityQueue<T> where T : System.IComparable<T>
         return false;
     }
 
+    // Indique si la file est vide.
     public bool IsEmpty()
     {
         return items.Count == 0;
     }
 
+    // Vide complètement la file.
     public void Clear()
     {
         items.Clear();

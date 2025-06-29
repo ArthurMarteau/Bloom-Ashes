@@ -5,87 +5,71 @@ using UnityEngine;
 public class UnitMover : MonoBehaviour
 {
     private Vector2Int currentGridPosition;
+    private Vector2Int previousGridPosition;
     private bool isMoving = false;
+    private bool isBeingPushedBack = false;
     private UnitAnimatorController animatorController;
 
     private GameObject targetToAttack = null;
     private Vector2Int? lastTargetPos = null;
     private Coroutine chaseCoroutine = null;
 
-    // Ajout persistent move
-    private Vector2Int? desiredTargetGridPos = null; // La case demandée par le joueur
-    private Coroutine persistentMoveCoroutine = null; // Pour pouvoir annuler le déplacement courant
+    private Vector2Int? desiredTargetGridPos = null;
+    private Coroutine persistentMoveCoroutine = null;
 
-    // Pour la gestion des croisements
     private int moveFrame = 0;
 
     private void Start()
     {
         currentGridPosition = GridManager.Instance.WorldToGrid(transform.position);
+        previousGridPosition = currentGridPosition;
         animatorController = GetComponent<UnitAnimatorController>();
         GridManager.Instance.RegisterOccupiedCell(currentGridPosition, gameObject);
     }
 
-    // === ORDRE DE DEPLACEMENT PERSISTANT (clic souris) ===
     public void TryMoveTo(Vector2Int targetGridPos)
     {
         CancelChase();
         CancelPersistentMove();
         SnapToCurrentCell();
 
-        // Option : commente cette ligne pour pouvoir redonner un ordre même en mouvement
-        // if (isMoving) return;
-
         desiredTargetGridPos = targetGridPos;
-        SnapToCurrentCell();
         persistentMoveCoroutine = StartCoroutine(PersistentMoveToTarget());
     }
 
     private IEnumerator PersistentMoveToTarget()
     {
         isMoving = true;
+        int retries = 0;
+        int maxRetries = 20;
 
-        while (desiredTargetGridPos.HasValue)
+        while (desiredTargetGridPos.HasValue && retries < maxRetries)
         {
-            // BFS pour aller au plus près de la case demandée
-            Vector2Int bestDestination = FindClosestReachableCellBFS(currentGridPosition, desiredTargetGridPos.Value);
+            Vector2Int bestDestination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, desiredTargetGridPos.Value);
 
             if (bestDestination == currentGridPosition)
             {
-                // On est bloqué au plus près, donc on attend un peu et on reteste tant qu’on a le même ordre
                 yield return new WaitForSeconds(0.2f);
+                retries++;
                 continue;
             }
 
-            // Bouge jusqu’à la bestDestination (logique dynamique)
             yield return StartCoroutine(FollowPathToDynamic(bestDestination));
 
-            // On vérifie si on est arrivé à la vraie cible
             if (currentGridPosition == desiredTargetGridPos.Value)
-            {
-                break; // Arrêt du déplacement : objectif atteint !
-            }
-            // Sinon, boucle : peut-être que la case demandée est enfin libre
+                break;
+
+            retries++;
         }
+
+        if (retries >= maxRetries)
+            Debug.LogWarning($"🔁 Trop de tentatives de déplacement vers {desiredTargetGridPos.Value}, annulation.");
 
         isMoving = false;
         desiredTargetGridPos = null;
         persistentMoveCoroutine = null;
     }
 
-    public void CancelPersistentMove()
-    {
-        if (persistentMoveCoroutine != null)
-        {
-            StopCoroutine(persistentMoveCoroutine);
-            persistentMoveCoroutine = null;
-        }
-        desiredTargetGridPos = null;
-        isMoving = false;
-        SnapToCurrentCell();
-    }
-
-    // === DEPLACEMENT CASE PAR CASE ===
     private IEnumerator FollowPathToDynamic(Vector2Int finalTarget)
     {
         if (GetComponent<Rootborn>() != null)
@@ -95,7 +79,7 @@ public class UnitMover : MonoBehaviour
         }
 
         isMoving = true;
-        moveFrame = 0; // reset à chaque déplacement
+        moveFrame = 0;
 
         List<Vector2Int> path = Pathfinding.Instance.FindPath(currentGridPosition, finalTarget);
         if (path == null || path.Count <= 1)
@@ -110,66 +94,113 @@ public class UnitMover : MonoBehaviour
         {
             Vector2Int step = path[i];
             Vector3 targetPos = GridManager.Instance.GridToWorld(step.x, step.y);
+            Vector3 startPos = transform.position;
 
-            // Gestion du croisement/collision ICI, par ex :
             GameObject occupant = GridManager.Instance.GetOccupant(step);
-            if (occupant != null)
+            if (occupant != null && occupant != this.gameObject)
             {
                 UnitMover otherMover = occupant.GetComponent<UnitMover>();
-                if (otherMover != null)
+                if (otherMover != null && !otherMover.isBeingPushedBack)
                 {
-                    if (otherMover.moveFrame <= this.moveFrame)
+                    float myDist = Vector3.Distance(transform.position, targetPos);
+                    float otherDist = Vector3.Distance(otherMover.transform.position, targetPos);
+
+                    if (myDist < otherDist)
                     {
-                        yield return null;
-                        i--; // ATTENTION : recommence ce step
-                        continue;
+                        otherMover.ForceReturnToPreviousPosition();
                     }
                     else
                     {
-                        otherMover.ForceReturnToPreviousPosition();
+                        yield return StartCoroutine(AnimateReturnToPrevious());
+                        yield break;
                     }
                 }
                 else
                 {
                     Debug.Log("❌ Case bloquée par un obstacle !");
-                    SnapToCurrentCell();
-                    isMoving = false;
+                    yield return StartCoroutine(AnimateReturnToPrevious());
                     yield break;
                 }
             }
+
+            GridManager.Instance.RegisterOccupiedCell(step, gameObject);
+
+            float totalStepDistance = Vector3.Distance(startPos, targetPos);
+            float moved = 0f;
 
             while (Vector3.Distance(transform.position, targetPos) > 0.01f)
             {
                 Vector3 direction = targetPos - transform.position;
                 animatorController.PlayWalkAnimation(direction);
-                transform.position = Vector3.MoveTowards(transform.position, targetPos, 1f * Time.deltaTime);
+                float stepMove = 1f * Time.deltaTime;
+                transform.position = Vector3.MoveTowards(transform.position, targetPos, stepMove);
+                moved += stepMove;
+
+                if (GridManager.Instance.IsCellBlocked(step))
+                {
+                    float progress = moved / totalStepDistance;
+                    if (progress < 0.5f)
+                    {
+                        Debug.Log("⛔ Pont fermé, retour en arrière");
+                        yield return StartCoroutine(AnimateReturnToPrevious());
+                        yield break;
+                    }
+                    else
+                    {
+                        Debug.Log("💀 Chute ! Trop engagé");
+                        GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+                        Destroy(gameObject);
+                        yield break;
+                    }
+                }
+
                 yield return null;
             }
 
-            // Quand l’unité est arrivée sur la case cible, SNAPPER et MAJ :
             transform.position = targetPos;
             GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
-            GridManager.Instance.RegisterOccupiedCell(step, gameObject);
+            previousGridPosition = currentGridPosition;
             currentGridPosition = step;
             moveFrame++;
         }
 
-        animatorController.PlayWalkAnimation(Vector2.zero); // Idle
+        animatorController.PlayWalkAnimation(Vector2.zero);
         SnapToCurrentCell();
         isMoving = false;
     }
 
-
-    // Gestion du croisement : à affiner selon ta logique (optionnel)
-    public void ForceReturnToPreviousPosition()
+    private IEnumerator AnimateReturnToPrevious()
     {
-        // A faire : gérer le retour arrière en cas de conflit, à ta façon
+        isBeingPushedBack = true;
+        Vector3 returnPos = GridManager.Instance.GridToWorld(previousGridPosition.x, previousGridPosition.y);
+        float speed = 3f;
+
+        GridManager.Instance.RegisterOccupiedCell(previousGridPosition, gameObject);
+        GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+
+        while (Vector3.Distance(transform.position, returnPos) > 0.01f)
+        {
+            Vector3 direction = returnPos - transform.position;
+            animatorController.PlayWalkAnimation(direction);
+            transform.position = Vector3.MoveTowards(transform.position, returnPos, speed * Time.deltaTime);
+            yield return null;
+        }
+
+        transform.position = returnPos;
+        currentGridPosition = previousGridPosition;
+        animatorController.PlayWalkAnimation(Vector2.zero);
+        isBeingPushedBack = false;
     }
 
-    // === AGGRO/CHASE LOGIC (identique mais dynamique) ===
+    public void ForceReturnToPreviousPosition()
+    {
+        if (!isBeingPushedBack)
+            StartCoroutine(AnimateReturnToPrevious());
+    }
+
     public void ChaseTarget(GameObject target)
     {
-        CancelPersistentMove(); // Toujours annuler le move classique si aggro !
+        CancelPersistentMove();
         if (chaseCoroutine != null)
         {
             StopCoroutine(chaseCoroutine);
@@ -183,12 +214,8 @@ public class UnitMover : MonoBehaviour
     {
         while (targetToAttack != null)
         {
-            if (targetToAttack == null)
-                yield break;
-
             Vector2Int targetGridPos = GridManager.Instance.WorldToGrid(targetToAttack.transform.position);
-
-            Vector2Int destination = FindClosestReachableCellBFS(currentGridPosition, targetGridPos);
+            Vector2Int destination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, targetGridPos);
 
             if (destination == currentGridPosition)
             {
@@ -197,20 +224,15 @@ public class UnitMover : MonoBehaviour
                 continue;
             }
 
-            Vector2Int myPos = currentGridPosition;
             bool inRange = false;
-            for (int dx = -1; dx <= 1; dx++)
+            for (int dx = -1; dx <= 1 && !inRange; dx++)
             {
-                for (int dy = -1; dy <= 1; dy++)
+                for (int dy = -1; dy <= 1 && !inRange; dy++)
                 {
                     if (dx == 0 && dy == 0) continue;
-                    if (myPos == new Vector2Int(targetGridPos.x + dx, targetGridPos.y + dy))
-                    {
+                    if (currentGridPosition == new Vector2Int(targetGridPos.x + dx, targetGridPos.y + dy))
                         inRange = true;
-                        break;
-                    }
                 }
-                if (inRange) break;
             }
 
             if (!inRange)
@@ -220,8 +242,7 @@ public class UnitMover : MonoBehaviour
             }
             else
             {
-                Debug.Log("💥 Cible à portée ! Prêt à attaquer.");
-                // TODO : Animation/dégâts ici
+                Debug.Log("💥 Cible à portée ! Prêt à attaquer.");
                 yield return new WaitForSeconds(0.5f);
             }
 
@@ -241,62 +262,28 @@ public class UnitMover : MonoBehaviour
         SnapToCurrentCell();
     }
 
-    // --- BFS pour "plus proche possible" ---
-    public Vector2Int FindClosestReachableCellBFS(Vector2Int start, Vector2Int target, int radiusMax = 10)
+    public void CancelPersistentMove()
     {
-        Queue<Vector2Int> queue = new Queue<Vector2Int>();
-        HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
-
-        queue.Enqueue(start);
-        visited.Add(start);
-
-        Vector2Int bestCell = start;
-        float bestDist = (start - target).sqrMagnitude;
-
-        int[] dirX = { -1, 0, 1, 0, -1, -1, 1, 1 };
-        int[] dirY = { 0, 1, 0, -1, 1, -1, 1, -1 };
-
-        int iter = 0;
-        int maxIter = 500;
-
-        while (queue.Count > 0 && iter < maxIter)
+        if (persistentMoveCoroutine != null)
         {
-            Vector2Int current = queue.Dequeue();
-            float dist = (current - target).sqrMagnitude;
-            if (dist < bestDist)
-            {
-                bestDist = dist;
-                bestCell = current;
-                if (bestDist <= 1f)
-                    return bestCell;
-            }
-
-            for (int i = 0; i < 8; i++)
-            {
-                Vector2Int neighbor = new Vector2Int(current.x + dirX[i], current.y + dirY[i]);
-                if (visited.Contains(neighbor)) continue;
-                if (!GridManager.Instance.IsWithinBounds(neighbor)) continue;
-                if (Mathf.Abs(neighbor.x - target.x) > radiusMax || Mathf.Abs(neighbor.y - target.y) > radiusMax)
-                    continue;
-                if (GridManager.Instance.IsCellUnavailable(neighbor, null)) continue;
-
-                visited.Add(neighbor);
-                queue.Enqueue(neighbor);
-            }
-
-            iter++;
+            StopCoroutine(persistentMoveCoroutine);
+            persistentMoveCoroutine = null;
         }
-        return bestCell;
+        desiredTargetGridPos = null;
+        isMoving = false;
+        SnapToCurrentCell();
     }
+
 
     private void SnapToCurrentCell()
     {
         Vector3 cellWorldPos = GridManager.Instance.GridToWorld(currentGridPosition.x, currentGridPosition.y);
         transform.position = cellWorldPos;
-        animatorController.PlayWalkAnimation(Vector2.zero); // Idle
+        animatorController.PlayWalkAnimation(Vector2.zero);
     }
-
 }
+
+
 
 
 
