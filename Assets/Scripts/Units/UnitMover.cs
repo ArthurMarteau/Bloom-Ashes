@@ -4,8 +4,11 @@ using UnityEngine;
 
 public class UnitMover : MonoBehaviour
 {
+    [SerializeField] private float baseMovementSpeed = 1f; // Vitesse de base configurable
+    
     private Vector2Int currentGridPosition;
     private Vector2Int previousGridPosition;
+    private Vector2Int lastTraversedPosition; // Dernière case parcourue pendant le mouvement
     private bool isMoving = false;
     private bool isBeingPushedBack = false;
     private UnitAnimatorController animatorController;
@@ -23,6 +26,7 @@ public class UnitMover : MonoBehaviour
     {
         currentGridPosition = GridManager.Instance.WorldToGrid(transform.position);
         previousGridPosition = currentGridPosition;
+        lastTraversedPosition = currentGridPosition; // Initialiser la dernière case parcourue
         animatorController = GetComponent<UnitAnimatorController>();
         GridManager.Instance.RegisterOccupiedCell(currentGridPosition, gameObject);
     }
@@ -40,30 +44,61 @@ public class UnitMover : MonoBehaviour
     private IEnumerator PersistentMoveToTarget()
     {
         isMoving = true;
-        int retries = 0;
-        int maxRetries = 20;
+        int attempts = 0;
+        int maxAttempts = 5; // Limité à 5 essais maximum
+        float retryDelay = 5f; // Attente de 5 secondes entre les tentatives
 
-        while (desiredTargetGridPos.HasValue && retries < maxRetries)
+        while (desiredTargetGridPos.HasValue && attempts < maxAttempts)
         {
-            Vector2Int bestDestination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, desiredTargetGridPos.Value);
-
-            if (bestDestination == currentGridPosition)
+            // Vérification de sécurité
+            if (Pathfinding.Instance == null)
             {
-                yield return new WaitForSeconds(0.2f);
-                retries++;
-                continue;
+                Debug.LogError("Pathfinding.Instance is null!");
+                break;
             }
 
+            Debug.Log($"🎯 Tentative {attempts + 1}/{maxAttempts} pour atteindre {desiredTargetGridPos.Value}");
+
+            Vector2Int bestDestination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, desiredTargetGridPos.Value);
+
+            // Si la destination est inaccessible (unité bloquée)
+            if (bestDestination == currentGridPosition)
+            {
+                attempts++;
+                if (attempts < maxAttempts)
+                {
+                    Debug.Log($"⏳ Destination inaccessible, nouvel essai dans {retryDelay} secondes... ({attempts}/{maxAttempts})");
+                    yield return new WaitForSeconds(retryDelay);
+                    continue;
+                }
+                else
+                {
+                    Debug.LogWarning($"🚫 Impossible d'atteindre {desiredTargetGridPos.Value} après {maxAttempts} tentatives, abandon.");
+                    break;
+                }
+            }
+
+            // Tentative de déplacement vers la destination
             yield return StartCoroutine(FollowPathToDynamic(bestDestination));
 
+            // Vérifier si on a atteint la destination finale
             if (currentGridPosition == desiredTargetGridPos.Value)
+            {
+                Debug.Log($"✅ Destination {desiredTargetGridPos.Value} atteinte avec succès!");
                 break;
+            }
 
-            retries++;
+            // Si le déplacement a échoué, compter comme un essai
+            attempts++;
+            if (attempts < maxAttempts)
+            {
+                Debug.Log($"🔄 Déplacement interrompu, nouvel essai dans {retryDelay} secondes... ({attempts}/{maxAttempts})");
+                yield return new WaitForSeconds(retryDelay);
+            }
         }
 
-        if (retries >= maxRetries)
-            Debug.LogWarning($"🔁 Trop de tentatives de déplacement vers {desiredTargetGridPos.Value}, annulation.");
+        if (attempts >= maxAttempts)
+            Debug.LogWarning($"🔁 Échec du déplacement vers {desiredTargetGridPos.Value} après {maxAttempts} tentatives, unité reste en position.");
 
         isMoving = false;
         desiredTargetGridPos = null;
@@ -80,6 +115,14 @@ public class UnitMover : MonoBehaviour
 
         isMoving = true;
         moveFrame = 0;
+
+        // Vérification de sécurité avant pathfinding
+        if (Pathfinding.Instance == null)
+        {
+            Debug.LogError("Pathfinding.Instance is null!");
+            isMoving = false;
+            yield break;
+        }
 
         List<Vector2Int> path = Pathfinding.Instance.FindPath(currentGridPosition, finalTarget);
         if (path == null || path.Count <= 1)
@@ -132,7 +175,7 @@ public class UnitMover : MonoBehaviour
             {
                 Vector3 direction = targetPos - transform.position;
                 animatorController.PlayWalkAnimation(direction);
-                float stepMove = 1f * Time.deltaTime;
+                float stepMove = baseMovementSpeed * Time.deltaTime;
                 transform.position = Vector3.MoveTowards(transform.position, targetPos, stepMove);
                 moved += stepMove;
 
@@ -159,6 +202,7 @@ public class UnitMover : MonoBehaviour
 
             transform.position = targetPos;
             GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+            lastTraversedPosition = currentGridPosition; // Sauvegarder la dernière case parcourue
             previousGridPosition = currentGridPosition;
             currentGridPosition = step;
             moveFrame++;
@@ -172,22 +216,25 @@ public class UnitMover : MonoBehaviour
     private IEnumerator AnimateReturnToPrevious()
     {
         isBeingPushedBack = true;
-        Vector3 returnPos = GridManager.Instance.GridToWorld(previousGridPosition.x, previousGridPosition.y);
-        float speed = 3f;
+        // Retour vers la dernière case parcourue pendant le mouvement, pas la position initiale
+        Vector3 returnPos = GridManager.Instance.GridToWorld(lastTraversedPosition.x, lastTraversedPosition.y);
+        float pushbackSpeed = baseMovementSpeed * 2f; // Vitesse de pushback = 2x la vitesse de base
 
-        GridManager.Instance.RegisterOccupiedCell(previousGridPosition, gameObject);
+        GridManager.Instance.RegisterOccupiedCell(lastTraversedPosition, gameObject);
         GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+
+        Debug.Log($"🔙 Pushback vers la dernière case parcourue: {lastTraversedPosition} (vitesse: {pushbackSpeed})");
 
         while (Vector3.Distance(transform.position, returnPos) > 0.01f)
         {
             Vector3 direction = returnPos - transform.position;
             animatorController.PlayWalkAnimation(direction);
-            transform.position = Vector3.MoveTowards(transform.position, returnPos, speed * Time.deltaTime);
+            transform.position = Vector3.MoveTowards(transform.position, returnPos, pushbackSpeed * Time.deltaTime);
             yield return null;
         }
 
         transform.position = returnPos;
-        currentGridPosition = previousGridPosition;
+        currentGridPosition = lastTraversedPosition;
         animatorController.PlayWalkAnimation(Vector2.zero);
         isBeingPushedBack = false;
     }
