@@ -57,6 +57,7 @@
     <Compile Include="Assets\Scripts\Units\UnitSelector.cs" />
     <Compile Include="Assets\Scripts\Utilities\PriorityQueue.cs" />
     <Compile Include="Assets\Scripts\Core\GridObstacle.cs" />
+    <Compile Include="Assets\Scripts\Utilities\MovementResult.cs" />
     <Compile Include="Assets\Scripts\Core\GameManager.cs" />
     <Compile Include="Assets\Scripts\Utilities\PathNode.cs" />
     <None Include="Packages\com.merry-yellow.code-assist\package.json" />

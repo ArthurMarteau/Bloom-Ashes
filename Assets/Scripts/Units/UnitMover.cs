@@ -20,8 +20,6 @@ public class UnitMover : MonoBehaviour
     private Vector2Int? desiredTargetGridPos = null;
     private Coroutine persistentMoveCoroutine = null;
 
-    private int moveFrame = 0;
-
     private void Start()
     {
         currentGridPosition = GridManager.Instance.WorldToGrid(transform.position);
@@ -42,14 +40,19 @@ public class UnitMover : MonoBehaviour
     }
 
     private IEnumerator PersistentMoveToTarget()
-    {
-        isMoving = true;
+    { 
         int attempts = 0;
         int maxAttempts = 5; // Limité à 5 essais maximum
-        float retryDelay = 5f; // Attente de 5 secondes entre les tentatives
+        float retryDelay = 3f; // Attente de 3 seconde entre les tentatives
 
         while (desiredTargetGridPos.HasValue && attempts < maxAttempts)
         {
+            // Délai Rootborn à chaque tentative
+            yield return HandleRootbornDelay();
+    
+            // Marquer comme en mouvement seulement à la première tentative
+            if (attempts == 0) isMoving = true;
+            
             // Vérification de sécurité
             if (Pathfinding.Instance == null)
             {
@@ -59,7 +62,20 @@ public class UnitMover : MonoBehaviour
 
             Debug.Log($"🎯 Tentative {attempts + 1}/{maxAttempts} pour atteindre {desiredTargetGridPos.Value}");
 
-            Vector2Int bestDestination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, desiredTargetGridPos.Value);
+            Vector2Int bestDestination;
+
+            // Vérifier d'abord si la destination finale est maintenant accessible directement
+            if (!GridManager.Instance.IsCellUnavailable(desiredTargetGridPos.Value, gameObject))
+            {
+                // La case cible est libre, on peut y aller directement !
+                bestDestination = desiredTargetGridPos.Value;
+                Debug.Log($"🎯 Case cible {desiredTargetGridPos.Value} maintenant libre, déplacement direct !");
+            }
+            else
+            {
+                // Sinon, chercher la cellule la plus proche comme avant
+                bestDestination = Pathfinding.Instance.FindClosestFreeCell(currentGridPosition, desiredTargetGridPos.Value);
+            }
 
             // Si la destination est inaccessible (unité bloquée)
             if (bestDestination == currentGridPosition)
@@ -89,6 +105,7 @@ public class UnitMover : MonoBehaviour
             }
 
             // Si le déplacement a échoué, compter comme un essai
+            Debug.Log($"🔍 FollowPathToDynamic terminé. Position actuelle: {currentGridPosition}, Cible: {desiredTargetGridPos.Value}");
             attempts++;
             if (attempts < maxAttempts)
             {
@@ -105,112 +122,157 @@ public class UnitMover : MonoBehaviour
         persistentMoveCoroutine = null;
     }
 
-    private IEnumerator FollowPathToDynamic(Vector2Int finalTarget)
+private IEnumerator FollowPathToDynamic(Vector2Int finalTarget)
+{
+    // Vérification de sécurité avant pathfinding
+    if (Pathfinding.Instance == null)
     {
-        if (GetComponent<Rootborn>() != null)
+        Debug.LogError("Pathfinding.Instance is null!");
+        isMoving = false;
+        yield break;
+    }
+
+    List<Vector2Int> path = Pathfinding.Instance.FindPath(currentGridPosition, finalTarget);
+    if (path == null || path.Count <= 1)
+    {
+        Debug.Log("❌ Chemin bloqué ou atteint.");
+        SnapToCurrentCell();
+        isMoving = false;
+        yield break;
+    }
+
+    for (int i = 1; i < path.Count; i++)
+    {
+        Vector2Int step = path[i];
+        Vector3 targetPos = GridManager.Instance.GridToWorld(step.x, step.y);
+        Vector3 startPos = transform.position;
+
+        // Système de sécurité anti-boucle infinie
+        int collisionRetries = 0;
+        int maxCollisionRetries = 3;
+
+        while (collisionRetries < maxCollisionRetries)
         {
-            animatorController.PlayIdleReversed();
-            yield return new WaitForSeconds(1f);
-        }
-
-        isMoving = true;
-        moveFrame = 0;
-
-        // Vérification de sécurité avant pathfinding
-        if (Pathfinding.Instance == null)
-        {
-            Debug.LogError("Pathfinding.Instance is null!");
-            isMoving = false;
-            yield break;
-        }
-
-        List<Vector2Int> path = Pathfinding.Instance.FindPath(currentGridPosition, finalTarget);
-        if (path == null || path.Count <= 1)
-        {
-            Debug.Log("❌ Chemin bloqué ou atteint.");
-            SnapToCurrentCell();
-            isMoving = false;
-            yield break;
-        }
-
-        for (int i = 1; i < path.Count; i++)
-        {
-            Vector2Int step = path[i];
-            Vector3 targetPos = GridManager.Instance.GridToWorld(step.x, step.y);
-            Vector3 startPos = transform.position;
-
+            collisionRetries++;
+            
+            // log ajouté pr verif
+            Debug.Log($"🔍 {gameObject.name} vérifie step {step} (tentative {collisionRetries})");
+            
+            // Vérifier si la case cible est occupée
             GameObject occupant = GridManager.Instance.GetOccupant(step);
             if (occupant != null && occupant != this.gameObject)
             {
                 UnitMover otherMover = occupant.GetComponent<UnitMover>();
-                if (otherMover != null && !otherMover.isBeingPushedBack)
+                if (otherMover != null && !otherMover.isBeingPushedBack && otherMover.isMoving)
                 {
-                    float myDist = Vector3.Distance(transform.position, targetPos);
-                    float otherDist = Vector3.Distance(otherMover.transform.position, targetPos);
-
-                    if (myDist < otherDist)
+                    // Système de priorité basé sur la distance vers la cellule cible
+                    bool shouldIPushOther = ShouldPushOtherUnit(otherMover, targetPos);
+                    
+                    if (shouldIPushOther)
                     {
+                        Debug.Log($"🚀 {gameObject.name} pousse {otherMover.gameObject.name} (plus proche de la cible) - Tentative {collisionRetries}");
                         otherMover.ForceReturnToPreviousPosition();
+                        // Attendre un court délai pour éviter les conflits simultanés
+                        yield return new WaitForSeconds(0.1f);
+                        // Continuer la boucle while pour revérifier
+                        continue;
                     }
                     else
                     {
+                        Debug.Log($"🔄 {gameObject.name} recule face à {otherMover.gameObject.name} (moins proche de la cible)");
                         yield return StartCoroutine(AnimateReturnToPrevious());
+                        Debug.Log($"🔍 Distance moi: {Vector3.Distance(transform.position, targetPos)}, Distance autre: {Vector3.Distance(otherMover.transform.position, targetPos)}");
                         yield break;
                     }
                 }
                 else
                 {
-                    Debug.Log("❌ Case bloquée par un obstacle !");
+                    Debug.Log("❌ Case bloquée par un obstacle ou une unité en pushback !");
                     yield return StartCoroutine(AnimateReturnToPrevious());
                     yield break;
                 }
             }
-
-            GridManager.Instance.RegisterOccupiedCell(step, gameObject);
-
-            float totalStepDistance = Vector3.Distance(startPos, targetPos);
-            float moved = 0f;
-
-            while (Vector3.Distance(transform.position, targetPos) > 0.01f)
-            {
-                Vector3 direction = targetPos - transform.position;
-                animatorController.PlayWalkAnimation(direction);
-                float stepMove = baseMovementSpeed * Time.deltaTime;
-                transform.position = Vector3.MoveTowards(transform.position, targetPos, stepMove);
-                moved += stepMove;
-
-                if (GridManager.Instance.IsCellBlocked(step))
-                {
-                    float progress = moved / totalStepDistance;
-                    if (progress < 0.5f)
-                    {
-                        Debug.Log("⛔ Pont fermé, retour en arrière");
-                        yield return StartCoroutine(AnimateReturnToPrevious());
-                        yield break;
-                    }
-                    else
-                    {
-                        Debug.Log("💀 Chute ! Trop engagé");
-                        GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
-                        Destroy(gameObject);
-                        yield break;
-                    }
-                }
-
-                yield return null;
-            }
-
-            transform.position = targetPos;
-            GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
-            lastTraversedPosition = currentGridPosition; // Sauvegarder la dernière case parcourue
-            previousGridPosition = currentGridPosition;
-            currentGridPosition = step;
-            moveFrame++;
+            
+            // Pas de collision détectée, on sort de la boucle while
+            break;
         }
 
-        animatorController.PlayWalkAnimation(Vector2.zero);
-        SnapToCurrentCell();
-        isMoving = false;
+        // Si on a épuisé les tentatives, abandonner ce step
+        if (collisionRetries >= maxCollisionRetries)
+        {
+            Debug.LogError($"🚨 SECURITE: Abandon du step {step} après {maxCollisionRetries} tentatives - {gameObject.name}");
+            yield return StartCoroutine(AnimateReturnToPrevious());
+            yield break;
+        }
+
+        // Enregistrer la nouvelle position avant de commencer le mouvement
+        GridManager.Instance.RegisterOccupiedCell(step, gameObject);
+
+        float totalStepDistance = Vector3.Distance(startPos, targetPos);
+        float moved = 0f;
+
+        // Animation du mouvement vers la case cible
+        while (Vector3.Distance(transform.position, targetPos) > 0.01f)
+        {
+            Vector3 direction = targetPos - transform.position;
+            animatorController.PlayWalkAnimation(direction);
+            float stepMove = baseMovementSpeed * Time.deltaTime;
+            transform.position = Vector3.MoveTowards(transform.position, targetPos, stepMove);
+            moved += stepMove;
+
+            // Vérifier si un pont/case se ferme pendant le mouvement
+            if (GridManager.Instance.IsCellBlocked(step))
+            {
+                float progress = moved / totalStepDistance;
+                if (progress < 0.5f)
+                {
+                    Debug.Log("⛔ Pont fermé, retour en arrière");
+                    yield return StartCoroutine(AnimateReturnToPrevious());
+                    yield break;
+                }
+                else
+                {
+                    Debug.Log("💀 Chute ! Trop engagé sur le pont");
+                    GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+                    Destroy(gameObject);
+                    yield break;
+                }
+            }
+
+            yield return null;
+        }
+
+        // Finaliser le déplacement vers la nouvelle case
+        transform.position = targetPos;
+        GridManager.Instance.UnregisterOccupiedCell(currentGridPosition);
+        lastTraversedPosition = currentGridPosition; // Sauvegarder la dernière case parcourue
+        previousGridPosition = currentGridPosition;
+        currentGridPosition = step;
+    }
+
+    // Arrêter l'animation de marche une fois arrivé
+    animatorController.PlayWalkAnimation(Vector2.zero);
+    SnapToCurrentCell();
+    isMoving = false;
+}
+
+    /// <summary>
+    /// Détermine si cette unité doit pousser l'autre unité basé sur l'avancement vers la cellule cible
+    /// </summary>
+    private bool ShouldPushOtherUnit(UnitMover otherMover, Vector3 targetPos)
+    {
+        // Calculer l'avancement de chaque unité vers la cellule cible
+        float myDistance = Vector3.Distance(transform.position, targetPos);
+        float otherDistance = Vector3.Distance(otherMover.transform.position, targetPos);
+    
+        // Priorité 1 : L'unité la plus proche de la cellule cible (plus avancée)
+        if (Mathf.Abs(myDistance - otherDistance) > 0.01f)
+        {
+            return myDistance < otherDistance; // Je suis plus proche = je pousse
+        }
+    
+        // Priorité 2 : Fallback déterministe avec l'ID de l'objet
+        return gameObject.GetInstanceID() < otherMover.gameObject.GetInstanceID();
     }
 
     private IEnumerator AnimateReturnToPrevious()
@@ -321,12 +383,22 @@ public class UnitMover : MonoBehaviour
         SnapToCurrentCell();
     }
 
-
     private void SnapToCurrentCell()
     {
         Vector3 cellWorldPos = GridManager.Instance.GridToWorld(currentGridPosition.x, currentGridPosition.y);
         transform.position = cellWorldPos;
         animatorController.PlayWalkAnimation(Vector2.zero);
+    }
+    
+    private IEnumerator HandleRootbornDelay()
+    {
+        Rootborn rootbornComponent = GetComponent<Rootborn>();
+        if (rootbornComponent != null && !isBeingPushedBack)
+        {
+            animatorController.PlayIdleReversed();
+            yield return new WaitForSeconds(1f);
+            animatorController.PlayWalkAnimation(Vector2.zero);
+        }
     }
 }
 
