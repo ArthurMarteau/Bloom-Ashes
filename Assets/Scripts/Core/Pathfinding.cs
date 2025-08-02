@@ -11,10 +11,8 @@ public class Pathfinding : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
     }
-
-    /// <summary>
-    /// Trouve le chemin optimal d'une cellule � une autre (A*)
-    /// </summary>
+    
+    // Trouve le chemin optimal d'une cellule � une autre (A*)
     public List<Vector2Int> FindPath(Vector2Int start, Vector2Int goal)
     {
         var closedSet = new HashSet<Vector2Int>();
@@ -47,13 +45,10 @@ public class Pathfinding : MonoBehaviour
             }
         }
 
-        return null; // Aucun chemin trouv�
+        return null; // Aucun chemin trouv�
     }
-
-    /// <summary>
-    /// Trouve la cellule la plus proche atteignable autour de la cible.
-    /// Utile si la cellule cible est occup�e.
-    /// </summary>
+    
+    ///Trouve la cellule la plus proche atteignable autour de la cible.
     public Vector2Int FindClosestFreeCell(Vector2Int start, Vector2Int target, int radiusMax = 10)
     {
         var queue = new Queue<Vector2Int>();
@@ -80,7 +75,8 @@ public class Pathfinding : MonoBehaviour
                 if (visited.Contains(neighbor) || !GridManager.Instance.IsWithinBounds(neighbor))
                     continue;
 
-                if (Mathf.Abs(neighbor.x - target.x) > radiusMax || Mathf.Abs(neighbor.y - target.y) > radiusMax)
+                int chebyshevDistance = Mathf.Max(Mathf.Abs(neighbor.x - target.x), Mathf.Abs(neighbor.y - target.y));
+                if (chebyshevDistance > radiusMax)
                     continue;
 
                 visited.Add(neighbor);
@@ -91,6 +87,8 @@ public class Pathfinding : MonoBehaviour
         return bestCell;
     }
 
+    // Reconstitue le chemin optimal en suivant les "balises" à l'envers depuis la destination
+    // Transforme l'exploration chaotique de A* en une liste ordonnée de cases à suivre
     private List<Vector2Int> ReconstructPath(Dictionary<Vector2Int, Vector2Int> cameFrom, Vector2Int current)
     {
         List<Vector2Int> path = new List<Vector2Int> { current };
@@ -102,11 +100,16 @@ public class Pathfinding : MonoBehaviour
         return path;
     }
 
+    // Heuristique Chebyshev : distance adaptée aux grilles avec 8 directions de mouvement (distance diagonale)
     private int Heuristic(Vector2Int a, Vector2Int b)
     {
-        return Mathf.Abs(a.x - b.x) + Mathf.Abs(a.y - b.y); // distance de Manhattan
+        int dx = Mathf.Abs(a.x - b.x);
+        int dy = Mathf.Abs(a.y - b.y);
+        return Mathf.Max(dx, dy);
     }
-
+    
+    // Retourne les 8 cases adjacentes autour d'une position donnée (sans la case centrale)
+    // Utilisé par l'algorithme A* pour explorer les options de déplacement possibles
     private IEnumerable<Vector2Int> GetNeighbors(Vector2Int pos)
     {
         for (int dx = -1; dx <= 1; dx++)

@@ -510,7 +510,6 @@ GameObject:
   serializedVersion: 6
   m_Component:
   - component: {fileID: 506519688}
-  - component: {fileID: 506519689}
   - component: {fileID: 506519690}
   m_Layer: 0
   m_Name: Pathfinding
@@ -534,18 +533,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 875531320}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &506519689
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 506519687}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 16da96a8876d34f439b672d5898f126a, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &506519690
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -2211,7 +2198,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8908398364920774238, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 2.2415338
+      value: 1.2415339
       objectReference: {fileID: 0}
     - target: {fileID: 8908398364920774238, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalPosition.z
@@ -2471,11 +2458,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8908398364920774238, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 0.35
+      value: 3.345095
       objectReference: {fileID: 0}
     - target: {fileID: 8908398364920774238, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 3.25
+      value: 1.2415339
       objectReference: {fileID: 0}
     - target: {fileID: 8908398364920774238, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalPosition.z
