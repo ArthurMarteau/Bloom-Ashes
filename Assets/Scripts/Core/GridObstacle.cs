@@ -7,7 +7,7 @@ public class GridObstacle : MonoBehaviour
         Solid,
         Water
     }
-    public ObstacleType obstacleType = ObstacleType.Solid;
+    [SerializeField] public ObstacleType obstacleType = ObstacleType.Solid;
 
     private void OnEnable()
     {

@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using static GridObstacle;
 
 public class GridManager : MonoBehaviour
 {
@@ -18,7 +17,7 @@ public class GridManager : MonoBehaviour
         if (Instance == null) Instance = this;
         else Destroy(gameObject);
 
-        // Calculer le décalage pour centrer la grille
+        // Calculer le dï¿½calage pour centrer la grille
         gridOffset = new Vector2(
         -width * cellSize / 2f,
         -height * cellSize / 2f
@@ -42,7 +41,7 @@ public class GridManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Enregistre la case comme bloquée par un obstacle.
+    /// Enregistre la case comme bloquï¿½e par un obstacle.
     /// </summary>
     public void RegisterBlockedCell(Vector2Int gridPos, GridObstacle obstacle)
     {
@@ -54,8 +53,8 @@ public class GridManager : MonoBehaviour
         if (blockedCells.ContainsKey(gridPos))
             blockedCells.Remove(gridPos);
     }
-    // Vérifie si la case est bloquée par un obstacle du terrain
-    public bool IsCellBlocked(Vector2Int pos, ObstacleType? type = null)
+    // Vï¿½rifie si la case est bloquï¿½e par un obstacle du terrain
+    public bool IsCellBlocked(Vector2Int pos, GridObstacle.ObstacleType? type = null)
     {
         if (!blockedCells.ContainsKey(pos))
             return false;
@@ -67,7 +66,7 @@ public class GridManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Enregistre la case comme occupée par une unité.
+    /// Enregistre la case comme occupï¿½e par une unitï¿½.
     /// </summary>
     public void RegisterOccupiedCell(Vector2Int pos, GameObject unit)
     {
@@ -91,7 +90,7 @@ public class GridManager : MonoBehaviour
         return occupiedCells.ContainsKey(pos) && occupiedCells[pos] != self;
     }
 
-    // Méthode globale : indisponible pour déplacement (obstacle ou unité)
+    // Mï¿½thode globale : indisponible pour dï¿½placement (obstacle ou unitï¿½)
     public bool IsCellUnavailable(Vector2Int pos, GameObject self = null)
     {
         return IsCellBlocked(pos) || IsCellOccupied(pos, self);
@@ -105,7 +104,7 @@ public class GridManager : MonoBehaviour
     {
         Gizmos.color = Color.grey;
 
-        // Décalage du centre
+        // Dï¿½calage du centre
         float xOffset = -width * cellSize / 2f;
         float yOffset = -height * cellSize / 2f;
 

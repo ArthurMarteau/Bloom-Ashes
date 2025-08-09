@@ -49,16 +49,16 @@
     <Compile Include="Assets\Scripts\Units\UnitHaloEffect.cs" />
     <Compile Include="Assets\Scripts\Units\UnitClickMover.cs" />
     <Compile Include="Assets\Scripts\Core\GridManager.cs" />
-    <Compile Include="Assets\Scripts\Core\Pathfinding.cs" />
-    <Compile Include="Assets\Scripts\Units\UnitMover.cs" />
+    <Compile Include="Assets\Scripts\Core\FlowFieldFollower.cs" />
+    <Compile Include="Assets\Scripts\Core\MovementCore.cs" />
+    <Compile Include="Assets\Scripts\Core\CollisionHandler.cs" />
     <Compile Include="Assets\Scripts\Units\Rootborn.cs" />
     <Compile Include="Assets\Scripts\Core\HealthManager.cs" />
     <Compile Include="Assets\Scripts\Animation\UnitAnimatorController.cs" />
     <Compile Include="Assets\Scripts\Units\UnitSelector.cs" />
-    <Compile Include="Assets\Scripts\Utilities\PriorityQueue.cs" />
     <Compile Include="Assets\Scripts\Core\GridObstacle.cs" />
     <Compile Include="Assets\Scripts\Core\GameManager.cs" />
-    <Compile Include="Assets\Scripts\Utilities\PathNode.cs" />
+    <Compile Include="Assets\Scripts\Core\FlowFieldManager.cs" />
     <None Include="Packages\com.merry-yellow.code-assist\package.json" />
     <Reference Include="UnityEngine">
       <HintPath>D:\Logiciel\UnityHub\6000.0.31f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
