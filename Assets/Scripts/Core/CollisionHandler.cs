@@ -1,4 +1,5 @@
 using System.Collections;
+using Core;
 using UnityEngine;
 
 public class CollisionHandler : MonoBehaviour
@@ -16,6 +17,10 @@ public class CollisionHandler : MonoBehaviour
     private bool isBeingPushedBack = false;
     private Vector2Int lastTraversedPosition;
     private Coroutine currentMovementCoroutine = null;
+    
+    // Protection contre les boucles infinies
+    private const int MAX_COLLISION_RETRIES = 3;
+    private const float COLLISION_RETRY_DELAY = 0.1f;
 
     // Initialise les références et la configuration
     public void Initialize(MovementCore core, UnitAnimatorController animator, float baseSpeed)
@@ -29,73 +34,128 @@ public class CollisionHandler : MonoBehaviour
         lastTraversedPosition = movementCore.GetCurrentGridPosition();
     }
 
-    // Tente un déplacement vers une case avec gestion des collisions
+    // Tente un déplacement vers une case avec gestion des collisions avancée
     public IEnumerator TryMoveToCell(Vector2Int targetCell)
     {
         Vector2Int currentPos = movementCore.GetCurrentGridPosition();
         
         // Vérifier si la case cible est occupée
         GameObject occupant = GridManager.Instance.GetOccupant(targetCell);
+        Debug.Log($"🔍 Case {targetCell} occupée par: {(occupant != null ? occupant.name : "LIBRE")}");
+        
         if (occupant != null && occupant != this.gameObject)
         {
+            Debug.Log($"🔍 Occupant est différent de {gameObject.name}");
+            
+            // Déclencher l'événement de collision
+            MovementEventSystem.TriggerUnitCollision(gameObject, occupant);
+            
             CollisionHandler otherHandler = occupant.GetComponent<CollisionHandler>();
             if (otherHandler != null && !otherHandler.isBeingPushedBack && otherHandler.isMovingToCell)
             {
-                // Système de priorité basé sur la proximité
-                Vector3 targetWorldPos = GridManager.Instance.GridToWorld(targetCell.x, targetCell.y);
-                bool shouldIPushOther = ShouldPushOtherUnit(otherHandler, targetWorldPos);
+                // Système de priorité basé sur l'avancement sur la case
+                bool shouldIPushOther = ShouldPushOtherUnit(otherHandler, targetCell);
                 
                 if (shouldIPushOther)
                 {
                     Debug.Log($"🚀 {gameObject.name} pousse {otherHandler.gameObject.name}");
                     otherHandler.ForceReturnToPrevious();
-                    yield return new WaitForSeconds(0.1f);
                     
-                    // Réessayer après avoir poussé l'autre unité
-                    yield return StartCoroutine(TryMoveToCell(targetCell));
-                    yield break;
+                    // Attendre un peu et réessayer avec protection contre boucle infinie
+                    yield return new WaitForSeconds(COLLISION_RETRY_DELAY);
+                    
+                    // Réessayer avec un compteur pour éviter les boucles infinies
+                    int retryCount = 0;
+                    while (retryCount < MAX_COLLISION_RETRIES)
+                    {
+                        yield return new WaitForSeconds(COLLISION_RETRY_DELAY);
+                        GameObject newOccupant = GridManager.Instance.GetOccupant(targetCell);
+                        
+                        if (newOccupant == null)
+                        {
+                            // La case est maintenant libre, procéder au mouvement
+                            yield return StartCoroutine(AnimateMovementToCell(targetCell));
+                            yield break;
+                        }
+                        
+                        retryCount++;
+                        Debug.Log($"⏳ Tentative {retryCount}/{MAX_COLLISION_RETRIES} de mouvement vers {targetCell}");
+                    }
+                    
+                    // Échec après plusieurs tentatives
+                    if (retryCount >= MAX_COLLISION_RETRIES)
+                    {
+                        Debug.LogWarning($"❌ Échec après {MAX_COLLISION_RETRIES} tentatives vers {targetCell}");
+                        MovementEventSystem.TriggerUnitBlocked(gameObject, targetCell);
+                        yield return StartCoroutine(AnimateReturnToPrevious());
+                    }
                 }
                 else
                 {
                     Debug.Log($"🔄 {gameObject.name} recule face à {otherHandler.gameObject.name}");
                     yield return StartCoroutine(AnimateReturnToPrevious());
-                    yield break;
                 }
             }
             else
             {
                 Debug.Log("❌ Case bloquée par un obstacle ou une unité statique !");
+                MovementEventSystem.TriggerUnitBlocked(gameObject, targetCell);
                 yield return StartCoroutine(AnimateReturnToPrevious());
-                yield break;
             }
         }
-        
-        // Case libre, procéder au mouvement
-        yield return StartCoroutine(AnimateMovementToCell(targetCell));
+        else
+        {
+            // Case libre, procéder au mouvement fluide
+            yield return StartCoroutine(AnimateMovementToCell(targetCell));
+        }
     }
 
-    // Anime le mouvement fluide vers une case
+    // Anime le mouvement fluide vers une case SANS téléportation
     private IEnumerator AnimateMovementToCell(Vector2Int targetCell)
     {
         isMovingToCell = true;
         Vector2Int startCell = movementCore.GetCurrentGridPosition();
         
-        // Enregistrer la nouvelle position avant de commencer le mouvement
-        GridManager.Instance.RegisterOccupiedCell(targetCell, gameObject);
-        
         // Calculer les positions monde
-        Vector3 startPos = GridManager.Instance.GridToWorld(startCell.x, startCell.y);
+        Vector3 startPos = transform.position;
         Vector3 targetPos = GridManager.Instance.GridToWorld(targetCell.x, targetCell.y);
+        
+        // Vérifier que le mouvement est cohérent (pas de téléportation)
+        float distance = Vector3.Distance(startPos, targetPos);
+        if (distance > 2f) // Plus d'une case de distance = problème
+        {
+            Debug.LogError($"⚠️ Tentative de téléportation détectée ! Distance: {distance}");
+            // Corriger en téléportant à la position de la grille actuelle
+            transform.position = GridManager.Instance.GridToWorld(startCell.x, startCell.y);
+            startPos = transform.position;
+            
+            // Recalculer la distance après correction
+            distance = Vector3.Distance(startPos, targetPos);
+            if (distance > 2f)
+            {
+                Debug.LogError($"⚠️ Téléportation impossible même après correction. Annulation du mouvement.");
+                isMovingToCell = false;
+                yield break;
+            }
+        }
+        
+        // Enregistrer la nouvelle position sur la grille AVANT le mouvement pour réserver
+        GridManager.Instance.UnregisterOccupiedCell(startCell);
+        GridManager.Instance.RegisterOccupiedCell(targetCell, gameObject);
         
         float totalDistance = Vector3.Distance(startPos, targetPos);
         float movedDistance = 0f;
         
-        // Animation du mouvement
+        // Direction pour l'animation
+        Vector2 moveDirection = (targetPos - startPos).normalized;
+        if (animatorController != null && moveDirection != Vector2.zero)
+        {
+            animatorController.PlayWalkAnimation(moveDirection);
+        }
+        
+        // Animation du mouvement fluide
         while (Vector3.Distance(transform.position, targetPos) > 0.01f)
         {
-            Vector3 direction = targetPos - transform.position;
-            animatorController.PlayWalkAnimation(direction);
-            
             float stepMove = movementSpeed * Time.deltaTime;
             transform.position = Vector3.MoveTowards(transform.position, targetPos, stepMove);
             movedDistance += stepMove;
@@ -107,13 +167,20 @@ public class CollisionHandler : MonoBehaviour
                 if (progress < 0.5f)
                 {
                     Debug.Log("⛔ Obstacle apparu, retour en arrière");
+                    // Remettre la grille dans l'état précédent
+                    GridManager.Instance.UnregisterOccupiedCell(targetCell);
+                    GridManager.Instance.RegisterOccupiedCell(startCell, gameObject);
+                    
+                    // Déclencher l'événement de blocage
+                    MovementEventSystem.TriggerUnitBlocked(gameObject, targetCell);
+                    
                     yield return StartCoroutine(AnimateReturnToPrevious());
                     yield break;
                 }
                 else
                 {
                     Debug.Log("💀 Unité détruite par un obstacle qui se ferme");
-                    GridManager.Instance.UnregisterOccupiedCell(movementCore.GetCurrentGridPosition());
+                    GridManager.Instance.UnregisterOccupiedCell(targetCell);
                     Destroy(gameObject);
                     yield break;
                 }
@@ -122,12 +189,11 @@ public class CollisionHandler : MonoBehaviour
             yield return null;
         }
         
-        // Finaliser le déplacement
+        // Finaliser le déplacement - s'assurer de la position exacte
         transform.position = targetPos;
-        animatorController.PlayWalkAnimation(Vector2.zero);
         
         // Mettre à jour les positions
-        lastTraversedPosition = movementCore.GetCurrentGridPosition();
+        lastTraversedPosition = startCell;
         movementCore.UpdateGridPosition(targetCell);
         
         isMovingToCell = false;
@@ -136,47 +202,80 @@ public class CollisionHandler : MonoBehaviour
         movementCore.ExecutePendingOrder();
     }
 
-    // Anime le retour vers la position précédente (pushback)
+    // Anime le retour vers la position précédente (pushback) SANS téléportation
     private IEnumerator AnimateReturnToPrevious()
     {
         isBeingPushedBack = true;
         
+        // Déclencher l'événement de pushback
+        MovementEventSystem.TriggerUnitPushedBack(gameObject);
+        
+        Vector3 currentPos = transform.position;
         Vector3 returnPos = GridManager.Instance.GridToWorld(lastTraversedPosition.x, lastTraversedPosition.y);
         
+        // Vérifier la cohérence du retour
+        float distance = Vector3.Distance(currentPos, returnPos);
+        if (distance > 2f) // Plus d'une case = problème
+        {
+            Debug.LogError($"⚠️ Pushback incohérent détecté ! Distance: {distance}");
+            // Utiliser la position actuelle comme point de départ
+            Vector2Int currentGrid = GridManager.Instance.WorldToGrid(currentPos);
+            lastTraversedPosition = currentGrid;
+            returnPos = GridManager.Instance.GridToWorld(currentGrid.x, currentGrid.y);
+            
+            // Si toujours incohérent, annuler le pushback
+            distance = Vector3.Distance(currentPos, returnPos);
+            if (distance > 2f)
+            {
+                Debug.LogError($"⚠️ Pushback impossible. Annulation.");
+                isBeingPushedBack = false;
+                yield break;
+            }
+        }
+        
         // Réenregistrer l'ancienne position
-        GridManager.Instance.RegisterOccupiedCell(lastTraversedPosition, gameObject);
         GridManager.Instance.UnregisterOccupiedCell(movementCore.GetCurrentGridPosition());
+        GridManager.Instance.RegisterOccupiedCell(lastTraversedPosition, gameObject);
         
-        Debug.Log($"🔙 Pushback vers {lastTraversedPosition}");
+        Debug.Log($"🔙 Pushback fluide vers {lastTraversedPosition}");
         
-        // Animation du retour
+        // Direction pour l'animation
+        Vector2 moveDirection = (returnPos - currentPos).normalized;
+        if (animatorController != null && moveDirection != Vector2.zero)
+        {
+            animatorController.PlayWalkAnimation(moveDirection);
+        }
+        
+        // Animation du retour fluide
         while (Vector3.Distance(transform.position, returnPos) > 0.01f)
         {
-            Vector3 direction = returnPos - transform.position;
-            animatorController.PlayWalkAnimation(direction);
             transform.position = Vector3.MoveTowards(transform.position, returnPos, pushbackSpeed * Time.deltaTime);
             yield return null;
         }
         
         // Finaliser le retour
         transform.position = returnPos;
-        animatorController.PlayWalkAnimation(Vector2.zero);
+        if (animatorController != null)
+        {
+            animatorController.PlayWalkAnimation(Vector2.zero); // Animation idle
+        }
         movementCore.UpdateGridPosition(lastTraversedPosition);
         
         isBeingPushedBack = false;
     }
 
-    // Détermine si cette unité doit pousser l'autre unité
-    private bool ShouldPushOtherUnit(CollisionHandler otherHandler, Vector3 targetPos)
+    // Détermine si cette unité doit pousser l'autre unité (priorité basée sur l'avancement)
+    private bool ShouldPushOtherUnit(CollisionHandler otherHandler, Vector2Int targetCell)
     {
-        // Calculer les distances vers la case cible
-        float myDistance = Vector3.Distance(transform.position, targetPos);
-        float otherDistance = Vector3.Distance(otherHandler.transform.position, targetPos);
+        // Calculer l'avancement de chaque unité vers la case cible
+        Vector3 targetPos = GridManager.Instance.GridToWorld(targetCell.x, targetCell.y);
+        float myDistanceToTarget = Vector3.Distance(transform.position, targetPos);
+        float otherDistanceToTarget = Vector3.Distance(otherHandler.transform.position, targetPos);
         
-        // Priorité 1 : L'unité la plus proche de la case cible
-        if (Mathf.Abs(myDistance - otherDistance) > 0.01f)
+        // Priorité 1 : L'unité la plus avancée (plus proche de la case cible) est prioritaire
+        if (Mathf.Abs(myDistanceToTarget - otherDistanceToTarget) > 0.1f)
         {
-            return myDistance < otherDistance;
+            return myDistanceToTarget < otherDistanceToTarget;
         }
         
         // Priorité 2 : Fallback déterministe avec l'ID de l'objet
