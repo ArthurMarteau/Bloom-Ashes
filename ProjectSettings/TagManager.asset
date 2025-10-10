@@ -4,16 +4,20 @@
 TagManager:
   serializedVersion: 3
   tags:
-  - Rootborn
   - NotWalkable
+  - Obstacle
+  - GroundUnit
+  - WaterUnit
+  - MountainUnit
+  - AirUnit
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - Trails
+  - Ground
   - Water
   - UI
-  - Environnment
+  - Obstacle
   - Environnment_Walkable
   - Units
   - 

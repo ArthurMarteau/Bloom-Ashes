@@ -1,211 +1,338 @@
-using System.Collections.Generic;
 using UnityEngine;
-using System.Linq;
 
 public class GridManager : MonoBehaviour
 {
-    public static GridManager Instance;
-
-    public int width = 128;
-    public int height = 128;
+    [Header("Grid Settings")]
+    [SerializeField] private int gridWidth = 10;
+    [SerializeField] private int gridHeight = 10;
     private float cellSize = 1f;
-    private Vector2 gridOffset;
-    private Dictionary<Vector2Int, GridObstacle> blockedCells = new Dictionary<Vector2Int, GridObstacle>();
-    private Dictionary<Vector2Int, GameObject> occupiedCells = new Dictionary<Vector2Int, GameObject>();
+    private Vector3 gridOrigin;
+
+    [Header("Layer Settings")]
+    [SerializeField] private LayerMask unitLayer = 1 << 8;      // Layer pour d�tecter les unit�s
+    [SerializeField] private LayerMask obstacleLayer = 1 << 6;  // Layer pour d�tecter les obstacles
+
+    [Header("Ground Type Configuration")]
+    [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
+
+    // Instance singleton
+    public static GridManager Instance { get; private set; }
 
     private void Awake()
     {
-        if (Instance == null) Instance = this;
-        else Destroy(gameObject);
+        // Initialise l'origine de la grille
+        CalculateGridOrigin();
 
-        // Calculer le décalage pour centrer la grille
-        gridOffset = new Vector2(
-            -width * cellSize / 2f,
-            -height * cellSize / 2f
-        );
+        // Configure le singleton
+        if (Instance == null)
+        {
+            Instance = this;
+            InitializeGroundTypeGrid();
+            Debug.Log($"Grille cr��e : {gridWidth}x{gridHeight}");
+        }
+        else
+        {
+            Destroy(gameObject);
+        }
     }
 
-    // Convertit une position de grille en position monde
-    public Vector3 GridToWorld(int x, int y)
+    // Recalcule l'origine de la grille � chaque modification dans l'inspecteur (initialisation et �dition)
+    private void OnValidate()
     {
-        return new Vector3(
-            (x + 0.5f) * cellSize + gridOffset.x,
-            (y + 0.5f) * cellSize + gridOffset.y,
-            0
-        );
+        CalculateGridOrigin();
+
+        // R�initialise la grille de terrain si les dimensions changent
+        if (groundTypeGrid == null || groundTypeGrid.GetLength(0) != gridWidth || groundTypeGrid.GetLength(1) != gridHeight)
+        {
+            InitializeGroundTypeGrid();
+        }
     }
 
-    // Convertit une position monde en position de grille
-    public Vector2Int WorldToGrid(Vector3 worldPos)
+    // Initialise la grille de terrain avec des valeurs par d�faut
+    // Cr�e un tableau 2D avec du terrain normal partout au d�part
+    // Modifiable via l'inspecteur ou m�thodes publiques
+    private void InitializeGroundTypeGrid()
     {
-        int x = Mathf.FloorToInt((worldPos.x - gridOffset.x) / cellSize);
-        int y = Mathf.FloorToInt((worldPos.y - gridOffset.y) / cellSize);
+        groundTypeGrid = new GroundType[gridWidth, gridHeight];
+
+        // Remplit avec du terrain normal par d�faut
+        for (int x = 0; x < gridWidth; x++)
+        {
+            for (int y = 0; y < gridHeight; y++)
+            {
+                groundTypeGrid[x, y] = GroundType.Ground;
+            }
+        }
+
+        Debug.Log("Grille de terrain initialis�e avec terrain normal");
+    }
+
+    // Recalcule l'origine de la grille pour centrer la grille
+    private void CalculateGridOrigin()
+    {
+        float originX = -gridWidth * cellSize * 0.5f;
+        float originY = -gridHeight * cellSize * 0.5f;
+        gridOrigin = new Vector3(originX, originY, 0);
+    }
+
+    // Convertit une position Unity en coordonn�es de grille
+    // Utilis� pour savoir dans quelle case se trouve un objet (unit�, clic souris, b�timent)
+    // Permet de passer du syst�me de coordonn�es Unity au syst�me de cases du jeu
+    public Vector2Int WorldToGrid(Vector3 worldPosition)
+    {
+        Vector3 localPosition = worldPosition - gridOrigin;
+        int x = Mathf.FloorToInt(localPosition.x / cellSize);
+        int y = Mathf.FloorToInt(localPosition.y / cellSize);
         return new Vector2Int(x, y);
     }
 
-    // Enregistre la case comme bloquée par un obstacle
-    public void RegisterBlockedCell(Vector2Int gridPos, GridObstacle obstacle)
+    // Convertit des coordonn�es de grille en position Unity centr�e sur la case
+    // Utilis� pour placer visuellement les objets au centre exact d'une case
+    // Permet de passer du syst�me de cases du jeu au syst�me de coordonn�es Unity
+    public Vector3 GridToWorld(Vector2Int gridPosition)
     {
-        blockedCells[gridPos] = obstacle;
+        float x = gridPosition.x * cellSize + cellSize * 0.5f;
+        float y = gridPosition.y * cellSize + cellSize * 0.5f;
+        return gridOrigin + new Vector3(x, y, 0);
     }
 
-    // Désenregistre une case bloquée
-    public void UnregisterBlockedCell(Vector2Int gridPos)
+    // V�rifie si les coordonn�es sont dans les limites de la grille
+    // �vite les crashes et comportements bizarres en validant chaque position avant utilisation
+    // (mouvements d'unit�s, clics joueur, calculs de pathfinding, placement d'objets)
+    public bool IsInBounds(Vector2Int coordinates)
     {
-        if (blockedCells.ContainsKey(gridPos))
-            blockedCells.Remove(gridPos);
+        return coordinates.x >= 0 && coordinates.x < gridWidth &&
+               coordinates.y >= 0 && coordinates.y < gridHeight;
     }
-    
-    // Vérifie si la case est bloquée par un obstacle du terrain
-    public bool IsCellBlocked(Vector2Int pos, GridObstacle.ObstacleType? type = null)
+
+    // M�thode principale pour PathFinding - d�termine si une case est accessible pour une unit�
+    // Combine les r�gles d'occupation (unit�s), obstacles et terrain selon les capacit�s de l'unit�
+    // Interface unique pour toute la logique d'accessibilit� via syst�me de tags
+    public bool IsWalkableFor(Vector2Int gridPosition, GameObject unit)
     {
-        if (!blockedCells.ContainsKey(pos))
+        // V�rifie d'abord les limites de la grille
+        if (!IsInBounds(gridPosition))
+        {
             return false;
+        }
 
-        if (type == null)
-            return true;
-
-        return blockedCells[pos].obstacleType == type;
-    }
-
-    // Enregistre la case comme occupée par une unité
-    public void RegisterOccupiedCell(Vector2Int pos, GameObject unit)
-    {
-        occupiedCells[pos] = unit;
-    }
-
-    // Désenregistre une case occupée
-    public void UnregisterOccupiedCell(Vector2Int pos)
-    {
-        if (occupiedCells.ContainsKey(pos))
-            occupiedCells.Remove(pos);
-    }
-    
-    // Récupère l'occupant d'une case
-    public GameObject GetOccupant(Vector2Int pos)
-    {
-        if (occupiedCells.ContainsKey(pos))
-            return occupiedCells[pos];
-        return null;
-    }
-
-    // Vérifie si une case est occupée par une unité
-    public bool IsCellOccupied(Vector2Int pos, GameObject self = null)
-    {
-        return occupiedCells.ContainsKey(pos) && occupiedCells[pos] != self;
-    }
-
-    // Vérifie si une case est indisponible pour déplacement (obstacle ou unité)
-    public bool IsCellUnavailable(Vector2Int pos, GameObject self = null)
-    {
-        return IsCellBlocked(pos) || IsCellOccupied(pos, self);
-    }
-    
-    // Vérifie si une position est dans les limites de la grille
-    public bool IsWithinBounds(Vector2Int pos)
-    {
-        return pos.x >= 0 && pos.x < width && pos.y >= 0 && pos.y < height;
-    }
-
-    // NOUVELLE MÉTHODE : Récupère toutes les unités dans un rayon donné
-    public List<GameObject> GetUnitsInRadius(Vector2Int center, int radius)
-    {
-        List<GameObject> unitsInRadius = new List<GameObject>();
-        
-        // Parcourir toutes les cases dans le rayon
-        for (int x = -radius; x <= radius; x++)
+        // R�gle absolue : aucune unit� ne peut occuper la m�me case qu'une autre
+        // EXCEPTION : ignore l'unit� qui demande le mouvement (�vite auto-blocage)
+        GameObject unitAtPosition = GetUnitAt(gridPosition);
+        if (unitAtPosition != null && unitAtPosition != unit)
         {
-            for (int y = -radius; y <= radius; y++)
+            return false; // Case occup�e par une AUTRE unit�
+        }
+
+        // R�gle obstacles : bloquent selon les capacit�s de vol de l'unit�
+        if (HasObstacleAt(gridPosition))
+        {
+            if (!UnitTypeHelper.CanFlyOverObstacles(unit))
             {
-                Vector2Int checkPos = center + new Vector2Int(x, y);
-                
-                // Vérifier que la position est valide et contient une unité
-                if (IsWithinBounds(checkPos) && occupiedCells.ContainsKey(checkPos))
-                {
-                    unitsInRadius.Add(occupiedCells[checkPos]);
-                }
+                return false;
             }
         }
-        
-        return unitsInRadius;
-    }
-    
-    // NOUVELLE MÉTHODE : Récupère toutes les unités dans un rayon avec filtre
-    public List<GameObject> GetUnitsInRadius(Vector2Int center, int radius, System.Func<GameObject, bool> filter)
-    {
-        List<GameObject> units = GetUnitsInRadius(center, radius);
-        return units.Where(filter).ToList();
-    }
-    
-    // NOUVELLE MÉTHODE : Récupère toutes les cases libres dans un rayon
-    public List<Vector2Int> GetFreeCellsInRadius(Vector2Int center, int radius)
-    {
-        List<Vector2Int> freeCells = new List<Vector2Int>();
-        
-        for (int x = -radius; x <= radius; x++)
+
+        // R�gle terrain : accessible selon les capacit�s de d�placement de l'unit�
+        GroundType terrainType = GetGroundTypeAt(gridPosition);
+        if (!UnitTypeHelper.CanWalkOnGround(unit, terrainType))
         {
-            for (int y = -radius; y <= radius; y++)
-            {
-                Vector2Int checkPos = center + new Vector2Int(x, y);
-                
-                // Vérifier que la position est valide et libre
-                if (IsWithinBounds(checkPos) && !IsCellUnavailable(checkPos))
-                {
-                    freeCells.Add(checkPos);
-                }
-            }
+            return false;
         }
-        
-        return freeCells;
-    }
-    
-    // NOUVELLE MÉTHODE : Calcule la densité d'unités dans une zone
-    public float GetUnitDensity(Vector2Int center, int radius)
-    {
-        int totalCells = (radius * 2 + 1) * (radius * 2 + 1);
-        int occupiedCount = GetUnitsInRadius(center, radius).Count;
-        return (float)occupiedCount / totalCells;
-    }
-    
-    // NOUVELLE MÉTHODE : Trouve la case libre la plus proche dans un rayon
-    public Vector2Int? GetNearestFreeCell(Vector2Int center, int maxRadius = 10)
-    {
-        // Chercher en spirale depuis le centre
-        for (int radius = 1; radius <= maxRadius; radius++)
-        {
-            List<Vector2Int> freeCells = GetFreeCellsInRadius(center, radius);
-            if (freeCells.Count > 0)
-            {
-                // Retourner la case libre la plus proche du centre
-                return freeCells.OrderBy(cell => Vector2Int.Distance(center, cell)).First();
-            }
-        }
-        
-        return null;
+
+        // Case libre et accessible
+        return true;
     }
 
-    // Méthode de visualisation en mode éditeur
+    // Retourne le type de terrain d'une position de grille
+    // Consulte le tableau statique configur� au d�marrage
+    // Utilis� par IsWalkableFor pour valider compatibilit� terrain/unit�
+    public GroundType GetGroundTypeAt(Vector2Int gridPosition)
+    {
+        if (!IsInBounds(gridPosition))
+        {
+            return GroundType.Ground; // Valeur par d�faut pour positions invalides
+        }
+
+        return groundTypeGrid[gridPosition.x, gridPosition.y];
+    }
+
+    // D�finit le type de terrain d'une position de grille
+    // Permet de configurer la carte pendant le d�veloppement
+    // Utilis� pour cr�er des zones sp�cialis�es (lacs, montagnes)
+    public void SetGroundTypeAt(Vector2Int gridPosition, GroundType groundType)
+    {
+        if (!IsInBounds(gridPosition))
+        {
+            Debug.LogWarning($"Tentative de d�finir terrain hors limites : {gridPosition}");
+            return;
+        }
+
+        groundTypeGrid[gridPosition.x, gridPosition.y] = groundType;
+        Debug.Log($"Terrain {gridPosition} d�fini comme {groundType.GetDisplayName()}");
+    }
+
+    // D�tecte la pr�sence d'une unit� sur une position de grille
+    // Convertit position grille en monde puis effectue raycast sur layer Units
+    // Retourne true si une unit� occupe cette case
+    public bool HasUnitAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D unitCollider = Physics2D.OverlapPoint(worldPosition, unitLayer);
+        return unitCollider != null;
+    }
+
+    // D�tecte la pr�sence d'un obstacle sur une position de grille
+    // Convertit position grille en monde puis effectue raycast sur layer Obstacles
+    // Retourne true si un obstacle occupe cette case
+    public bool HasObstacleAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
+        return obstacleCollider != null;
+    }
+
+    // Retourne l'unit� pr�sente sur une position de grille (null si aucune)
+    // Utilis� pour identifier quelle unit� occupe une case sp�cifique
+    // Utile pour interactions, s�lection et gestion de collisions
+    public GameObject GetUnitAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D unitCollider = Physics2D.OverlapPoint(worldPosition, unitLayer);
+        return unitCollider?.gameObject;
+    }
+
+    // Retourne l'obstacle pr�sent sur une position de grille (null si aucun)
+    // Utilis� pour identifier quel obstacle occupe une case sp�cifique
+    // Utile pour interactions, destruction et gestion d'effets
+    public GameObject GetObstacleAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
+        return obstacleCollider?.gameObject;
+    }
+
+    // Getter pour la taille de cellule
+    // Permet aux autres scripts de conna�tre la taille d'une case pour leurs calculs
+    // (port�es d'attaque, formation d'unit�s, distances, interface utilisateur)
+    public float GetCellSize()
+    {
+        return cellSize;
+    }
+
+    // Getter pour les dimensions de la grille
+    // Permet aux autres scripts de conna�tre les limites de la carte
+    // (g�n�ration d'objets, contraintes de cam�ra, logique d'IA, affichage interface)
+    public Vector2Int GetGridSize()
+    {
+        return new Vector2Int(gridWidth, gridHeight);
+    }
+
+    // Affiche la grille dans l'�diteur et en jeu avec coloration selon le terrain
     private void OnDrawGizmos()
     {
-        Gizmos.color = Color.grey;
+        // Dessine les lignes de grille par-dessus
+        Gizmos.color = Color.gray;
 
-        // Décalage du centre
-        float xOffset = -width * cellSize / 2f;
-        float yOffset = -height * cellSize / 2f;
-
-        for (int x = 0; x <= width; x++)
+        // Dessine les lignes verticales
+        for (int x = 0; x <= gridWidth; x++)
         {
-            Vector3 from = new Vector3(x * cellSize + xOffset, yOffset, 0);
-            Vector3 to = new Vector3(x * cellSize + xOffset, height * cellSize + yOffset, 0);
-            Gizmos.DrawLine(from, to);
+            Vector3 start = gridOrigin + new Vector3(x * cellSize, 0, 0);
+            Vector3 end = gridOrigin + new Vector3(x * cellSize, gridHeight * cellSize, 0);
+            Gizmos.DrawLine(start, end);
         }
 
-        for (int y = 0; y <= height; y++)
+        // Dessine les lignes horizontales
+        for (int y = 0; y <= gridHeight; y++)
         {
-            Vector3 from = new Vector3(xOffset, y * cellSize + yOffset, 0);
-            Vector3 to = new Vector3(width * cellSize + xOffset, y * cellSize + yOffset, 0);
-            Gizmos.DrawLine(from, to);
+            Vector3 start = gridOrigin + new Vector3(0, y * cellSize, 0);
+            Vector3 end = gridOrigin + new Vector3(gridWidth * cellSize, y * cellSize, 0);
+            Gizmos.DrawLine(start, end);
+        }
+
+        // Dessine le contour de la grille en plus �pais
+        Gizmos.color = Color.white;
+        Vector3 bottomLeft = gridOrigin;
+        Vector3 bottomRight = gridOrigin + new Vector3(gridWidth * cellSize, 0, 0);
+        Vector3 topRight = gridOrigin + new Vector3(gridWidth * cellSize, gridHeight * cellSize, 0);
+        Vector3 topLeft = gridOrigin + new Vector3(0, gridHeight * cellSize, 0);
+
+        Gizmos.DrawLine(bottomLeft, bottomRight);
+        Gizmos.DrawLine(bottomRight, topRight);
+        Gizmos.DrawLine(topRight, topLeft);
+        Gizmos.DrawLine(topLeft, bottomLeft);
+    }
+
+    // M�thode de test pour v�rifier les conversions
+    [ContextMenu("Test Grid Conversions")]
+    private void TestGridConversions()
+    {
+        // Test quelques conversions
+        Vector2Int gridPos = new Vector2Int(2, 3);
+        Vector3 worldPos = GridToWorld(gridPos);
+        Vector2Int backToGrid = WorldToGrid(worldPos);
+
+        Debug.Log($"Test conversion :");
+        Debug.Log($"Grille {gridPos} -> Monde {worldPos} -> Grille {backToGrid}");
+
+        // Test les limites
+        Debug.Log($"(0,0) dans les limites : {IsInBounds(new Vector2Int(0, 0))}");
+        Debug.Log($"({gridWidth - 1},{gridHeight - 1}) dans les limites : {IsInBounds(new Vector2Int(gridWidth - 1, gridHeight - 1))}");
+        Debug.Log($"({gridWidth},{gridHeight}) dans les limites : {IsInBounds(new Vector2Int(gridWidth, gridHeight))}");
+    }
+
+    // M�thode de test pour la logique de PathFinding avec syst�me de tags
+    [ContextMenu("Test PathFinding Logic")]
+    private void TestPathFindingLogic()
+    {
+        Vector2Int testPosition = new Vector2Int(2, 2);
+
+        Debug.Log($"=== Test PathFinding Logic sur {testPosition} ===");
+        Debug.Log($"Position dans limites : {IsInBounds(testPosition)}");
+        Debug.Log($"Unit� pr�sente : {HasUnitAt(testPosition)}");
+        Debug.Log($"Obstacle pr�sent : {HasObstacleAt(testPosition)}");
+        Debug.Log($"Type terrain : {GetGroundTypeAt(testPosition).GetDisplayName()}");
+
+        // Test avec des GameObjects fictifs (n�cessite vraies unit�s dans la sc�ne)
+        GameObject unitAtPosition = GetUnitAt(testPosition);
+        if (unitAtPosition != null)
+        {
+            Debug.Log($"Unit� d�tect�e : {unitAtPosition.name} ({UnitTypeHelper.GetDisplayName(unitAtPosition)})");
+            Debug.Log($"Terrains accessibles : {UnitTypeHelper.GetAccessibleTerrains(unitAtPosition)}");
+        }
+        else
+        {
+            Debug.Log("Aucune unit� d�tect�e sur cette position");
         }
     }
-}
 
+    // M�thode utilitaire pour cr�er des zones de terrain rapidement
+    [ContextMenu("Create Test Terrain")]
+    private void CreateTestTerrain()
+    {
+        if (groundTypeGrid == null)
+        {
+            InitializeGroundTypeGrid();
+        }
+
+        // Cr�e une zone d'eau (coins bas-gauche)
+        for (int x = 0; x < 3; x++)
+        {
+            for (int y = 0; y < 3; y++)
+            {
+                SetGroundTypeAt(new Vector2Int(x, y), GroundType.Water);
+            }
+        }
+
+        // Cr�e une zone de montagne (coins haut-droite)
+        for (int x = gridWidth - 3; x < gridWidth; x++)
+        {
+            for (int y = gridHeight - 3; y < gridHeight; y++)
+            {
+                SetGroundTypeAt(new Vector2Int(x, y), GroundType.Mountain);
+            }
+        }
+
+        Debug.Log("Terrain de test cr�� : Eau en bas-gauche, Montagne en haut-droite");
+    }
+}
