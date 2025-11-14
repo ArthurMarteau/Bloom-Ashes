@@ -4,12 +4,25 @@ using UnityEngine;
 
 // Composant responsable de l'exécution du mouvement individuel d'une unité
 // Attaché à chaque GameObject unité pour gérer son déplacement case par case
-// Exécute les chemins calculés par PathFinding via coordination MovementService
+// Exécute les chemins calculés par PathFinding via coordination MovementManager
 public class MovementController : MonoBehaviour
 {
     [Header("Movement Settings")]
-    [SerializeField] private float movementSpeed = 2f;          // Vitesse déplacement (unités Unity/seconde)
-    [SerializeField] private float centerTolerance = 0.1f;      // Distance pour considérer case "atteinte"
+    private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
+    private float centerTolerance = 1f;      // Distance pour considérer case "atteinte"
+
+    // Modifie la vitesse de déplacement de l'unité
+    // Appelé par UnitStats pour synchroniser les stats
+    public void SetMovementSpeed(float newSpeed)
+    {
+        movementSpeed = Mathf.Max(0.1f, newSpeed);
+
+        if (debugMovement)
+        {
+            Debug.Log($"MovementController {gameObject.name}: Vitesse mise à jour -> {movementSpeed}");
+        }
+    }
+
 
     [Header("Debug")]
     [SerializeField] private bool debugMovement = true;         // Affichage debug dans console
@@ -31,12 +44,13 @@ public class MovementController : MonoBehaviour
     private bool isMoving = false;
 
     // Références cached pour performance
-    private MovementService movementService;
+    private MovementManager movementManager;
     private GameObject unitGameObject;
-    private AnimatorManager animatorManager;
+    private AnimatorController animatorController;
 
     // Variables de contrôle temporel
-    private Coroutine movementCoroutine;
+    private Coroutine movementCoroutine; 
+    private Coroutine retryCoroutine;
 
     // Initialise les références et l'état par défaut
     private void Awake()
@@ -44,29 +58,31 @@ public class MovementController : MonoBehaviour
         unitGameObject = gameObject;
         currentState = MovementState.Idle;
         
-        // Cache la référence AnimatorManager
-        animatorManager = GetComponent<AnimatorManager>();
-        if (animatorManager == null)
+        // Cache la référence AnimatorController
+        animatorController = GetComponent<AnimatorController>();
+        if (animatorController == null)
         {
-            Debug.LogWarning($"MovementController sur {gameObject.name}: AnimatorManager non trouvé!");
+            Debug.LogWarning($"MovementController sur {gameObject.name}: AnimatorController non trouvé!");
         }
     }
 
-    // Cache la référence MovementService au démarrage
+    // Cache la référence MovementManager au démarrage
     private void Start()
     {
-        movementService = MovementService.Instance;
-        if (movementService == null)
+        movementManager = MovementManager.Instance;
+        if (movementManager == null)
         {
-            Debug.LogError($"MovementController sur {gameObject.name}: MovementService non trouvé!");
+            Debug.LogError($"MovementController sur {gameObject.name}: MovementManager non trouvé!");
         }
     }
 
     // Démarre un nouveau mouvement selon le chemin fourni par PathFinding
-    // Interface principale pour MovementService qui a calculé le trajet
+    // Interface principale pour MovementManager qui a calculé le trajet
     // Valide le chemin et lance la coroutine de déplacement
     public bool StartMovement(List<Vector2Int> path)
     {
+        Debug.Log($"StartMovement appelé, position actuelle: {transform.position}");
+
         // Valide le chemin fourni
         if (path == null || path.Count == 0)
         {
@@ -110,6 +126,13 @@ public class MovementController : MonoBehaviour
             movementCoroutine = null;
         }
 
+        // Arrête la coroutine de retry si active
+        if (retryCoroutine != null)
+        {
+            StopCoroutine(retryCoroutine);
+            retryCoroutine = null;
+        }
+
         // Remet à zéro les variables d'état
         isMoving = false;
         currentState = MovementState.Idle;
@@ -117,9 +140,9 @@ public class MovementController : MonoBehaviour
         currentPathIndex = 0;
 
         // Arrête les animations et retourne à idle
-        if (animatorManager != null)
+        if (animatorController != null)
         {
-            animatorManager.StopAllAnimations();
+            animatorController.StopAllAnimations();
         }
 
         if (debugMovement)
@@ -152,16 +175,16 @@ public class MovementController : MonoBehaviour
             targetCell = currentPath[currentPathIndex];
 
             // Gestion spéciale Rootborn : IdleReversed avant mouvement
-            if (IsRootborn() && currentPathIndex == 0) // Seulement au début du chemin
+            if (IsRootborn() && currentPathIndex == 0)
             {
                 yield return StartCoroutine(PlayRootbornPreMovementAnimation());
             }
 
             // Démarre l'animation de marche
-            if (animatorManager != null)
+            if (animatorController != null)
             {
                 Vector2Int currentPosition = GridManager.Instance.WorldToGrid(transform.position);
-                animatorManager.PlayWalkAnimation(currentPosition, targetCell);
+                animatorController.PlayWalkAnimation(currentPosition, targetCell);
             }
 
             // Vérifie que la case cible est toujours accessible
@@ -230,6 +253,41 @@ public class MovementController : MonoBehaviour
                 yield break;
             }
 
+            // Vérifie en temps réel si la case cible est toujours libre
+            if (GridManager.Instance.GetUnitAt(targetCell) != null &&
+                GridManager.Instance.GetUnitAt(targetCell) != unitGameObject)
+            {
+                // Case occupée → retour animé à la case précédente
+                Vector3 currentPosition = transform.position;
+
+                // Joue l'animation de marche dans la direction opposée
+                Vector2Int currentGridPos = GridManager.Instance.WorldToGrid(currentPosition);
+                Vector2Int startGridPos = GridManager.Instance.WorldToGrid(startPosition);
+                if (animatorController != null)
+                {
+                    animatorController.PlayWalkAnimation(currentGridPos, startGridPos);
+                }
+
+                float returnTime = (elapsedTime / movementSpeed) / 1f;
+                float returnElapsed = 0f;
+
+                while (returnElapsed < returnTime)
+                {
+                    float returnProgress = returnElapsed / returnTime;
+                    transform.position = Vector3.Lerp(currentPosition, startPosition, returnProgress);
+                    returnElapsed += Time.deltaTime;
+                    yield return null;
+                }
+
+                transform.position = startPosition;
+                if (animatorController != null)
+                {
+                    animatorController.PlayIdleAnimation();
+                }
+                HandlePathBlocked();
+                yield break;
+            }
+
             // Calcule la progression (0 à 1)
             float progression = elapsedTime / journeyTime;
 
@@ -245,37 +303,60 @@ public class MovementController : MonoBehaviour
         transform.position = targetPosition;
     }
 
-
-
     // Gère la situation où le chemin devient inaccessible
-    // Demande un nouveau chemin au MovementService pour contourner l'obstacle
-    // Change l'état et notifie MovementService pour recalcul
+    // Demande un nouveau chemin au MovementManager pour contourner l'obstacle
+    // Change l'état et notifie MovementManager pour recalcul
     private void HandlePathBlocked()
     {
         currentState = MovementState.Blocked;
         isMoving = false;
 
-        string reason = "Case suivante inaccessible, demande nouveau chemin";
-
         if (debugMovement)
         {
-            Debug.LogWarning($"MovementController {gameObject.name}: {reason}");
+            Debug.LogWarning($"MovementController {gameObject.name}: Case inaccessible");
         }
 
-        // Demande un nouveau chemin au MovementService
-        if (movementService != null)
+        // Arrête l'animation
+        if (animatorController != null)
+        {
+            animatorController.PlayIdleAnimation();
+        }
+
+        // Lance retry automatique
+        if (movementManager != null && currentPath.Count > 0)
         {
             Vector2Int finalDestination = currentPath[currentPath.Count - 1];
-            movementService.MoveUnitTo(unitGameObject, finalDestination, 1); // Priorité 1 pour recalcul
+            retryCoroutine = StartCoroutine(RetryPathPeriodically(finalDestination));
         }
+    }
 
-        // Remet en état idle en attendant le nouveau chemin
-        currentState = MovementState.Idle;
+    // Coroutine pour réessayer de demander un nouveau chemin périodiquement
+    private IEnumerator RetryPathPeriodically(Vector2Int destination)
+    {
+
+        while (currentState == MovementState.Blocked)
+        {
+
+            yield return new WaitForSeconds(1f);
+
+            // Réessaye le chemin
+            if (movementManager != null)
+            {
+                movementManager.MoveUnitTo(unitGameObject, destination);
+            }
+        }
+    }
+
+    public void StartRetryToDestination(Vector2Int destination)
+    {
+        Debug.Log($"MovementController {gameObject.name}: StartRetryToDestination appelé vers {destination}");
+        currentState = MovementState.Blocked;
+        retryCoroutine = StartCoroutine(RetryPathPeriodically(destination));
     }
 
     // Actions finales quand la destination est atteinte avec succès
-    // Nettoie l'état et notifie MovementService de la réussite
-    // Transition vers état final puis retour à idle
+    // Nettoie l'état et notifie MovementManager de la réussite
+    // Transition vers état final puis retour à idle (sauf si attaque en cours)
     private void OnMovementCompleted()
     {
         currentState = MovementState.Arrived;
@@ -286,22 +367,20 @@ public class MovementController : MonoBehaviour
             Debug.Log($"MovementController {gameObject.name}: Destination atteinte avec succès");
         }
 
-        // Retourne à l'animation idle
-        if (animatorManager != null)
+        // Vérifie si une attaque est en cours
+        AttackController attackController = GetComponent<AttackController>();
+        bool isAttacking = attackController != null && attackController.IsAttacking();
+
+        // Retourne à l'animation idle SEULEMENT si pas en train d'attaquer
+        if (animatorController != null && !isAttacking)
         {
-            animatorManager.PlayIdleAnimation();
+            animatorController.PlayIdleAnimation();
         }
 
         // Reset la session IdleReversed pour Rootborn (vraie fin de mouvement)
-        if (animatorManager != null)
+        if (animatorController != null && !isAttacking)
         {
-            animatorManager.ResetIdleReversedSession();
-        }
-
-        // Notifie MovementService du succès
-        if (movementService != null)
-        {
-            movementService.OnMovementCompleted(unitGameObject);
+            animatorController.ResetIdleReversedSession();
         }
 
         // Remet en état idle pour prochaine commande
@@ -322,7 +401,7 @@ public class MovementController : MonoBehaviour
     // Bloque le mouvement jusqu'à ce que IdleReversed soit terminé
     private IEnumerator PlayRootbornPreMovementAnimation()
     {
-        if (animatorManager == null || !IsRootborn())
+        if (animatorController == null || !IsRootborn())
         {
             yield break;
         }
@@ -330,7 +409,7 @@ public class MovementController : MonoBehaviour
         bool animationCompleted = false;
 
         // Lance l'animation IdleReversed avec callback
-        animatorManager.PlayRootbornIdleReversed(() => {
+        animatorController.PlayRootbornIdleReversed(() => {
             animationCompleted = true;
         });
 

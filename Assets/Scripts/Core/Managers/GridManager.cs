@@ -125,7 +125,7 @@ public class GridManager : MonoBehaviour
         }
 
         // R�gle obstacles : bloquent selon les capacit�s de vol de l'unit�
-        if (HasObstacleAt(gridPosition))
+        if (GetObstacleAt(gridPosition))
         {
             if (!UnitTypeHelper.CanFlyOverObstacles(unit))
             {
@@ -172,26 +172,6 @@ public class GridManager : MonoBehaviour
         Debug.Log($"Terrain {gridPosition} d�fini comme {groundType.GetDisplayName()}");
     }
 
-    // D�tecte la pr�sence d'une unit� sur une position de grille
-    // Convertit position grille en monde puis effectue raycast sur layer Units
-    // Retourne true si une unit� occupe cette case
-    public bool HasUnitAt(Vector2Int gridPosition)
-    {
-        Vector3 worldPosition = GridToWorld(gridPosition);
-        Collider2D unitCollider = Physics2D.OverlapPoint(worldPosition, unitLayer);
-        return unitCollider != null;
-    }
-
-    // D�tecte la pr�sence d'un obstacle sur une position de grille
-    // Convertit position grille en monde puis effectue raycast sur layer Obstacles
-    // Retourne true si un obstacle occupe cette case
-    public bool HasObstacleAt(Vector2Int gridPosition)
-    {
-        Vector3 worldPosition = GridToWorld(gridPosition);
-        Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
-        return obstacleCollider != null;
-    }
-
     // Retourne l'unit� pr�sente sur une position de grille (null si aucune)
     // Utilis� pour identifier quelle unit� occupe une case sp�cifique
     // Utile pour interactions, s�lection et gestion de collisions
@@ -210,14 +190,6 @@ public class GridManager : MonoBehaviour
         Vector3 worldPosition = GridToWorld(gridPosition);
         Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
         return obstacleCollider?.gameObject;
-    }
-
-    // Getter pour la taille de cellule
-    // Permet aux autres scripts de conna�tre la taille d'une case pour leurs calculs
-    // (port�es d'attaque, formation d'unit�s, distances, interface utilisateur)
-    public float GetCellSize()
-    {
-        return cellSize;
     }
 
     // Getter pour les dimensions de la grille
@@ -289,8 +261,8 @@ public class GridManager : MonoBehaviour
 
         Debug.Log($"=== Test PathFinding Logic sur {testPosition} ===");
         Debug.Log($"Position dans limites : {IsInBounds(testPosition)}");
-        Debug.Log($"Unit� pr�sente : {HasUnitAt(testPosition)}");
-        Debug.Log($"Obstacle pr�sent : {HasObstacleAt(testPosition)}");
+        Debug.Log($"Unit� pr�sente : {GetUnitAt(testPosition)}");
+        Debug.Log($"Obstacle pr�sent : {GetObstacleAt(testPosition)}");
         Debug.Log($"Type terrain : {GetGroundTypeAt(testPosition).GetDisplayName()}");
 
         // Test avec des GameObjects fictifs (n�cessite vraies unit�s dans la sc�ne)

@@ -99,8 +99,8 @@ public class PathFindingTester : MonoBehaviour
         if (!isWalkable)
         {
             GroundType terrainType = GridManager.Instance.GetGroundTypeAt(potentiallyBlocked);
-            bool hasObstacle = GridManager.Instance.HasObstacleAt(potentiallyBlocked);
-            bool hasUnit = GridManager.Instance.HasUnitAt(potentiallyBlocked);
+            bool hasObstacle = GridManager.Instance.GetObstacleAt(potentiallyBlocked);
+            bool hasUnit = GridManager.Instance.GetUnitAt(potentiallyBlocked);
 
             Debug.Log($"  Raison blocage - Terrain: {terrainType.GetDisplayName()}, Obstacle: {hasObstacle}, Unité: {hasUnit}");
 
@@ -257,12 +257,12 @@ public class PathFindingTester : MonoBehaviour
             {
                 Vector2Int position = new Vector2Int(x, y);
 
-                if (GridManager.Instance.HasUnitAt(position))
+                if (GridManager.Instance.GetUnitAt(position))
                 {
                     unitCells++;
                     blockedCells++;
                 }
-                else if (GridManager.Instance.HasObstacleAt(position))
+                else if (GridManager.Instance.GetObstacleAt(position))
                 {
                     obstacleCells++;
                     // Les obstacles bloquent seulement les unités non-volantes

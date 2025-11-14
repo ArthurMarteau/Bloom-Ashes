@@ -6,7 +6,7 @@ using UnityEngine;
 // Composant responsable de la gestion des animations d'unités
 // Attaché à chaque GameObject unité pour gérer ses animations selon les directions
 // Interface entre MovementController et Animator Unity avec gestion miroir
-public class AnimatorManager : MonoBehaviour
+public class AnimatorController : MonoBehaviour
 {
     [Header("Animation Settings")]
     [SerializeField] private float rootbornIdleReversedDuration = 1f;  // Durée IdleReversed Rootborn
@@ -50,13 +50,13 @@ public class AnimatorManager : MonoBehaviour
         // Valide que les composants existent
         if (unitAnimator == null)
         {
-            Debug.LogError($"AnimatorManager sur {gameObject.name}: Composant Animator manquant!");
+            Debug.LogError($"AnimatorController sur {gameObject.name}: Composant Animator manquant!");
             return;
         }
 
         if (spriteRenderer == null)
         {
-            Debug.LogError($"AnimatorManager sur {gameObject.name}: Composant SpriteRenderer manquant!");
+            Debug.LogError($"AnimatorController sur {gameObject.name}: Composant SpriteRenderer manquant!");
             return;
         }
 
@@ -65,7 +65,7 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager initialisé pour {gameObject.name}, Rootborn: {IsRootborn()}");
+            Debug.Log($"AnimatorController initialisé pour {gameObject.name}, Rootborn: {IsRootborn()}");
         }
     }
 
@@ -108,12 +108,92 @@ public class AnimatorManager : MonoBehaviour
 
             if (debugAnimations)
             {
-                Debug.Log($"AnimatorManager {gameObject.name}: Animation {animationName}, Direction {direction}, Miroir: {requiresMirror}");
+                Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName}, Direction {direction}, Miroir: {requiresMirror}");
             }
         }
         else
         {
-            Debug.LogWarning($"AnimatorManager {gameObject.name}: Animation non trouvée pour direction {direction}");
+            Debug.LogWarning($"AnimatorController {gameObject.name}: Animation non trouvée pour direction {direction}");
+        }
+    }
+
+    // Interface pour déclencher animation d'attaque
+    // Ajuste automatiquement la vitesse selon attackInterval de l'unité
+    public void PlayAttackAnimation(Vector2Int fromPosition, Vector2Int toPosition, float attackInterval)
+    {
+        if (unitAnimator == null) return;
+
+        // Calcule la direction de l'attaque
+        AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
+
+        // Détermine si un miroir est requis
+        bool requiresMirror = RequiresMirror(direction);
+        SetMirror(requiresMirror);
+
+        // Construit le nom de l'animation d'attaque
+        string attackAnimationName = GetAttackAnimationName(direction);
+
+        // Joue l'animation
+        unitAnimator.Play(attackAnimationName);
+
+        // Ajuste la vitesse de l'animation selon attackInterval
+        // Si l'animation dure 1s et attackInterval = 0.5s → speed = 2x
+        // Si l'animation dure 1s et attackInterval = 2s → speed = 0.5x
+        StartCoroutine(AdjustAttackSpeed(attackAnimationName, attackInterval));
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {attackAnimationName}, Direction {direction}, Miroir: {requiresMirror}, AttackInterval: {attackInterval}s");
+        }
+    }
+
+    // Ajuste la vitesse de l'animation pour correspondre à attackInterval
+    private IEnumerator AdjustAttackSpeed(string attackAnimationName, float attackInterval)
+    {
+        // Attend une frame pour que l'animation soit chargée
+        yield return null;
+
+        // Récupère la durée originale de l'animation
+        AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
+        float originalAnimationLength = stateInfo.length;
+
+        // Calcule la vitesse nécessaire
+        float requiredSpeed = originalAnimationLength / attackInterval;
+        unitAnimator.speed = requiredSpeed;
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController: Vitesse ajustée à {requiredSpeed}x (animation {originalAnimationLength}s → {attackInterval}s)");
+        }
+
+        // Attend la fin de l'attaque
+        yield return new WaitForSeconds(attackInterval);
+
+        // Remet la vitesse normale
+        unitAnimator.speed = 1f;
+    }
+
+    // Retourne le nom de l'animation d'attaque selon la direction
+    // Utilise la même convention que Walk mais préfixe Attack_
+    private string GetAttackAnimationName(AnimationDirection direction)
+    {
+        switch (direction)
+        {
+            case AnimationDirection.North:
+                return "Attack_N";
+            case AnimationDirection.NorthWest:
+            case AnimationDirection.NorthEast: // Miroir de NW
+                return "Attack_NW";
+            case AnimationDirection.West:
+            case AnimationDirection.East: // Miroir de W
+                return "Attack_W";
+            case AnimationDirection.SouthWest:
+            case AnimationDirection.SouthEast: // Miroir de SW
+                return "Attack_SW";
+            case AnimationDirection.South:
+                return "Attack_S";
+            default:
+                return "Attack_S"; // Fallback
         }
     }
 
@@ -138,7 +218,7 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager {gameObject.name}: Animation Idle");
+            Debug.Log($"AnimatorController {gameObject.name}: Animation Idle");
         }
     }
 
@@ -159,7 +239,7 @@ public class AnimatorManager : MonoBehaviour
         {
             if (debugAnimations)
             {
-                Debug.Log($"AnimatorManager {gameObject.name}: IdleReversed déjà joué cette session, skip");
+                Debug.Log($"AnimatorController {gameObject.name}: IdleReversed déjà joué cette session, skip");
             }
             onComplete?.Invoke();
             return;
@@ -182,7 +262,7 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager {gameObject.name}: Début IdleReversed Rootborn ({rootbornIdleReversedDuration}s)");
+            Debug.Log($"AnimatorController {gameObject.name}: Début IdleReversed Rootborn ({rootbornIdleReversedDuration}s)");
         }
 
         // Marque comme joué pour cette session complète
@@ -233,7 +313,7 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager {gameObject.name}: Fin IdleReversed Rootborn");
+            Debug.Log($"AnimatorController {gameObject.name}: Fin IdleReversed Rootborn");
         }
 
         // Déclenche le callback pour autoriser le mouvement
@@ -248,8 +328,15 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager {gameObject.name}: Session IdleReversed resetée");
+            Debug.Log($"AnimatorController {gameObject.name}: Session IdleReversed resetée");
         }
+    }
+
+    // Vérifie si l'IdleReversed a déjà été joué dans cette session
+    // Utilisé par MovementController et AttackController pour éviter de rejouer
+    public bool HasPlayedIdleReversedThisSession()
+    {
+        return hasPlayedIdleReversedThisSession;
     }
 
     // Calcule la direction d'animation entre deux positions
@@ -311,7 +398,6 @@ public class AnimatorManager : MonoBehaviour
         return gameObject.name.Contains("Rootborn");
     }
 
-
     // Arrête toutes les animations en cours
     // Méthode publique pour reset depuis l'extérieur
     public void StopAllAnimations()
@@ -333,22 +419,41 @@ public class AnimatorManager : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorManager {gameObject.name}: Toutes animations arrêtées");
+            Debug.Log($"AnimatorController {gameObject.name}: Toutes animations arrêtées");
         }
     }
 
-    // Retourne l'état actuel des animations
-    // Interface pour debug et coordination avec autres systèmes
-    public bool IsPlayingSpecialAnimation()
+
+    // Joue l'animation de mort de l'unité
+    // Appelée par UnitStats quand l'unité meurt
+    public void PlayDeathAnimation()
     {
-        return isPlayingIdleReversed;
+        if (unitAnimator == null) return;
+
+        // Arrête toutes les animations en cours
+        if (idleReversedCoroutine != null)
+        {
+            StopCoroutine(idleReversedCoroutine);
+            isPlayingIdleReversed = false;
+        }
+
+        // Remet le miroir par défaut
+        SetMirror(false);
+
+        // Joue l'animation de mort
+        unitAnimator.Play("Death");
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController {gameObject.name}: Animation Death");
+        }
     }
 
     // Méthode de debug pour afficher l'état de l'animator
     [ContextMenu("Debug Animator State")]
     private void DebugAnimatorState()
     {
-        Debug.Log($"=== AnimatorManager Debug - {gameObject.name} ===");
+        Debug.Log($"=== AnimatorController Debug - {gameObject.name} ===");
         Debug.Log($"Est Rootborn: {IsRootborn()}");
         Debug.Log($"IdleReversed en cours: {isPlayingIdleReversed}");
         Debug.Log($"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}");

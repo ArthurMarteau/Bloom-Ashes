@@ -118,11 +118,6 @@ public class SelectionManager : MonoBehaviour
         {
             EndSelection();
         }
-        // Clic droit - ordre de mouvement pour les unités sélectionnées
-        else if (Input.GetMouseButtonDown(1))
-        {
-            HandleMovementOrder();
-        }
     }
 
     // Démarre une sélection potentielle et détermine le type (simple/rectangle)
@@ -512,65 +507,5 @@ public class SelectionManager : MonoBehaviour
     public int GetSelectedUnitCount()
     {
         return selectedUnits.Count;
-    }
-
-    // === GESTION DES ORDRES DE MOUVEMENT ===
-
-    // Traite les ordres de mouvement via clic droit
-    // Envoie toutes les unités sélectionnées vers la position cliquée
-    // Interface principale entre sélection et système de mouvement
-    private void HandleMovementOrder()
-    {
-        // Vérifie qu'il y a des unités sélectionnées
-        if (!HasUnitsSelected())
-        {
-            Debug.Log("Aucune unité sélectionnée pour ordre de mouvement");
-            return;
-        }
-
-        // Convertit la position de la souris en coordonnées de grille
-        Vector3 mouseWorldPosition = GetMouseWorldPosition();
-        Vector2Int targetGridPosition = GridManager.Instance.WorldToGrid(mouseWorldPosition);
-
-        // Vérifie que la destination est dans les limites
-        if (!GridManager.Instance.IsInBounds(targetGridPosition))
-        {
-            Debug.LogWarning($"Ordre de mouvement hors limites : {targetGridPosition}");
-            return;
-        }
-
-        // Envoie l'ordre de mouvement à toutes les unités sélectionnées
-        List<GameObject> selectedUnitsList = GetSelectedUnits();
-        int successfulOrders = 0;
-
-        foreach (GameObject unit in selectedUnitsList)
-        {
-            if (MovementService.Instance != null)
-            {
-                bool orderSuccessful = MovementService.Instance.MoveUnitTo(unit, targetGridPosition);
-                if (orderSuccessful)
-                {
-                    successfulOrders++;
-                }
-            }
-            else
-            {
-                Debug.LogError("MovementService non trouvé ! Assure-toi qu'il y a un GameObject MovementService dans la scène.");
-                break;
-            }
-        }
-
-        Debug.Log($"Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnitsList.Count} unités");
-    }
-
-    // Convertit la position de la souris en position monde
-    // Utilisé pour déterminer où le joueur clique sur la grille
-    // Interface utilitaire pour conversion coordonnées
-    private Vector3 GetMouseWorldPosition()
-    {
-        Vector3 mouseScreenPosition = Input.mousePosition;
-        Vector3 mouseWorldPosition = mainCamera.ScreenToWorldPoint(mouseScreenPosition);
-        mouseWorldPosition.z = 0f; // Assure coordonnée Z à 0 pour 2D
-        return mouseWorldPosition;
     }
 }

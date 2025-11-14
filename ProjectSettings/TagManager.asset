@@ -10,6 +10,7 @@ TagManager:
   - WaterUnit
   - MountainUnit
   - AirUnit
+  - Unit
   layers:
   - Default
   - TransparentFX
@@ -50,7 +51,7 @@ TagManager:
   - name: Trails
     uniqueID: 3237316205
     locked: 0
-  - name: Environnment
+  - name: Obstacle
     uniqueID: 1271899921
     locked: 0
   - name: Environnment Walkable
