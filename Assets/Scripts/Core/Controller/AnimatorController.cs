@@ -398,6 +398,13 @@ public class AnimatorController : MonoBehaviour
         return gameObject.name.Contains("Rootborn");
     }
 
+    // Retourne l'état actuel des animations
+    // Interface pour debug et coordination avec autres systèmes
+    public bool IsPlayingSpecialAnimation()
+    {
+        return isPlayingIdleReversed;
+    }
+
     // Arrête toutes les animations en cours
     // Méthode publique pour reset depuis l'extérieur
     public void StopAllAnimations()
