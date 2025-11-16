@@ -158,6 +158,19 @@ public class MovementController : MonoBehaviour
         return currentState;
     }
 
+    // Vérifie si l'unité est prête à recevoir un nouvel ordre de mouvement
+    // Retourne false si une animation pré-mouvement (IdleReversed) est en cours
+    public bool IsReadyForMovement()
+    {
+        // Si c'est un Rootborn et que l'IdleReversed est en cours, pas prêt
+        if (IsRootborn() && animatorController != null && animatorController.IsPlayingSpecialAnimation())
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     // Coroutine principale qui exécute le déplacement case par case
     // Boucle de mouvement qui respecte la grille et détecte les obstacles
     // Gère la progression étape par étape jusqu'à destination

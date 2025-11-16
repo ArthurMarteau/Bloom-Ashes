@@ -147,6 +147,19 @@ public class MovementManager : MonoBehaviour
             return false;
         }
 
+        // Vérifie si l'unité est prête (pas d'IdleReversed en cours pour Rootborn)
+        if (!movementController.IsReadyForMovement())
+        {
+            if (debugMovements)
+            {
+                Debug.Log($"MovementManager: {unit.name} pas prêt (animation en cours), ordre remis en queue");
+            }
+
+            // Remet l'ordre en queue pour réessayer plus tard
+            movementQueue.Enqueue(request);
+            return false;
+        }
+
         // Arrête tout mouvement en cours
         movementController.StopMovement();
 
