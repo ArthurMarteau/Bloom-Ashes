@@ -174,13 +174,13 @@ public class MovementManager : MonoBehaviour
 
         // Utilise la position physique réelle au lieu d'une case arrondie
         Vector3 actualPosition = unit.transform.position;
-        Debug.Log($"🔍 ExecuteAfterStop: Position physique = {actualPosition}"); // NOUVEAU
+        Debug.Log($"🔍 ExecuteAfterStop: Position physique = {actualPosition}");
         Vector3 targetWorldPosition = GridManager.Instance.GridToWorld(targetPosition);
         float distanceToTarget = Vector3.Distance(actualPosition, targetWorldPosition);
 
         // Vérifie si déjà à destination (physiquement proche)
         Vector2Int currentGridPosition = GridManager.Instance.WorldToGrid(actualPosition);
-        Debug.Log($"🔍 ExecuteAfterStop: Case grille = {currentGridPosition}, Cible = {targetPosition}"); // NOUVEAU
+        Debug.Log($"🔍 ExecuteAfterStop: Case grille = {currentGridPosition}, Cible = {targetPosition}");
         if (currentGridPosition == targetPosition && distanceToTarget < 0.1f)
         {
             Debug.Log($"MovementManager: {unit.name} déjà à destination {targetPosition}");
@@ -192,7 +192,7 @@ public class MovementManager : MonoBehaviour
 
         if (path == null || path.Count == 0)
         {
-            Debug.Log($"🔍 ExecuteAfterStop: Chemin calculé = {string.Join(" -> ", path)}"); // NOUVEAU
+            Debug.Log($"🔍 ExecuteAfterStop: Chemin calculé = {string.Join(" -> ", path)}");
             Debug.LogWarning($"MovementManager: Pas de chemin trouvé pour {unit.name} vers {targetPosition}, lancement retry");
             movementController.StartRetryToDestination(targetPosition);
             yield break;
