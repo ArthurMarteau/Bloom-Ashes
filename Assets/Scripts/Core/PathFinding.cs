@@ -51,27 +51,8 @@ public static class PathFinding
     // Nouvelle surcharge : calcule chemin depuis position monde réelle
     public static List<Vector2Int> FindPath(Vector3 worldStartPosition, Vector2Int endPosition, GameObject unit)
     {
-        // Convertit la position monde en case grille
         Vector2Int gridStartPosition = GridManager.Instance.WorldToGrid(worldStartPosition);
-
-        // Calcule le chemin normalement
-        List<Vector2Int> path = FindPath(gridStartPosition, endPosition, unit);
-
-        // Si l'unité n'est pas au centre de sa case, ajoute sa case actuelle au début du chemin
-        Vector3 cellCenter = GridManager.Instance.GridToWorld(gridStartPosition);
-        float distanceFromCenter = Vector3.Distance(worldStartPosition, cellCenter);
-
-        if (distanceFromCenter > 0.1f && path.Count > 0)
-        {
-            // L'unité doit d'abord finir d'atteindre sa case actuelle
-            // Mais seulement si ce n'est pas déjà la première étape
-            if (path[0] != gridStartPosition)
-            {
-                path.Insert(0, gridStartPosition);
-            }
-        }
-
-        return path;
+        return FindPath(gridStartPosition, endPosition, unit);
     }
 
     // Implémentation pure de l'algorithme A* sans optimisations

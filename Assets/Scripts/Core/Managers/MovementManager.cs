@@ -198,18 +198,6 @@ public class MovementManager : MonoBehaviour
             yield break;
         }
 
-        if (path.Count > 1)
-        {
-            Vector3 firstCellCenter = GridManager.Instance.GridToWorld(path[0]);
-            float distanceFromFirstCell = Vector3.Distance(actualPosition, firstCellCenter);
-
-            if (distanceFromFirstCell > 0.1f) // Si l'unité est à plus de 30% de la case
-            {
-                path.RemoveAt(0); // Retire la première case, l'unité ira directement vers la suivante
-                Debug.Log($"🔍 Première case retirée, nouveau chemin : {string.Join(" -> ", path)}");
-            }
-        }
-
         // Lance le mouvement
         movementController.StartMovement(path);
         Debug.Log($"MovementManager: Mouvement démarré pour {unit.name}, {path.Count} étapes");

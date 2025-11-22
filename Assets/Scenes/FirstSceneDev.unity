@@ -453,6 +453,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 6089708986104746477, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: m_EdgeRadius
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7541550046592275571, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_Enabled
       value: 0
@@ -1408,7 +1412,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   maxMovementsPerFrame: 5
-  debugMovements: 0
+  debugMovements: 1
 --- !u!1 &875531318
 GameObject:
   m_ObjectHideFlags: 0
@@ -1747,6 +1751,10 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 224587866070118923, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 6089708986104746477, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: m_EdgeRadius
       value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 7541550046592275571, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
