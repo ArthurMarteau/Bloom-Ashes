@@ -4,7 +4,7 @@ using UnityEngine;
 
 // Gère l'attaque persistante d'une cible ennemie
 // L'unité poursuit et attaque sa cible tant que l'ordre persiste
-// S'intègre avec MovementManager pour se positionner à portée
+// S'intègre avec MovementController pour se positionner à portée
 public class AttackController : MonoBehaviour
 {
     [Header("Attack Settings")]
@@ -19,7 +19,7 @@ public class AttackController : MonoBehaviour
     private float lastCheckTime;
 
     // Références
-    private MovementManager movementManager;
+    private MovementController movementController;
     private UnitStats unitStats;
     private TeamComponent teamComponent;
     private GameObject unitGameObject;
@@ -48,14 +48,11 @@ public class AttackController : MonoBehaviour
         {
             Debug.LogWarning($"AttackController sur {gameObject.name}: AnimatorController non trouvé!");
         }
-    }
 
-    private void Start()
-    {
-        movementManager = MovementManager.Instance;
-        if (movementManager == null)
+        movementController = GetComponent<MovementController>();
+        if (movementController == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: MovementManager non trouvé !");
+            Debug.LogError($"AttackController sur {gameObject.name}: MovementController non trouvé !");
         }
     }
 
@@ -69,7 +66,6 @@ public class AttackController : MonoBehaviour
 
         // Vérifie TOUJOURS si la cible a bougé, même pendant mouvement
         Vector2Int currentTargetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-        Vector2Int lastKnownPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
         // Si cible a bougé (changé de case) et qu'on n'est pas à portée
         if (!IsTargetInRange())
@@ -219,6 +215,7 @@ public class AttackController : MonoBehaviour
 
     // Vérifie si la cible est à portée d'attaque ET si l'unité est au centre de sa case
     // Utilise la portée définie dans UnitStats
+    // Utilise la position logique (pas transform.position pendant Lerp)
     private bool IsTargetInRange()
     {
         if (unitStats == null || currentTarget == null)
@@ -226,22 +223,9 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
-        Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
+        // Utilise la position logique au lieu de transform.position
+        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-
-        // Vérifie d'abord si l'unité est au centre de sa case
-        Vector3 cellCenter = GridManager.Instance.GridToWorld(myPosition);
-        float distanceFromCenter = Vector3.Distance(transform.position, cellCenter);
-
-        // Tolérance : l'unité doit être à moins de 0.1 unité du centre
-        if (distanceFromCenter > 0.1f)
-        {
-            if (debugAttack)
-            {
-                Debug.Log($"AttackController {gameObject.name}: Pas encore au centre de la case (distance: {distanceFromCenter:F3})");
-            }
-            return false; // Pas au centre, ne peut pas attaquer
-        }
 
         // Vérifie ensuite la portée d'attaque
         int attackRange = unitStats.GetAttackRange();
@@ -251,23 +235,24 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack && inRange)
         {
-            Debug.Log($"AttackController {gameObject.name}: À portée et au centre de la case → Prêt à attaquer");
+            Debug.Log($"AttackController {gameObject.name}: À portée → Prêt à attaquer");
         }
 
         return inRange;
     }
 
     // Déplace l'unité à portée de la cible
-    // Utilise MovementManager pour le déplacement
+    // Utilise MovementController pour le déplacement
+    // Utilise la position logique pour calculs
     private void MoveToRange()
     {
-        if (movementManager == null || currentTarget == null)
+        if (movementController == null || currentTarget == null)
         {
             return;
         }
 
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-        Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
+        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
 
         int attackRange = unitStats.GetAttackRange();
 
@@ -284,14 +269,13 @@ public class AttackController : MonoBehaviour
         }
 
         // Arrête le mouvement en cours avant d'en lancer un nouveau
-        MovementController movementController = GetComponent<MovementController>();
         if (movementController != null)
         {
             movementController.StopMovement();
         }
 
         // Envoie l'ordre de mouvement
-        movementManager.MoveUnitTo(unitGameObject, bestPosition);
+        movementController.MoveTo(bestPosition);
 
         if (debugAttack)
         {

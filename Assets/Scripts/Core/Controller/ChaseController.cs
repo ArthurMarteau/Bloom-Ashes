@@ -3,7 +3,7 @@ using UnityEngine;
 
 // Gère la poursuite persistante d'une unité cible
 // L'unité suit sa cible et reste adjacente à elle tant que l'ordre persiste
-// S'intègre avec MovementManager pour les déplacements case par case
+// S'intègre avec MovementController pour les déplacements case par case
 public class ChaseController : MonoBehaviour
 {
     [Header("Chase Settings")]
@@ -17,21 +17,18 @@ public class ChaseController : MonoBehaviour
     private float lastCheckTime;
 
     // Références
-    private MovementManager movementManager;
+    private MovementController movementController;
     private GameObject unitGameObject;
 
     // Initialise les références
     private void Awake()
     {
         unitGameObject = gameObject;
-    }
 
-    private void Start()
-    {
-        movementManager = MovementManager.Instance;
-        if (movementManager == null)
+        movementController = GetComponent<MovementController>();
+        if (movementController == null)
         {
-            Debug.LogError($"ChaseController sur {gameObject.name}: MovementManager non trouvé !");
+            Debug.LogError($"ChaseController sur {gameObject.name}: MovementController non trouvé !");
         }
     }
 
@@ -57,10 +54,10 @@ public class ChaseController : MonoBehaviour
             }
 
             // Annule mouvement en cours et recalcule
-            MovementController movementController = GetComponent<MovementController>();
-            if (movementController != null)
+            MovementController mc = GetComponent<MovementController>();
+            if (mc != null)
             {
-                movementController.StopMovement();
+                mc.StopMovement();
             }
 
             MoveTowardsTarget();
@@ -68,8 +65,8 @@ public class ChaseController : MonoBehaviour
         }
 
         // Si cible n'a pas bougé, vérifie seulement si on est à l'arrêt
-        MovementController mc = GetComponent<MovementController>();
-        if (mc != null && mc.GetCurrentState() == MovementController.MovementState.Moving)
+        MovementController movementCtrl = GetComponent<MovementController>();
+        if (movementCtrl != null && movementCtrl.GetCurrentState() == MovementController.MovementState.Moving)
         {
             // En mouvement vers la bonne destination, on attend
             return;
@@ -169,7 +166,7 @@ public class ChaseController : MonoBehaviour
         else
         {
             // Cible n'a pas bougé, vérifie si on est adjacent
-            Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
+            Vector2Int myPosition = movementController.GetCurrentLogicalCell();
 
             if (!IsAdjacentTo(myPosition, currentTargetPosition))
             {
@@ -182,14 +179,15 @@ public class ChaseController : MonoBehaviour
 
     // Calcule et exécute le mouvement vers la cible
     // Trouve la case la plus proche (pas forcément adjacente) et s'y déplace
+    // Utilise la position logique pour calculs
     private void MoveTowardsTarget()
     {
-        if (movementManager == null || currentTarget == null)
+        if (movementController == null || currentTarget == null)
         {
             return;
         }
 
-        Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
+        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
         // Vérifie si déjà adjacent
@@ -216,7 +214,7 @@ public class ChaseController : MonoBehaviour
 
         // Envoie l'ordre de mouvement
         Debug.Log($"📤 Chase: Envoi ordre mouvement vers {bestCell}");
-        movementManager.MoveUnitTo(unitGameObject, bestCell);
+        movementController.MoveTo(bestCell);
 
         if (debugChase)
         {

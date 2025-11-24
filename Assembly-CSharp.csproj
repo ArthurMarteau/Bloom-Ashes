@@ -55,7 +55,7 @@
     <UnityVersion>6000.0.31f1</UnityVersion>
   </PropertyGroup>
   <ItemGroup>
-    <Analyzer Include="C:\Program Files\Microsoft Visual Studio\2022\Community\Common7\IDE\Extensions\Microsoft\Visual Studio Tools for Unity\Analyzers\Microsoft.Unity.Analyzers.dll" />
+    <Analyzer Include="C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\Extensions\Microsoft\Visual Studio Tools for Unity\Analyzers\Microsoft.Unity.Analyzers.dll" />
     <Analyzer Include="D:\Logiciel\UnityHub\6000.0.31f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.SourceGenerators.dll" />
     <Analyzer Include="D:\Logiciel\UnityHub\6000.0.31f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.Properties.SourceGenerator.dll" />
     <Analyzer Include="D:\Logiciel\UnityHub\6000.0.31f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
@@ -76,7 +76,6 @@
     <Compile Include="Assets\Scripts\Core\Controller\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Core\PathFinding.cs" />
     <Compile Include="Assets\Scripts\Units\UnitType.cs" />
-    <Compile Include="Assets\Scripts\Core\Managers\MovementManager.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">

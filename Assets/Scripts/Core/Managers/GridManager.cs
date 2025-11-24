@@ -9,8 +9,8 @@ public class GridManager : MonoBehaviour
     private Vector3 gridOrigin;
 
     [Header("Layer Settings")]
-    [SerializeField] private LayerMask unitLayer = 1 << 8;      // Layer pour d�tecter les unit�s
-    [SerializeField] private LayerMask obstacleLayer = 1 << 6;  // Layer pour d�tecter les obstacles
+    [SerializeField] private LayerMask unitLayer = 1 << 8;      // Layer pour détecter les unités
+    [SerializeField] private LayerMask obstacleLayer = 1 << 6;  // Layer pour détecter les obstacles
 
     [Header("Ground Type Configuration")]
     [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
@@ -28,7 +28,7 @@ public class GridManager : MonoBehaviour
         {
             Instance = this;
             InitializeGroundTypeGrid();
-            Debug.Log($"Grille cr��e : {gridWidth}x{gridHeight}");
+            Debug.Log($"Grille créée : {gridWidth}x{gridHeight}");
         }
         else
         {
@@ -36,26 +36,26 @@ public class GridManager : MonoBehaviour
         }
     }
 
-    // Recalcule l'origine de la grille � chaque modification dans l'inspecteur (initialisation et �dition)
+    // Recalcule l'origine de la grille à chaque modification dans l'inspecteur (initialisation et édition)
     private void OnValidate()
     {
         CalculateGridOrigin();
 
-        // R�initialise la grille de terrain si les dimensions changent
+        // Réinitialise la grille de terrain si les dimensions changent
         if (groundTypeGrid == null || groundTypeGrid.GetLength(0) != gridWidth || groundTypeGrid.GetLength(1) != gridHeight)
         {
             InitializeGroundTypeGrid();
         }
     }
 
-    // Initialise la grille de terrain avec des valeurs par d�faut
-    // Cr�e un tableau 2D avec du terrain normal partout au d�part
-    // Modifiable via l'inspecteur ou m�thodes publiques
+    // Initialise la grille de terrain avec des valeurs par défaut
+    // Crée un tableau 2D avec du terrain normal partout au départ
+    // Modifiable via l'inspecteur ou méthodes publiques
     private void InitializeGroundTypeGrid()
     {
         groundTypeGrid = new GroundType[gridWidth, gridHeight];
 
-        // Remplit avec du terrain normal par d�faut
+        // Remplit avec du terrain normal par défaut
         for (int x = 0; x < gridWidth; x++)
         {
             for (int y = 0; y < gridHeight; y++)
@@ -64,7 +64,7 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Grille de terrain initialis�e avec terrain normal");
+        Debug.Log("Grille de terrain initialisée avec terrain normal");
     }
 
     // Recalcule l'origine de la grille pour centrer la grille
@@ -75,9 +75,9 @@ public class GridManager : MonoBehaviour
         gridOrigin = new Vector3(originX, originY, 0);
     }
 
-    // Convertit une position Unity en coordonn�es de grille
-    // Utilis� pour savoir dans quelle case se trouve un objet (unit�, clic souris, b�timent)
-    // Permet de passer du syst�me de coordonn�es Unity au syst�me de cases du jeu
+    // Convertit une position Unity en coordonnées de grille
+    // Utilisé pour savoir dans quelle case se trouve un objet (unité, clic souris, bâtiment)
+    // Permet de passer du système de coordonnées Unity au système de cases du jeu
     public Vector2Int WorldToGrid(Vector3 worldPosition)
     {
         Vector3 localPosition = worldPosition - gridOrigin;
@@ -86,9 +86,9 @@ public class GridManager : MonoBehaviour
         return new Vector2Int(x, y);
     }
 
-    // Convertit des coordonn�es de grille en position Unity centr�e sur la case
-    // Utilis� pour placer visuellement les objets au centre exact d'une case
-    // Permet de passer du syst�me de cases du jeu au syst�me de coordonn�es Unity
+    // Convertit des coordonnées de grille en position Unity centrée sur la case
+    // Utilisé pour placer visuellement les objets au centre exact d'une case
+    // Permet de passer du système de cases du jeu au système de coordonnées Unity
     public Vector3 GridToWorld(Vector2Int gridPosition)
     {
         float x = gridPosition.x * cellSize + cellSize * 0.5f;
@@ -96,35 +96,37 @@ public class GridManager : MonoBehaviour
         return gridOrigin + new Vector3(x, y, 0);
     }
 
-    // V�rifie si les coordonn�es sont dans les limites de la grille
-    // �vite les crashes et comportements bizarres en validant chaque position avant utilisation
-    // (mouvements d'unit�s, clics joueur, calculs de pathfinding, placement d'objets)
+    // Vérifie si les coordonnées sont dans les limites de la grille
+    // Évite les crashes et comportements bizarres en validant chaque position avant utilisation
+    // (mouvements d'unités, clics joueur, calculs de pathfinding, placement d'objets)
     public bool IsInBounds(Vector2Int coordinates)
     {
         return coordinates.x >= 0 && coordinates.x < gridWidth &&
                coordinates.y >= 0 && coordinates.y < gridHeight;
     }
 
-    // M�thode principale pour PathFinding - d�termine si une case est accessible pour une unit�
-    // Combine les r�gles d'occupation (unit�s), obstacles et terrain selon les capacit�s de l'unit�
-    // Interface unique pour toute la logique d'accessibilit� via syst�me de tags
+    // Méthode principale pour PathFinding - détermine si une case est accessible pour une unité
+    // Combine les règles d'occupation (unités), obstacles et terrain selon les capacités de l'unité
+    // Interface unique pour toute la logique d'accessibilité via système de tags
+    // Utilise la position logique des unités pour détection fiable pendant Lerp
     public bool IsWalkableFor(Vector2Int gridPosition, GameObject unit)
     {
-        // V�rifie d'abord les limites de la grille
+        // Vérifie d'abord les limites de la grille
         if (!IsInBounds(gridPosition))
         {
             return false;
         }
 
-        // R�gle absolue : aucune unit� ne peut occuper la m�me case qu'une autre
-        // EXCEPTION : ignore l'unit� qui demande le mouvement (�vite auto-blocage)
+        // Règle absolue : aucune unité ne peut occuper la même case qu'une autre
+        // EXCEPTION : ignore l'unité qui demande le mouvement (évite auto-blocage)
+        // IMPORTANT : Utilise GetUnitAtLogical au lieu de GetUnitAt pour détection fiable pendant Lerp
         GameObject unitAtPosition = GetUnitAt(gridPosition);
         if (unitAtPosition != null && unitAtPosition != unit)
         {
-            return false; // Case occup�e par une AUTRE unit�
+            return false; // Case occupée par une AUTRE unité
         }
 
-        // R�gle obstacles : bloquent selon les capacit�s de vol de l'unit�
+        // Règle obstacles : bloquent selon les capacités de vol de l'unité
         if (GetObstacleAt(gridPosition))
         {
             if (!UnitTypeHelper.CanFlyOverObstacles(unit))
@@ -133,7 +135,7 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // R�gle terrain : accessible selon les capacit�s de d�placement de l'unit�
+        // Règle terrain : accessible selon les capacités de déplacement de l'unité
         GroundType terrainType = GetGroundTypeAt(gridPosition);
         if (!UnitTypeHelper.CanWalkOnGround(unit, terrainType))
         {
@@ -145,36 +147,37 @@ public class GridManager : MonoBehaviour
     }
 
     // Retourne le type de terrain d'une position de grille
-    // Consulte le tableau statique configur� au d�marrage
-    // Utilis� par IsWalkableFor pour valider compatibilit� terrain/unit�
+    // Consulte le tableau statique configuré au démarrage
+    // Utilisé par IsWalkableFor pour valider compatibilité terrain/unité
     public GroundType GetGroundTypeAt(Vector2Int gridPosition)
     {
         if (!IsInBounds(gridPosition))
         {
-            return GroundType.Ground; // Valeur par d�faut pour positions invalides
+            return GroundType.Ground; // Valeur par défaut pour positions invalides
         }
 
         return groundTypeGrid[gridPosition.x, gridPosition.y];
     }
 
-    // D�finit le type de terrain d'une position de grille
-    // Permet de configurer la carte pendant le d�veloppement
-    // Utilis� pour cr�er des zones sp�cialis�es (lacs, montagnes)
+    // Définit le type de terrain d'une position de grille
+    // Permet de configurer la carte pendant le développement
+    // Utilisé pour créer des zones spécialisées (lacs, montagnes)
     public void SetGroundTypeAt(Vector2Int gridPosition, GroundType groundType)
     {
         if (!IsInBounds(gridPosition))
         {
-            Debug.LogWarning($"Tentative de d�finir terrain hors limites : {gridPosition}");
+            Debug.LogWarning($"Tentative de définir terrain hors limites : {gridPosition}");
             return;
         }
 
         groundTypeGrid[gridPosition.x, gridPosition.y] = groundType;
-        Debug.Log($"Terrain {gridPosition} d�fini comme {groundType.GetDisplayName()}");
+        Debug.Log($"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}");
     }
 
-    // Retourne l'unit� pr�sente sur une position de grille (null si aucune)
-    // Utilis� pour identifier quelle unit� occupe une case sp�cifique
-    // Utile pour interactions, s�lection et gestion de collisions
+    // Retourne l'unité présente sur une position de grille via Collider2D (null si aucune)
+    // ATTENTION : Ne détecte que les unités dont transform.position est au centre de la case
+    // Peut échouer si l'unité est en plein Lerp entre deux cases
+    // Pour PathFinding, utiliser GetUnitAtLogical() à la place
     public GameObject GetUnitAt(Vector2Int gridPosition)
     {
         Vector3 worldPosition = GridToWorld(gridPosition);
@@ -182,8 +185,8 @@ public class GridManager : MonoBehaviour
         return unitCollider?.gameObject;
     }
 
-    // Retourne l'obstacle pr�sent sur une position de grille (null si aucun)
-    // Utilis� pour identifier quel obstacle occupe une case sp�cifique
+    // Retourne l'obstacle présent sur une position de grille (null si aucun)
+    // Utilisé pour identifier quel obstacle occupe une case spécifique
     // Utile pour interactions, destruction et gestion d'effets
     public GameObject GetObstacleAt(Vector2Int gridPosition)
     {
@@ -193,14 +196,14 @@ public class GridManager : MonoBehaviour
     }
 
     // Getter pour les dimensions de la grille
-    // Permet aux autres scripts de conna�tre les limites de la carte
-    // (g�n�ration d'objets, contraintes de cam�ra, logique d'IA, affichage interface)
+    // Permet aux autres scripts de connaître les limites de la carte
+    // (génération d'objets, contraintes de caméra, logique d'IA, affichage interface)
     public Vector2Int GetGridSize()
     {
         return new Vector2Int(gridWidth, gridHeight);
     }
 
-    // Affiche la grille dans l'�diteur et en jeu avec coloration selon le terrain
+    // Affiche la grille dans l'éditeur et en jeu avec coloration selon le terrain
     private void OnDrawGizmos()
     {
         // Dessine les lignes de grille par-dessus
@@ -222,7 +225,7 @@ public class GridManager : MonoBehaviour
             Gizmos.DrawLine(start, end);
         }
 
-        // Dessine le contour de la grille en plus �pais
+        // Dessine le contour de la grille en plus épais
         Gizmos.color = Color.white;
         Vector3 bottomLeft = gridOrigin;
         Vector3 bottomRight = gridOrigin + new Vector3(gridWidth * cellSize, 0, 0);
@@ -235,7 +238,7 @@ public class GridManager : MonoBehaviour
         Gizmos.DrawLine(topLeft, bottomLeft);
     }
 
-    // M�thode de test pour v�rifier les conversions
+    // Méthode de test pour vérifier les conversions
     [ContextMenu("Test Grid Conversions")]
     private void TestGridConversions()
     {
@@ -253,7 +256,7 @@ public class GridManager : MonoBehaviour
         Debug.Log($"({gridWidth},{gridHeight}) dans les limites : {IsInBounds(new Vector2Int(gridWidth, gridHeight))}");
     }
 
-    // M�thode de test pour la logique de PathFinding avec syst�me de tags
+    // Méthode de test pour la logique de PathFinding avec système de tags
     [ContextMenu("Test PathFinding Logic")]
     private void TestPathFindingLogic()
     {
@@ -261,24 +264,24 @@ public class GridManager : MonoBehaviour
 
         Debug.Log($"=== Test PathFinding Logic sur {testPosition} ===");
         Debug.Log($"Position dans limites : {IsInBounds(testPosition)}");
-        Debug.Log($"Unit� pr�sente : {GetUnitAt(testPosition)}");
-        Debug.Log($"Obstacle pr�sent : {GetObstacleAt(testPosition)}");
+        Debug.Log($"Unité présente (Collider) : {GetUnitAt(testPosition)}");
+        Debug.Log($"Obstacle présent : {GetObstacleAt(testPosition)}");
         Debug.Log($"Type terrain : {GetGroundTypeAt(testPosition).GetDisplayName()}");
 
-        // Test avec des GameObjects fictifs (n�cessite vraies unit�s dans la sc�ne)
+        // Test avec des GameObjects fictifs (nécessite vraies unités dans la scène)
         GameObject unitAtPosition = GetUnitAt(testPosition);
         if (unitAtPosition != null)
         {
-            Debug.Log($"Unit� d�tect�e : {unitAtPosition.name} ({UnitTypeHelper.GetDisplayName(unitAtPosition)})");
+            Debug.Log($"Unité détectée : {unitAtPosition.name} ({UnitTypeHelper.GetDisplayName(unitAtPosition)})");
             Debug.Log($"Terrains accessibles : {UnitTypeHelper.GetAccessibleTerrains(unitAtPosition)}");
         }
         else
         {
-            Debug.Log("Aucune unit� d�tect�e sur cette position");
+            Debug.Log("Aucune unité détectée sur cette position");
         }
     }
 
-    // M�thode utilitaire pour cr�er des zones de terrain rapidement
+    // Méthode utilitaire pour créer des zones de terrain rapidement
     [ContextMenu("Create Test Terrain")]
     private void CreateTestTerrain()
     {
@@ -287,7 +290,7 @@ public class GridManager : MonoBehaviour
             InitializeGroundTypeGrid();
         }
 
-        // Cr�e une zone d'eau (coins bas-gauche)
+        // Crée une zone d'eau (coins bas-gauche)
         for (int x = 0; x < 3; x++)
         {
             for (int y = 0; y < 3; y++)
@@ -296,7 +299,7 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        // Cr�e une zone de montagne (coins haut-droite)
+        // Crée une zone de montagne (coins haut-droite)
         for (int x = gridWidth - 3; x < gridWidth; x++)
         {
             for (int y = gridHeight - 3; y < gridHeight; y++)
@@ -305,6 +308,6 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Terrain de test cr�� : Eau en bas-gauche, Montagne en haut-droite");
+        Debug.Log("Terrain de test créé : Eau en bas-gauche, Montagne en haut-droite");
     }
 }

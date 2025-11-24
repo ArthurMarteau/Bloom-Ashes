@@ -1,7 +1,7 @@
 ﻿using UnityEngine;
 
 // Gère les ordres donnés aux unités sélectionnées
-// Fait le lien entre SelectionManager et les managers d'exécution (MovementManager, etc.)
+// Fait le lien entre SelectionManager et les controllers d'unités (MovementController, AttackController, etc.)
 // Extensible pour différents types d'ordres (mouvement, attaque, patrouille, etc.)
 public class OrderManager : MonoBehaviour
 {
@@ -9,7 +9,6 @@ public class OrderManager : MonoBehaviour
 
     [Header("References")]
     [SerializeField] private SelectionManager selectionManager;
-    [SerializeField] private MovementManager movementManager;
 
     private Camera mainCamera;
 
@@ -38,15 +37,6 @@ public class OrderManager : MonoBehaviour
             if (selectionManager == null)
             {
                 Debug.LogError("OrderManager: SelectionManager non trouvé !");
-            }
-        }
-
-        if (movementManager == null)
-        {
-            movementManager = FindAnyObjectByType<MovementManager>();
-            if (movementManager == null)
-            {
-                Debug.LogError("OrderManager: MovementManager non trouvé !");
             }
         }
 
@@ -214,10 +204,11 @@ public class OrderManager : MonoBehaviour
                 attackController.StopAttack();
             }
 
-            // Envoie l'ordre de mouvement
-            if (movementManager != null)
+            // Envoie l'ordre de mouvement directement au MovementController
+            MovementController movementController = unit.GetComponent<MovementController>();
+            if (movementController != null)
             {
-                bool orderSuccessful = movementManager.MoveUnitTo(unit, targetGridPosition);
+                bool orderSuccessful = movementController.MoveTo(targetGridPosition);
                 if (orderSuccessful)
                 {
                     successfulOrders++;
@@ -225,8 +216,7 @@ public class OrderManager : MonoBehaviour
             }
             else
             {
-                Debug.LogError("OrderManager: MovementManager non disponible !");
-                break;
+                Debug.LogWarning($"OrderManager: {unit.name} n'a pas de MovementController");
             }
         }
 
