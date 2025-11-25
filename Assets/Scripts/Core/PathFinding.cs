@@ -48,13 +48,6 @@ public static class PathFinding
         return calculatedPath;
     }
 
-    // Nouvelle surcharge : calcule chemin depuis position monde réelle
-    public static List<Vector2Int> FindPath(Vector3 worldStartPosition, Vector2Int endPosition, GameObject unit)
-    {
-        Vector2Int gridStartPosition = GridManager.Instance.WorldToGrid(worldStartPosition);
-        return FindPath(gridStartPosition, endPosition, unit);
-    }
-
     // Implémentation pure de l'algorithme A* sans optimisations
     // Trouve le chemin optimal en explorant les possibilités de manière intelligente
     // Utilise heuristique pour guider la recherche vers la destination

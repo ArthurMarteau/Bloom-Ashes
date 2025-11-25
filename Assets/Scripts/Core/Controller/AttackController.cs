@@ -215,7 +215,7 @@ public class AttackController : MonoBehaviour
 
     // Vérifie si la cible est à portée d'attaque ET si l'unité est au centre de sa case
     // Utilise la portée définie dans UnitStats
-    // Utilise la position logique (pas transform.position pendant Lerp)
+    // Utilise la position de grille actuelle (transform.position converti)
     private bool IsTargetInRange()
     {
         if (unitStats == null || currentTarget == null)
@@ -223,8 +223,8 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
-        // Utilise la position logique au lieu de transform.position
-        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
+        // Utilise la position de grille actuelle au lieu de position logique
+        Vector2Int myPosition = movementController.GetCurrentGridPosition();
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
         // Vérifie ensuite la portée d'attaque
@@ -243,7 +243,7 @@ public class AttackController : MonoBehaviour
 
     // Déplace l'unité à portée de la cible
     // Utilise MovementController pour le déplacement
-    // Utilise la position logique pour calculs
+    // Utilise la position de grille actuelle pour calculs
     private void MoveToRange()
     {
         if (movementController == null || currentTarget == null)
@@ -252,7 +252,7 @@ public class AttackController : MonoBehaviour
         }
 
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
+        Vector2Int myPosition = movementController.GetCurrentGridPosition();
 
         int attackRange = unitStats.GetAttackRange();
 

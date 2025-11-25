@@ -166,7 +166,7 @@ public class ChaseController : MonoBehaviour
         else
         {
             // Cible n'a pas bougé, vérifie si on est adjacent
-            Vector2Int myPosition = movementController.GetCurrentLogicalCell();
+            Vector2Int myPosition = movementController.GetCurrentGridPosition();
 
             if (!IsAdjacentTo(myPosition, currentTargetPosition))
             {
@@ -179,7 +179,7 @@ public class ChaseController : MonoBehaviour
 
     // Calcule et exécute le mouvement vers la cible
     // Trouve la case la plus proche (pas forcément adjacente) et s'y déplace
-    // Utilise la position logique pour calculs
+    // Utilise la position de grille actuelle pour calculs
     private void MoveTowardsTarget()
     {
         if (movementController == null || currentTarget == null)
@@ -187,7 +187,7 @@ public class ChaseController : MonoBehaviour
             return;
         }
 
-        Vector2Int myPosition = movementController.GetCurrentLogicalCell();
+        Vector2Int myPosition = movementController.GetCurrentGridPosition();
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
         // Vérifie si déjà adjacent

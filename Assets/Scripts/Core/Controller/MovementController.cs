@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,7 +9,7 @@ public class MovementController : MonoBehaviour
 {
     [Header("Movement Settings")]
     private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
-    private float centerTolerance = 1f;      // Distance pour considérer case "atteinte"
+    private float centerTolerance = 0.1f;      // Distance pour considérer case "atteinte"
 
     // Modifie la vitesse de déplacement de l'unité
     // Appelé par UnitStats pour synchroniser les stats
@@ -43,7 +43,6 @@ public class MovementController : MonoBehaviour
     private Vector2Int targetCell;
     private bool isMoving = false;
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
-    private Vector2Int currentLogicalCell; // Position logique (case réelle où l'unité EST)
 
     // Références cached pour performance
     private GameObject unitGameObject;
@@ -58,9 +57,6 @@ public class MovementController : MonoBehaviour
     {
         unitGameObject = gameObject;
         currentState = MovementState.Idle;
-        
-        // Initialise la position logique à la position de spawn
-        currentLogicalCell = GridManager.Instance.WorldToGrid(transform.position);
         
         // Cache la référence AnimatorController
         animatorController = GetComponent<AnimatorController>();
@@ -82,16 +78,6 @@ public class MovementController : MonoBehaviour
         {
             Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} hors limites");
             return false;
-        }
-
-        // NOUVEAU : Vérifie que la destination est différente de la position actuelle
-        if (currentLogicalCell == targetPosition)
-        {
-            if (debugMovement)
-            {
-                Debug.Log($"MovementController {gameObject.name}: Déjà sur {targetPosition}, pas de mouvement nécessaire");
-            }
-            return false; // Pas d'erreur mais pas de mouvement
         }
 
         // Valide que la destination est accessible pour cette unité
@@ -122,8 +108,10 @@ public class MovementController : MonoBehaviour
             StopMovement();
         }
 
-        // Calcule le chemin depuis la position logique (pas la position physique pendant Lerp)
-        List<Vector2Int> path = PathFinding.FindPath(currentLogicalCell, targetPosition, unitGameObject);
+        // Calcule le chemin depuis la position actuelle
+        Vector2Int startPosition = GridManager.Instance.WorldToGrid(transform.position);
+        Debug.Log($"🔍 Position EXACTE avant pathfinding: {transform.position} → Grid: {startPosition}");
+        List<Vector2Int> path = PathFinding.FindPath(startPosition, targetPosition, unitGameObject);
 
         if (path == null || path.Count == 0)
         {
@@ -142,11 +130,6 @@ public class MovementController : MonoBehaviour
     // Valide le chemin et lance la coroutine de déplacement
     private bool StartMovement(List<Vector2Int> path)
     {
-        if (debugMovement)
-        {
-            Debug.Log($"StartMovement: Position logique={currentLogicalCell}, Position physique={transform.position}");
-        }
-
         // Valide le chemin fourni
         if (path == null || path.Count == 0)
         {
@@ -156,9 +139,6 @@ public class MovementController : MonoBehaviour
             }
             return false;
         }
-
-        // Snap physique à la position logique pour éviter désynchronisation
-        transform.position = GridManager.Instance.GridToWorld(currentLogicalCell);
 
         // Initialise les variables de mouvement
         currentPath = new List<Vector2Int>(path);
@@ -180,12 +160,9 @@ public class MovementController : MonoBehaviour
 
     // Arrête immédiatement le mouvement en cours
     // Interruption manuelle ou automatique (conflit, obstacle)
-    // Nettoie l'état, snap à la position logique, arrête toutes les coroutines
+    // Nettoie l'état, arrête toutes les coroutines
     public void StopMovement()
     {
-        // Snap physique à la position logique (pas à transform.position qui peut être en Lerp)
-        transform.position = GridManager.Instance.GridToWorld(currentLogicalCell);
-
         // Arrête la coroutine de mouvement
         if (movementCoroutine != null)
         {
@@ -214,7 +191,7 @@ public class MovementController : MonoBehaviour
 
         if (debugMovement)
         {
-            Debug.Log($"MovementController {gameObject.name}: Mouvement arrêté, snap à {currentLogicalCell}");
+            Debug.Log($"MovementController {gameObject.name}: Mouvement arrêté");
         }
     }
 
@@ -225,12 +202,11 @@ public class MovementController : MonoBehaviour
         return currentState;
     }
 
-    // Retourne la position logique actuelle (case réelle où l'unité EST)
+    // Retourne la position de grille actuelle calculée depuis transform.position
     // Utilisé par AttackController et ChaseController pour calculs de distance/portée
-    // Plus fiable que WorldToGrid(transform.position) pendant un Lerp
-    public Vector2Int GetCurrentLogicalCell()
+    public Vector2Int GetCurrentGridPosition()
     {
-        return currentLogicalCell;
+        return GridManager.Instance.WorldToGrid(transform.position);
     }
 
     // Vérifie si l'unité est prête à recevoir un nouvel ordre de mouvement
@@ -261,9 +237,6 @@ public class MovementController : MonoBehaviour
         {
             // Récupère la prochaine case à atteindre
             targetCell = currentPath[currentPathIndex];
-
-            // Met à jour la position logique AVANT le Lerp
-            currentLogicalCell = targetCell;
 
             // Gestion spéciale Rootborn : IdleReversed avant mouvement
             if (IsRootborn() && currentPathIndex == 0)
@@ -351,12 +324,9 @@ public class MovementController : MonoBehaviour
                 // Case occupée → retour animé à la case précédente
                 Vector3 currentPosition = transform.position;
 
-                // Réinitialise currentLogicalCell à la case de départ
-                Vector2Int startGridPos = GridManager.Instance.WorldToGrid(startPosition);
-                currentLogicalCell = startGridPos;
-
                 // Joue l'animation de marche dans la direction opposée
                 Vector2Int currentGridPos = GridManager.Instance.WorldToGrid(currentPosition);
+                Vector2Int startGridPos = GridManager.Instance.WorldToGrid(startPosition);
                 if (animatorController != null)
                 {
                     animatorController.PlayWalkAnimation(currentGridPos, startGridPos);
@@ -422,25 +392,21 @@ public class MovementController : MonoBehaviour
         if (animatorController != null)
         {
             animatorController.PlayIdleAnimation();
+
+            // Reset IdleReversed pour Rootborn (retry = nouveau départ)
+            if (IsRootborn())
+            {
+                animatorController.ResetIdleReversedSession();
+            }
         }
 
-        // Lance retry automatique local
+        // Lance retry automatique (il vérifiera lui-même si accessible)
         if (currentPath.Count > 0)
         {
             Vector2Int finalDestination = currentPath[currentPath.Count - 1];
-            // Ne retry QUE si la destination finale est libre ou accessible
-        if (GridManager.Instance.IsWalkableFor(finalDestination, unitGameObject))
-        {
             retryCoroutine = StartCoroutine(RetryPathPeriodically(finalDestination));
         }
-        else
-        {
-            if (debugMovement)
-            {
-                Debug.Log($"MovementController {gameObject.name}: Destination {finalDestination} toujours bloquée, pas de retry");
-            }
-        }
-        }
+
     }
 
     // Coroutine pour réessayer de calculer un nouveau chemin périodiquement
