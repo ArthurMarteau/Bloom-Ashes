@@ -149,9 +149,15 @@ public class AttackController : MonoBehaviour
             damageCoroutine = null;
         }
 
+        // Retourne à l'animation Idle
+        if (animatorController != null)
+        {
+            animatorController.PlayIdleAnimation();
+        }
+
         if (debugAttack)
         {
-            Debug.Log($"AttackController {gameObject.name}: Attaque arrêtée et dégâts annulés");
+            Debug.Log($"AttackController {gameObject.name}: Attaque arrêtée, retour en Idle");
         }
     }
 
@@ -182,7 +188,18 @@ public class AttackController : MonoBehaviour
         }
         else
         {
-            // Hors portée → déplace vers la cible
+            // Hors portée → annule les dégâts en cours et déplace vers la cible
+            if (damageCoroutine != null)
+            {
+                StopCoroutine(damageCoroutine);
+                damageCoroutine = null;
+
+                if (debugAttack)
+                {
+                    Debug.Log($"AttackController {gameObject.name}: Cible hors portée, annulation des dégâts en cours");
+                }
+            }
+
             MoveToRange();
         }
     }
@@ -223,11 +240,23 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
-        // Utilise la position de grille actuelle au lieu de position logique
+        // IMPORTANT: Vérifie d'abord que l'unité est au centre de sa cellule
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector3 cellWorldCenter = GridManager.Instance.GridToWorld(myPosition);
+        float distanceToCenter = Vector3.Distance(transform.position, cellWorldCenter);
+        float centerTolerance = 0.1f; // Même tolérance que MovementController
 
-        // Vérifie ensuite la portée d'attaque
+        if (distanceToCenter > centerTolerance)
+        {
+            if (debugAttack)
+            {
+                Debug.Log($"AttackController {gameObject.name}: Pas au centre de la cellule (distance: {distanceToCenter:F3}), attaque différée");
+            }
+            return false;
+        }
+
+        // Maintenant vérifie la portée d'attaque
+        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
         int attackRange = unitStats.GetAttackRange();
         int distance = Mathf.Max(Mathf.Abs(myPosition.x - targetPosition.x), Mathf.Abs(myPosition.y - targetPosition.y));
 
@@ -235,7 +264,7 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack && inRange)
         {
-            Debug.Log($"AttackController {gameObject.name}: À portée → Prêt à attaquer");
+            Debug.Log($"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer");
         }
 
         return inRange;
@@ -268,13 +297,7 @@ public class AttackController : MonoBehaviour
             return;
         }
 
-        // Arrête le mouvement en cours avant d'en lancer un nouveau
-        if (movementController != null)
-        {
-            movementController.StopMovement();
-        }
-
-        // Envoie l'ordre de mouvement
+        // Envoie l'ordre de mouvement (le MovementController gère le changement de direction)
         movementController.MoveTo(bestPosition);
 
         if (debugAttack)
@@ -284,18 +307,28 @@ public class AttackController : MonoBehaviour
     }
 
     // Trouve une position accessible à portée d'attaque avec le chemin le plus court
-    // Utilise PathFinding pour calculer le chemin réel vers chaque case à portée
-    // Prend en compte les obstacles pour trouver la vraie case optimale
+    // Version optimisée : génère les positions à portée puis calcule le chemin le plus court
+    // PRIORISE les cases alignées (même X ou Y) pour mouvement naturel
     private Vector2Int FindPositionInRange(Vector2Int targetPosition, Vector2Int myPosition, int attackRange)
     {
         Vector2Int bestPosition = Vector2Int.zero;
         int shortestPathLength = int.MaxValue;
+        bool bestIsAligned = false; // Flag pour prioriser alignement
 
-        // Parcourt toutes les cases dans un carré autour de la cible
+        // Génère toutes les positions à portée (Chebyshev distance)
+        List<Vector2Int> candidatePositions = new List<Vector2Int>();
+
         for (int x = -attackRange; x <= attackRange; x++)
         {
             for (int y = -attackRange; y <= attackRange; y++)
             {
+                // Vérifie distance Chebyshev (max de |x| et |y|)
+                int distance = Mathf.Max(Mathf.Abs(x), Mathf.Abs(y));
+                if (distance > attackRange || distance == 0)
+                {
+                    continue;
+                }
+
                 Vector2Int candidatePosition = targetPosition + new Vector2Int(x, y);
 
                 // Vérifie que la position est dans les limites
@@ -310,34 +343,80 @@ public class AttackController : MonoBehaviour
                     continue;
                 }
 
-                // Vérifie que c'est bien à portée (Chebyshev distance)
-                int distance = Mathf.Max(Mathf.Abs(x), Mathf.Abs(y));
-                if (distance > attackRange)
-                {
-                    continue;
-                }
-
-                // Calcule le chemin réel depuis notre position actuelle
-                List<Vector2Int> path = PathFinding.FindPath(myPosition, candidatePosition, unitGameObject);
-
-                // Si pas de chemin trouvé, ignore cette case
-                if (path == null || path.Count == 0)
-                {
-                    continue;
-                }
-
-                // Compare la longueur du chemin
-                if (path.Count < shortestPathLength)
-                {
-                    shortestPathLength = path.Count;
-                    bestPosition = candidatePosition;
-                }
+                candidatePositions.Add(candidatePosition);
             }
         }
 
-        if (bestPosition != Vector2Int.zero && debugAttack)
+        // Si aucune case candidate, fallback vers cible directe
+        if (candidatePositions.Count == 0)
         {
-            Debug.Log($"AttackController {gameObject.name}: Meilleure position trouvée {bestPosition} avec chemin de {shortestPathLength} cases");
+            if (debugAttack)
+            {
+                Debug.LogWarning($"AttackController {gameObject.name}: Aucune case à portée accessible, tentative vers cible directement");
+            }
+            return targetPosition;
+        }
+
+        // Calcule le chemin le plus court parmi les candidates
+        // PRIORISE les cases alignées avec notre position
+        foreach (Vector2Int candidatePosition in candidatePositions)
+        {
+            // Calcule le chemin réel depuis notre position actuelle
+            List<Vector2Int> path = PathFinding.FindPath(myPosition, candidatePosition, unitGameObject);
+
+            // Si pas de chemin trouvé, ignore cette case
+            if (path == null || path.Count == 0)
+            {
+                continue;
+            }
+
+            // Vérifie si cette case est alignée (même X ou même Y)
+            bool isAligned = (candidatePosition.x == myPosition.x) || (candidatePosition.y == myPosition.y);
+
+            // Logique de priorisation:
+            // 1. Case alignée avec chemin plus court OU même longueur
+            // 2. Si pas encore de best aligné, case non-alignée avec chemin plus court
+            bool shouldUpdate = false;
+
+            if (isAligned && !bestIsAligned)
+            {
+                // Case alignée trouvée, toujours mieux qu'une non-alignée
+                shouldUpdate = true;
+            }
+            else if (isAligned && bestIsAligned)
+            {
+                // Les deux alignées, prend la plus courte
+                shouldUpdate = path.Count < shortestPathLength;
+            }
+            else if (!isAligned && !bestIsAligned)
+            {
+                // Aucune alignée, prend la plus courte
+                shouldUpdate = path.Count < shortestPathLength;
+            }
+            // Si isAligned=false et bestIsAligned=true, on ignore (garde l'alignée)
+
+            if (shouldUpdate)
+            {
+                shortestPathLength = path.Count;
+                bestPosition = candidatePosition;
+                bestIsAligned = isAligned;
+            }
+        }
+
+        // Si aucune case trouvée après PathFinding, fallback vers cible directe
+        if (bestPosition == Vector2Int.zero)
+        {
+            if (debugAttack)
+            {
+                Debug.LogWarning($"AttackController {gameObject.name}: Aucun chemin trouvé vers cases à portée, tentative vers cible directement");
+            }
+            return targetPosition;
+        }
+
+        if (debugAttack)
+        {
+            string alignedStr = bestIsAligned ? " (ALIGNÉE)" : "";
+            Debug.Log($"AttackController {gameObject.name}: Meilleure position trouvée {bestPosition}{alignedStr} avec chemin de {shortestPathLength} cases (portée: {attackRange})");
         }
 
         return bestPosition;
@@ -383,8 +462,8 @@ public class AttackController : MonoBehaviour
     {
         yield return new WaitForSeconds(delay);
 
-        // Vérifie que la cible existe toujours
-        if (targetStats != null && !targetStats.IsDead())
+        // Vérifie que la cible existe toujours, n'est pas morte, ET est toujours à portée
+        if (targetStats != null && !targetStats.IsDead() && IsTargetInRange())
         {
             int damage = unitStats.GetAttackDamage();
             targetStats.TakeDamage(damage);
@@ -393,6 +472,10 @@ public class AttackController : MonoBehaviour
             {
                 Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage})");
             }
+        }
+        else if (debugAttack && targetStats != null && !targetStats.IsDead())
+        {
+            Debug.Log($"AttackController {gameObject.name}: Dégâts annulés - cible hors portée ou pas au centre");
         }
     }
 

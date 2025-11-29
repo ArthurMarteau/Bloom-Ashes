@@ -53,13 +53,7 @@ public class ChaseController : MonoBehaviour
                 Debug.Log($"⚡ ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition} ! Recalcul immédiat");
             }
 
-            // Annule mouvement en cours et recalcule
-            MovementController mc = GetComponent<MovementController>();
-            if (mc != null)
-            {
-                mc.StopMovement();
-            }
-
+            // Recalcule le chemin (le MovementController gère le changement de direction)
             MoveTowardsTarget();
             return; // Sort pour ne pas vérifier à nouveau cette frame
         }
