@@ -57,8 +57,7 @@ public class MovementController : MonoBehaviour
     private Coroutine retryCoroutine;
     private bool isFirstMoveOfSession = true; // Reset quand mouvement s'arrête
 
-    // Initialise les références et l'état par défaut
-    private void Awake()
+    private void Start()
     {
         unitGameObject = gameObject;
         currentState = MovementState.Idle;

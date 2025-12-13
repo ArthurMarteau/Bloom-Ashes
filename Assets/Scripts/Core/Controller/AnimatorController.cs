@@ -33,6 +33,7 @@ public class AnimatorController : MonoBehaviour
     private SpriteRenderer spriteRenderer;
     private bool isPlayingIdleReversed = false;
     private Coroutine idleReversedCoroutine;
+    private Coroutine attackSpeedCoroutine;
 
     // Cache des noms d'animations universels
     private Dictionary<AnimationDirection, string> walkAnimations;
@@ -381,6 +382,26 @@ public class AnimatorController : MonoBehaviour
                direction == AnimationDirection.SouthEast;
     }
 
+    // Retourne le nom de l'animation actuellement jouée
+    // Utilisé pour sauvegarder l'état avant une interruption (Hit, etc.)
+    private string GetCurrentAnimationName()
+    {
+        AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
+
+        // Le nom complet contient le layer, on extrait juste le nom de l'animation
+        // Format: "Base Layer.Move_N" -> "Move_N"
+        AnimatorClipInfo[] clipInfo = unitAnimator.GetCurrentAnimatorClipInfo(0);
+
+        if (clipInfo.Length > 0)
+        {
+            return clipInfo[0].clip.name;
+        }
+
+        // Fallback si pas de clip trouvé
+        return "Idle";
+    }
+
+
     // Active/désactive le miroir du SpriteRenderer
     // Utilise flipX pour inverser horizontalement le sprite
     private void SetMirror(bool mirror)
@@ -453,6 +474,100 @@ public class AnimatorController : MonoBehaviour
         if (debugAnimations)
         {
             Debug.Log($"AnimatorController {gameObject.name}: Animation Death");
+        }
+    }
+
+    // Joue l'animation Hit selon la direction de l'attaquant
+    // Sauvegarde l'animation en cours et la reprend exactement où elle en était après le Hit
+    public void PlayHitAnimation(Vector2Int attackerPosition, Vector2Int victimPosition)
+    {
+        // Ne joue pas Hit si l'unité est morte (elle doit rester en Death)
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            if (debugAnimations)
+            {
+                Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - unité morte");
+            }
+            return;
+        }
+
+        // Sauvegarde l'animation actuelle et sa progression
+        AnimatorStateInfo currentState = unitAnimator.GetCurrentAnimatorStateInfo(0);
+        string currentAnimationName = GetCurrentAnimationName();
+
+        // Si on est en train de jouer une animation Attack
+        if (currentAnimationName.StartsWith("Attack_"))
+        {
+            float normalizedTime = currentState.normalizedTime % 1f; // Progression (0-1)
+
+            // Si on est dans les 20 derniers % (0.8 à 1.0), on ignore le Hit
+            if (normalizedTime >= 0.8f)
+            {
+                if (debugAnimations)
+                {
+                    Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - animation Attack à {normalizedTime:F2} (>= 0.8)");
+                }
+                return;
+            }
+        }
+
+        float savednormalizedTime = currentState.normalizedTime % 1f; // Progression actuelle (0-1)
+
+        // Vérifie si l'unité est un Rootborn en état Idle
+        MovementController movementController = GetComponent<MovementController>();
+        AttackController attackController = GetComponent<AttackController>();
+
+        if (IsRootborn() && movementController != null &&
+            movementController.GetCurrentState() == MovementController.MovementState.Idle &&
+            attackController != null && !attackController.IsAttacking())
+        {
+            // Rootborn idle utilise toujours Hit_Idle
+            if (debugAnimations)
+            {
+                Debug.Log($"AnimatorController {gameObject.name}: Animation Hit_Idle (Rootborn en Idle)");
+            }
+            unitAnimator.Play("Hit_Idle", 0, 0f); // Force le redémarrage à 0
+            return;
+        }
+
+        // Calcule la direction du coup (attaquant vers victime)
+        int deltaY = attackerPosition.y - victimPosition.y;
+
+        // Détermine quelle animation Hit jouer selon direction verticale
+        string hitAnimation;
+        if (deltaY > 0)
+        {
+            // Coup vient du haut (N, NE, NW)
+            hitAnimation = "Hit_NW";
+        }
+        else
+        {
+            // Coup vient du bas ou du côté (E, SE, S, SW, W)
+            hitAnimation = "Hit_SW";
+        }
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {hitAnimation} (attaquant {attackerPosition} -> victime {victimPosition}), restaurera {currentAnimationName} à {savednormalizedTime:F2}");
+        }
+
+        unitAnimator.Play(hitAnimation);
+        StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, savednormalizedTime, 0.3f));
+    }
+
+    // Coroutine pour restaurer l'animation précédente après le Hit
+    // Rejoue l'animation exactement à la frame où elle en était
+    private IEnumerator RestoreAnimationAfterHit(string animationName, float normalizedTime, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+
+        // Rejoue l'animation à partir du temps sauvegardé
+        unitAnimator.Play(animationName, 0, normalizedTime);
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName} restaurée à {normalizedTime:F2}");
         }
     }
 

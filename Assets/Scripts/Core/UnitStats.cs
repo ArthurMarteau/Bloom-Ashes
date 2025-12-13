@@ -1,4 +1,5 @@
-﻿using UnityEngine;
+﻿using UnityEditor.Experimental.GraphView;
+using UnityEngine;
 using UnityEngine.Events;
 
 // Gère les statistiques et l'état de santé d'une unité
@@ -14,6 +15,7 @@ public class UnitStats : MonoBehaviour
     [SerializeField] private int attackDamage = 10;      // Dégâts infligés par attaque
     [SerializeField] private int attackRange = 1;        // Portée d'attaque (1 = mêlée, 3+ = distance)
     [SerializeField] private int defense = 0;            // Réduction de dégâts (soustraction simple)
+    [SerializeField] private float attackSpeed = 2.0f;   // Temps entre chaque attaque (secondes)
 
     [Header("Movement Stats")]
     [SerializeField] private float moveSpeed = 2.0f;     // Vitesse de déplacement (unités/seconde)
@@ -47,7 +49,7 @@ public class UnitStats : MonoBehaviour
 
     // Applique des dégâts à l'unité avec formule damage - defense
     // Déclenche l'événement OnDamaged et vérifie la mort
-    public void TakeDamage(int damage)
+    public void TakeDamage(int damage, GameObject attacker = null)
     {
         if (isDead)
         {
@@ -73,6 +75,19 @@ public class UnitStats : MonoBehaviour
         if (currentHP <= 0)
         {
             Die();
+            return;
+        }
+
+        // Joue l'animation Hit si attaquant fourni
+        if (attacker != null)
+        {
+            AnimatorController animatorController = GetComponent<AnimatorController>();
+            if (animatorController != null)
+            {
+                Vector2Int attackerPos = GridManager.Instance.WorldToGrid(attacker.transform.position);
+                Vector2Int victimPos = GridManager.Instance.WorldToGrid(transform.position);
+                animatorController.PlayHitAnimation(attackerPos, victimPos);
+            }
         }
     }
 
@@ -153,7 +168,15 @@ public class UnitStats : MonoBehaviour
         if (chaseController != null)
         {
             chaseController.StopChase();
-            chaseController.enabled = false;
+            chaseController.enabled = false; 
+        }
+
+        // Désactive l'attaque
+        AttackController attackController = GetComponent<AttackController>();
+        if (attackController != null)
+        {
+            attackController.StopAttack();
+            attackController.enabled = false;
         }
 
         // Désactive le collider pour ne plus bloquer le pathfinding
@@ -213,6 +236,9 @@ public class UnitStats : MonoBehaviour
     {
         return moveSpeed;
     }
+
+    // Retourne la vitesse d'attaque
+    public float GetAttackSpeed() { return attackSpeed; }
 
     // Vérifie si l'unité est morte
     public bool IsDead()

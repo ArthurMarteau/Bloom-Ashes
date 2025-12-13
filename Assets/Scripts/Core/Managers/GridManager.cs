@@ -203,6 +203,11 @@ public class GridManager : MonoBehaviour
         return new Vector2Int(gridWidth, gridHeight);
     }
 
+    public float GetCellSize()
+    {
+        return cellSize;
+    }
+
     // Affiche la grille dans l'éditeur et en jeu avec coloration selon le terrain
     private void OnDrawGizmos()
     {
