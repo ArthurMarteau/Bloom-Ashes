@@ -15,7 +15,7 @@ public class UnitStats : MonoBehaviour
     [SerializeField] private int attackDamage = 10;      // Dégâts infligés par attaque
     [SerializeField] private int attackRange = 1;        // Portée d'attaque (1 = mêlée, 3+ = distance)
     [SerializeField] private int defense = 0;            // Réduction de dégâts (soustraction simple)
-    [SerializeField] private float attackSpeed = 2.0f;   // Temps entre chaque attaque (secondes)
+    [SerializeField] private float attackSpeed = 1.0f;   // Temps entre chaque attaque (secondes)
 
     [Header("Movement Stats")]
     [SerializeField] private float moveSpeed = 2.0f;     // Vitesse de déplacement (unités/seconde)
@@ -140,6 +140,18 @@ public class UnitStats : MonoBehaviour
         // Désactive les composants de gameplay (mouvement, chase, etc.)
         DisableGameplayComponents();
 
+        // Abaisse le sprite pour qu'il soit toujours derrière les unités vivantes
+        SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
+        if (spriteRenderer != null)
+        {
+            spriteRenderer.sortingOrder = -1; // Valeur basse pour être en dessous
+
+            if (debugStats)
+            {
+                Debug.Log($"UnitStats {gameObject.name}: Sorting order abaissé à -1 (mort)");
+            }
+        }
+
         // Joue l'animation de mort
         AnimatorController animatorController = GetComponent<AnimatorController>();
         if (animatorController != null)
@@ -155,12 +167,16 @@ public class UnitStats : MonoBehaviour
     // Empêche l'unité morte de bouger, être sélectionnée, etc.
     private void DisableGameplayComponents()
     {
-        // Désactive le mouvement
+        // Désactive le mouvement sans snap (pour mort naturelle à la position visuelle)
         MovementController movementController = GetComponent<MovementController>();
         if (movementController != null)
         {
-            movementController.StopMovement();
-            movementController.enabled = false;
+            // Arrête juste les coroutines sans forcer un snap de position
+            if (movementController.enabled)
+            {
+                movementController.StopAllCoroutines(); // Arrête les interpolations
+            }
+            movementController.enabled = false; // Désactive le composant
         }
 
         // Désactive la chase

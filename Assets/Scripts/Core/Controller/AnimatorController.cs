@@ -11,6 +11,7 @@ public class AnimatorController : MonoBehaviour
     [Header("Animation Settings")]
     [SerializeField] private float rootbornIdleReversedDuration = 1f;  // Durée IdleReversed Rootborn
     [SerializeField] private bool syncAnimationWithDuration = true;     // Synchronise animation avec durée
+    public const float ATTACK_ANIMATION_DURATION = 0.5f;
 
     [Header("Debug")]
     [SerializeField] private bool debugAnimations = true;
@@ -31,9 +32,7 @@ public class AnimatorController : MonoBehaviour
     // Variables d'état d'animation
     private Animator unitAnimator;
     private SpriteRenderer spriteRenderer;
-    private bool isPlayingIdleReversed = false;
     private Coroutine idleReversedCoroutine;
-    private Coroutine attackSpeedCoroutine;
 
     // Cache des noms d'animations universels
     private Dictionary<AnimationDirection, string> walkAnimations;
@@ -95,6 +94,13 @@ public class AnimatorController : MonoBehaviour
     {
         if (unitAnimator == null) return;
 
+        // Ne joue pas d'animation si l'unité est morte
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            return;
+        }
+
         // Calcule la direction du mouvement
         AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
 
@@ -118,60 +124,29 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
-    // Interface pour déclencher animation d'attaque
-    // Ajuste automatiquement la vitesse selon attackInterval de l'unité
-    public void PlayAttackAnimation(Vector2Int fromPosition, Vector2Int toPosition, float attackInterval)
+    // Interface pour déclencher animation d'attaque adaptée à attackSpeed
+    public void PlayAttackAnimation(Vector2Int fromPosition, Vector2Int toPosition)
     {
         if (unitAnimator == null) return;
 
-        // Calcule la direction de l'attaque
-        AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
+        // Ne joue pas d'animation si l'unité est morte
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            return;
+        }
 
-        // Détermine si un miroir est requis
+        AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
         bool requiresMirror = RequiresMirror(direction);
         SetMirror(requiresMirror);
 
-        // Construit le nom de l'animation d'attaque
         string attackAnimationName = GetAttackAnimationName(direction);
-
-        // Joue l'animation
         unitAnimator.Play(attackAnimationName);
 
-        // Ajuste la vitesse de l'animation selon attackInterval
-        // Si l'animation dure 1s et attackInterval = 0.5s → speed = 2x
-        // Si l'animation dure 1s et attackInterval = 2s → speed = 0.5x
-        StartCoroutine(AdjustAttackSpeed(attackAnimationName, attackInterval));
-
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {attackAnimationName}, Direction {direction}, Miroir: {requiresMirror}, AttackInterval: {attackInterval}s");
+            Debug.Log($"AnimatorController {gameObject.name}: Attack {attackAnimationName} (durée {ATTACK_ANIMATION_DURATION}s)");
         }
-    }
-
-    // Ajuste la vitesse de l'animation pour correspondre à attackInterval
-    private IEnumerator AdjustAttackSpeed(string attackAnimationName, float attackInterval)
-    {
-        // Attend une frame pour que l'animation soit chargée
-        yield return null;
-
-        // Récupère la durée originale de l'animation
-        AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
-        float originalAnimationLength = stateInfo.length;
-
-        // Calcule la vitesse nécessaire
-        float requiredSpeed = originalAnimationLength / attackInterval;
-        unitAnimator.speed = requiredSpeed;
-
-        if (debugAnimations)
-        {
-            Debug.Log($"AnimatorController: Vitesse ajustée à {requiredSpeed}x (animation {originalAnimationLength}s → {attackInterval}s)");
-        }
-
-        // Attend la fin de l'attaque
-        yield return new WaitForSeconds(attackInterval);
-
-        // Remet la vitesse normale
-        unitAnimator.speed = 1f;
     }
 
     // Retourne le nom de l'animation d'attaque selon la direction
@@ -198,17 +173,79 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
+    // Joue l'animation Idle_Attack pour stance de combat
+    // Boucle en attendant le prochain coup
+    public void PlayIdleAttackAnimation(Vector2Int fromPosition, Vector2Int toPosition)
+    {
+        if (unitAnimator == null) return;
+
+        // Ne joue pas d'animation si l'unité est morte
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            return;
+        }
+
+        // Calcule la direction
+        AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
+
+        // Gère le miroir
+        bool requiresMirror = RequiresMirror(direction);
+        SetMirror(requiresMirror);
+
+        // Construit le nom Idle_Attack
+        string idleAttackAnimationName = GetIdleAttackAnimationName(direction);
+
+        // Joue l'animation en boucle
+        unitAnimator.Play(idleAttackAnimationName);
+
+        if (debugAnimations)
+        {
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {idleAttackAnimationName}, Direction {direction}, Miroir: {requiresMirror}");
+        }
+    }
+
+    // Retourne le nom de l'animation Idle_Attack selon la direction
+    private string GetIdleAttackAnimationName(AnimationDirection direction)
+    {
+        switch (direction)
+        {
+            case AnimationDirection.North:
+                return "AttackIdle_N";
+            case AnimationDirection.NorthWest:
+            case AnimationDirection.NorthEast:
+                return "AttackIdle_NW";
+            case AnimationDirection.West:
+            case AnimationDirection.East:
+                return "AttackIdle_W";
+            case AnimationDirection.SouthWest:
+            case AnimationDirection.SouthEast:
+                return "AttackIdle_SW";
+            case AnimationDirection.South:
+                return "AttackIdle_S";
+            default:
+                return "AttackIdle_S";
+        }
+    }
+
     // Interface pour revenir à l'animation idle
     // Appelée par MovementController quand l'unité s'arrête
     public void PlayIdleAnimation()
     {
         if (unitAnimator == null) return;
 
+        // Ne joue pas d'animation si l'unité est morte
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            return;
+        }
+
         // Arrête IdleReversed si en cours (Rootborn)
-        if (isPlayingIdleReversed && idleReversedCoroutine != null)
+        if (idleReversedCoroutine != null)
         {
             StopCoroutine(idleReversedCoroutine);
-            isPlayingIdleReversed = false;
+            idleReversedCoroutine = null;
         }
 
         // Remet le miroir par défaut
@@ -235,6 +272,13 @@ public class AnimatorController : MonoBehaviour
             return;
         }
 
+        // Ne joue pas d'animation si l'unité est morte
+        UnitStats unitStats = GetComponent<UnitStats>();
+        if (unitStats != null && unitStats.IsDead())
+        {
+            return;
+        }
+
         // Si IdleReversed déjà joué pour cette session, callback immédiat
         if (hasPlayedIdleReversedThisSession)
         {
@@ -256,6 +300,7 @@ public class AnimatorController : MonoBehaviour
         if (idleReversedCoroutine != null)
         {
             StopCoroutine(idleReversedCoroutine);
+            idleReversedCoroutine = null;
         }
 
         // Lance la coroutine IdleReversed
@@ -274,8 +319,6 @@ public class AnimatorController : MonoBehaviour
     // Joue l'animation pendant la durée spécifiée puis déclenche le callback
     private IEnumerator PlayIdleReversedCoroutine(Action onComplete)
     {
-        isPlayingIdleReversed = true;
-
         // Joue l'animation IdleReversed
         unitAnimator.Play(idleReversedAnimationName);
 
@@ -309,8 +352,7 @@ public class AnimatorController : MonoBehaviour
         }
 
         // Termine l'animation spéciale
-        isPlayingIdleReversed = false;
-        idleReversedCoroutine = null;
+       idleReversedCoroutine = null;
 
         if (debugAnimations)
         {
@@ -333,8 +375,8 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
-    // Vérifie si l'IdleReversed a déjà été joué dans cette session
-    // Utilisé par MovementController et AttackController pour éviter de rejouer
+    // Retourne si IdleReversed a déjà été joué dans cette session
+    // Utilisé par AttackController pour déterminer si AttackIdle peut être joué
     public bool HasPlayedIdleReversedThisSession()
     {
         return hasPlayedIdleReversedThisSession;
@@ -423,7 +465,7 @@ public class AnimatorController : MonoBehaviour
     // Interface pour debug et coordination avec autres systèmes
     public bool IsPlayingSpecialAnimation()
     {
-        return isPlayingIdleReversed;
+        return idleReversedCoroutine != null;
     }
 
     // Arrête toutes les animations en cours
@@ -434,8 +476,10 @@ public class AnimatorController : MonoBehaviour
         {
             StopCoroutine(idleReversedCoroutine);
             idleReversedCoroutine = null;
-            isPlayingIdleReversed = false;
         }
+
+        // Reset le flag de session pour permettre le prochain cycle IdleReversed
+        hasPlayedIdleReversedThisSession = false;
 
         // Reset la vitesse d'animation
         if (unitAnimator != null)
@@ -462,7 +506,7 @@ public class AnimatorController : MonoBehaviour
         if (idleReversedCoroutine != null)
         {
             StopCoroutine(idleReversedCoroutine);
-            isPlayingIdleReversed = false;
+            idleReversedCoroutine = null;
         }
 
         // Remet le miroir par défaut
@@ -492,27 +536,18 @@ public class AnimatorController : MonoBehaviour
             return;
         }
 
-        // Sauvegarde l'animation actuelle et sa progression
-        AnimatorStateInfo currentState = unitAnimator.GetCurrentAnimatorStateInfo(0);
+        // Sauvegarde l'animation actuelle
         string currentAnimationName = GetCurrentAnimationName();
 
         // Si on est en train de jouer une animation Attack
         if (currentAnimationName.StartsWith("Attack_"))
         {
-            float normalizedTime = currentState.normalizedTime % 1f; // Progression (0-1)
-
-            // Si on est dans les 20 derniers % (0.8 à 1.0), on ignore le Hit
-            if (normalizedTime >= 0.8f)
+            if (debugAnimations)
             {
-                if (debugAnimations)
-                {
-                    Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - animation Attack à {normalizedTime:F2} (>= 0.8)");
-                }
-                return;
+                Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - animation Attack en cours");
             }
+            return;
         }
-
-        float savednormalizedTime = currentState.normalizedTime % 1f; // Progression actuelle (0-1)
 
         // Vérifie si l'unité est un Rootborn en état Idle
         MovementController movementController = GetComponent<MovementController>();
@@ -527,7 +562,7 @@ public class AnimatorController : MonoBehaviour
             {
                 Debug.Log($"AnimatorController {gameObject.name}: Animation Hit_Idle (Rootborn en Idle)");
             }
-            unitAnimator.Play("Hit_Idle", 0, 0f); // Force le redémarrage à 0
+            unitAnimator.Play("Hit_Idle"); // Force le redémarrage à 0
             return;
         }
 
@@ -549,25 +584,26 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {hitAnimation} (attaquant {attackerPosition} -> victime {victimPosition}), restaurera {currentAnimationName} à {savednormalizedTime:F2}");
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {hitAnimation} (attaquant {attackerPosition} -> victime {victimPosition}), restaurera {currentAnimationName}");
         }
 
         unitAnimator.Play(hitAnimation);
-        StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, savednormalizedTime, 0.3f));
+        StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, 0.333f));
     }
 
     // Coroutine pour restaurer l'animation précédente après le Hit
     // Rejoue l'animation exactement à la frame où elle en était
-    private IEnumerator RestoreAnimationAfterHit(string animationName, float normalizedTime, float delay)
+    private IEnumerator RestoreAnimationAfterHit(string animationName, float delay)
     {
+        // Attend la fin de l'animation Hit
         yield return new WaitForSeconds(delay);
 
         // Rejoue l'animation à partir du temps sauvegardé
-        unitAnimator.Play(animationName, 0, normalizedTime);
+        unitAnimator.Play(animationName);
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName} restaurée à {normalizedTime:F2}");
+            Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName}");
         }
     }
 
@@ -577,7 +613,7 @@ public class AnimatorController : MonoBehaviour
     {
         Debug.Log($"=== AnimatorController Debug - {gameObject.name} ===");
         Debug.Log($"Est Rootborn: {IsRootborn()}");
-        Debug.Log($"IdleReversed en cours: {isPlayingIdleReversed}");
+        Debug.Log($"IdleReversed en cours: {idleReversedCoroutine != null}");
         Debug.Log($"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}");
         Debug.Log($"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName("Idle") : "Animator null")}");
         Debug.Log($"Miroir actif: {(spriteRenderer != null ? spriteRenderer.flipX : false)}");

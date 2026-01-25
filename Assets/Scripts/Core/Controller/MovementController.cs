@@ -417,6 +417,21 @@ public class MovementController : MonoBehaviour
         }
     }
 
+    // Vide la queue de chemin sans téléporter l'unité
+    // L'unité termine son interpolation vers la case actuelle puis s'arrête
+    public void ClearPathQueue()
+    {
+        if (logicalPath != null)
+        {
+            logicalPath.Clear();
+        }
+
+        if (debugMovement)
+        {
+            Debug.Log($"MovementController {gameObject.name}: Queue de chemin vidée");
+        }
+    }
+
     // Retourne l'état actuel du contrôleur de mouvement
     // Interface pour debug et coordination avec autres systèmes
     public MovementState GetCurrentState()

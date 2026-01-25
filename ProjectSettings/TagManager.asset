@@ -21,7 +21,7 @@ TagManager:
   - Obstacle
   - Environnment_Walkable
   - Units
-  - 
+  - Projectiles
   - 
   - 
   - 
@@ -60,8 +60,11 @@ TagManager:
   - name: Units
     uniqueID: 2016719739
     locked: 0
-  - name: UI
+  - name: Projectiles
     uniqueID: 2884809151
+    locked: 0
+  - name: UI
+    uniqueID: 57466303
     locked: 0
   m_RenderingLayers:
   - Default
