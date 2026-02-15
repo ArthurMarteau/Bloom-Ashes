@@ -12,6 +12,7 @@ public class AttackController : MonoBehaviour
     [SerializeField] private bool debugAttack = true;
     [SerializeField] private bool autoAttackEnabled = true;    // Active l'attaque automatique des ennemis à portée
     [SerializeField] private float projectileTravelTimePerCell = 0.2f;
+    [SerializeField] private GameObject projectilePrefab; // Prefab du projectile visuel
 
     // État de l'attaque
     private GameObject currentTarget;
@@ -792,6 +793,22 @@ public class AttackController : MonoBehaviour
             if (debugAttack)
             {
                 Debug.Log($"🏹 AttackController {gameObject.name}: Projectile lancé, distance {distanceInCells} cases, trajet {projectileTravelTime}s");
+            }
+
+            // NOUVEAU CODE ICI
+            // Spawne le projectile visuel
+            if (projectilePrefab != null && currentTarget != null)
+            {
+                Vector3 startPos = transform.position;
+                Vector3 endPos = currentTarget.transform.position;
+
+                GameObject projectile = Instantiate(projectilePrefab, startPos, Quaternion.identity);
+                ProjectileVisual visual = projectile.GetComponent<ProjectileVisual>();
+
+                if (visual != null)
+                {
+                    visual.Initialize(startPos, endPos, projectileTravelTime);
+                }
             }
 
             // Attend que le projectile arrive
