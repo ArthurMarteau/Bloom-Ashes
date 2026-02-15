@@ -4,19 +4,24 @@
 TagManager:
   serializedVersion: 3
   tags:
-  - Rootborn
   - NotWalkable
+  - Obstacle
+  - GroundUnit
+  - WaterUnit
+  - MountainUnit
+  - AirUnit
+  - Unit
   layers:
   - Default
   - TransparentFX
   - Ignore Raycast
-  - Trails
+  - Ground
   - Water
   - UI
-  - Environnment
+  - Obstacle
   - Environnment_Walkable
   - Units
-  - 
+  - Projectiles
   - 
   - 
   - 
@@ -46,7 +51,7 @@ TagManager:
   - name: Trails
     uniqueID: 3237316205
     locked: 0
-  - name: Environnment
+  - name: Obstacle
     uniqueID: 1271899921
     locked: 0
   - name: Environnment Walkable
@@ -55,8 +60,11 @@ TagManager:
   - name: Units
     uniqueID: 2016719739
     locked: 0
-  - name: UI
+  - name: Projectiles
     uniqueID: 2884809151
+    locked: 0
+  - name: UI
+    uniqueID: 57466303
     locked: 0
   m_RenderingLayers:
   - Default

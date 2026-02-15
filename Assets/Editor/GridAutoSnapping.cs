@@ -30,7 +30,6 @@ public static class GridAutoSnapping
            (Tools.current != Tool.Move && Tools.current != Tool.Rect))
             return;
 
-
         Event e = Event.current;
 
         // Détecte si on est en train de drag (move)
@@ -45,7 +44,7 @@ public static class GridAutoSnapping
             foreach (Transform t in Selection.transforms)
             {
                 Vector2Int gridPos = gridManager.WorldToGrid(t.position);
-                Vector3 snappedPos = gridManager.GridToWorld(gridPos.x, gridPos.y);
+                Vector3 snappedPos = gridManager.GridToWorld(gridPos); // Changé ici
 
                 if ((t.position - snappedPos).sqrMagnitude > 0.0001f)
                 {
@@ -57,7 +56,6 @@ public static class GridAutoSnapping
         }
     }
 }
-
 
 
 
