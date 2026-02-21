@@ -54,6 +54,7 @@
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\InputManager.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\ProjectileVisual.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\PathFinding.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitType.cs" />

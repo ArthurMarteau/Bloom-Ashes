@@ -1,10 +1,11 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 
 // Gère la sélection d'objets avec clic simple et rectangle de sélection
 // Système hybride : raycast direct + Physics2D pour rectangle
 // Priorité : Unités (multiple) > Obstacles/Ground (unique, remplace unités)
+// Consomme les events de InputManager — aucun accès direct à Input.*
 public class SelectionManager : MonoBehaviour
 {
     [Header("Selection Settings")]
@@ -16,10 +17,6 @@ public class SelectionManager : MonoBehaviour
     [Header("Selection Square")]
     // Prefab du carré de sélection à instancier pour chaque objet sélectionné
     [SerializeField] private GameObject selectionSquarePrefab;
-
-    [Header("Rectangle Selection")]
-    // Délai minimum pour déclencher la sélection rectangle (évite clic accidentel)
-    [SerializeField] private float rectangleSelectionDelay = 0.1f;
 
     // === SELECTION MULTIPLE UNITES ===
     // Stocke toutes les unités actuellement sélectionnées avec leurs carrés
@@ -35,12 +32,15 @@ public class SelectionManager : MonoBehaviour
     // === RECTANGLE SELECTION ===
     // Variables pour gérer la sélection par drag rectangle
     private bool isDragging;
-    private Vector3 dragStartPosition;
-    private float dragStartTime;
+    private Vector3 dragStartPosition;       // Position écran au début du drag (fournie par InputManager)
+    private Vector3 lastDragScreenPosition;  // Dernière position écran reçue pendant le drag
     private LineRenderer rectangleRenderer;
 
     // Référence à la caméra pour convertir les clics souris en rayons 3D
     private Camera mainCamera;
+
+    // Référence à l'InputManager (abonnement aux events, accès à IsShiftHeld)
+    private InputManager inputManager;
 
     // Méthode appelée au démarrage pour initialiser les références et composants
     private void Awake()
@@ -62,11 +62,21 @@ public class SelectionManager : MonoBehaviour
         SetupRectangleRenderer();
     }
 
-    // Méthode appelée chaque frame pour gérer les interactions de sélection
-    // Gère le clic simple, le début/fin du drag et la mise à jour du rectangle
-    private void Update()
+    // S'abonne aux events de InputManager pour découpler la lecture d'input
+    private void Start()
     {
-        HandleSelectionInput();
+        inputManager = InputManager.Instance;
+        if (inputManager == null)
+        {
+            Debug.LogError("SelectionManager: InputManager introuvable dans la scène !");
+            return;
+        }
+
+        inputManager.OnLeftClickDown.AddListener(OnLeftClickDownHandler);
+        inputManager.OnDragStart.AddListener(OnDragStartHandler);
+        inputManager.OnDragUpdate.AddListener(OnDragUpdateHandler);
+        inputManager.OnLeftClickUp.AddListener(OnLeftClickUpHandler);
+        inputManager.OnDragEnd.AddListener(OnDragEndHandler);
     }
 
     // Configure le LineRenderer pour dessiner le rectangle de sélection
@@ -89,95 +99,86 @@ public class SelectionManager : MonoBehaviour
         rectangleRenderer.enabled = false; // Masqué par défaut
     }
 
-    // Point d'entrée principal pour gérer tous les types d'input de sélection et mouvement
-    // Détermine s'il s'agit d'un clic simple, sélection rectangle ou ordre de mouvement
-    private void HandleSelectionInput()
+    // --- Handlers InputManager ---
+
+    // Clic gauche enfoncé — réinitialise l'état du drag
+    private void OnLeftClickDownHandler(Vector3 worldPosition)
     {
-        // Ignore les clics sur l'interface utilisateur (boutons, menus)
+        // Ignore si curseur sur UI
         if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
         {
             return;
         }
 
-        // Début du clic gauche - démarre potentiellement une sélection
-        if (Input.GetMouseButtonDown(0))
-        {
-            StartPotentialSelection();
-        }
-        // Pendant le maintien du clic - met à jour le rectangle si nécessaire
-        else if (Input.GetMouseButton(0))
-        {
-            // Vérifie si la souris a bougé pour déclencher le rectangle
-            if (Vector3.Distance(Input.mousePosition, dragStartPosition) > 5f || isDragging)
-            {
-                UpdateRectangleSelection();
-            }
-        }
-        // Fin du clic gauche - finalise la sélection (simple ou rectangle)
-        else if (Input.GetMouseButtonUp(0))
-        {
-            EndSelection();
-        }
+        isDragging = false;
+
+        Debug.Log($"🎯 START Selection — monde {worldPosition}");
     }
 
-    // Démarre une sélection potentielle et détermine le type (simple/rectangle)
-    // Enregistre la position et le temps pour décider ultérieurement du type
-    private void StartPotentialSelection()
+    // Début du drag — enregistre la position initiale et active le rectangle
+    private void OnDragStartHandler(Vector3 screenPosition)
     {
-        Debug.Log($"🎯 START Selection - MousePos: {Input.mousePosition}");
-        // Enregistre la position de début et le temps pour le rectangle
-        dragStartPosition = Input.mousePosition;
-        dragStartTime = Time.time;
-        isDragging = false; // Pas encore en mode drag
+        // Ignore si curseur sur UI
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
+        {
+            return;
+        }
+
+        dragStartPosition = screenPosition;
+        lastDragScreenPosition = screenPosition;
+        isDragging = true;
+        rectangleRenderer.enabled = true;
+
+        Debug.Log("🟢 Mode rectangle ACTIVÉ !");
     }
 
-    // Met à jour le rectangle de sélection pendant le drag
-    // Active le mode rectangle si délai écoulé et dessine le rectangle en temps réel
-    private void UpdateRectangleSelection()
+    // Drag en cours — met à jour la position courante et redessine le rectangle
+    private void OnDragUpdateHandler(Vector3 screenPosition)
     {
-        float timeSinceStart = Time.time - dragStartTime;
-        Debug.Log($"Update Rectangle: Time={timeSinceStart}, IsDragging={isDragging}, Delay={rectangleSelectionDelay}");
-
-        // Vérifie si le délai minimum est écoulé pour activer le rectangle
-        if (!isDragging && timeSinceStart > rectangleSelectionDelay)
+        if (!isDragging)
         {
-            isDragging = true;
-            rectangleRenderer.enabled = true;
-            Debug.Log("🟢 Mode rectangle ACTIVÉ !");
+            return;
         }
 
-        // Si en mode rectangle, met à jour le dessin
-        if (isDragging)
-        {
-            Debug.Log("🎨 Dessin du rectangle...");
-            DrawSelectionRectangle();
-        }
+        lastDragScreenPosition = screenPosition;
+
+        Debug.Log("🎨 Dessin du rectangle...");
+        DrawSelectionRectangle();
     }
 
-    // Finalise la sélection selon le mode actuel (simple ou rectangle)
-    // Point de décision final pour traiter le résultat de l'interaction
-    private void EndSelection()
+    // Clic simple relâché (pas de drag) — sélectionne l'objet sous le curseur
+    private void OnLeftClickUpHandler(Vector3 screenPosition)
     {
-        if (isDragging)
+        // Ignore si curseur sur UI
+        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
         {
-            // Mode rectangle - sélectionne toutes les unités dans la zone
-            CompleteRectangleSelection();
-            isDragging = false;
-            rectangleRenderer.enabled = false;
+            return;
         }
-        else
-        {
-            // Mode clic simple - sélectionne l'objet sous le curseur
-            HandleSimpleClick();
-        }
+
+        HandleSimpleClick(screenPosition);
     }
+
+    // Fin du drag — complète la sélection rectangle et masque le rectangle
+    private void OnDragEndHandler()
+    {
+        if (!isDragging)
+        {
+            return;
+        }
+
+        CompleteRectangleSelection();
+        isDragging = false;
+        rectangleRenderer.enabled = false;
+    }
+
+    // --- Logique de sélection ---
 
     // Traite la sélection par clic simple avec système de priorité
     // Priorité : unitLayer > obstacleLayer > groundLayer (pas de replacement)
-    private void HandleSimpleClick()
+    private void HandleSimpleClick(Vector3 screenPosition)
     {
-        // Convertit la position souris en rayon 3D dans le monde
-        Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+        // Convertit la position écran en rayon 3D dans le monde
+        Ray ray = mainCamera.ScreenPointToRay(screenPosition);
 
         // 1. Vérifie d'abord les unités (priorité la plus haute)
         RaycastHit2D unitHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, unitLayer);
@@ -198,7 +199,7 @@ public class SelectionManager : MonoBehaviour
         }
 
         // 3. Si ni unité ni obstacle, sélection ground
-        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
         worldPosition.z = 0;
         HandleGroundSelection(worldPosition);
     }
@@ -210,7 +211,7 @@ public class SelectionManager : MonoBehaviour
         // Efface les sélections obstacle/ground (unités prioritaires)
         ClearNonUnitSelection();
 
-        if (Input.GetKey(KeyCode.LeftShift))
+        if (InputManager.Instance.IsShiftHeld)
         {
             // Mode sélection multiple - ajoute ou retire l'unité
             if (IsUnitSelected(unit))
@@ -253,7 +254,7 @@ public class SelectionManager : MonoBehaviour
     {
         // Convertit les positions écran en positions monde
         Vector3 startWorld = mainCamera.ScreenToWorldPoint(dragStartPosition);
-        Vector3 endWorld = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 endWorld = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
         startWorld.z = endWorld.z = 0;
 
         // Calcule les coins de la zone de sélection
@@ -287,7 +288,7 @@ public class SelectionManager : MonoBehaviour
     {
         // Convertit les positions écran en positions monde
         Vector3 startWorld = mainCamera.ScreenToWorldPoint(dragStartPosition);
-        Vector3 endWorld = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+        Vector3 endWorld = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
         startWorld.z = endWorld.z = 0;
 
         // Définit les 4 coins du rectangle + retour au début
@@ -459,6 +460,19 @@ public class SelectionManager : MonoBehaviour
     private bool IsUnitSelected(GameObject unit)
     {
         return selectedUnits.ContainsKey(unit);
+    }
+
+    // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
+    private void OnDestroy()
+    {
+        if (inputManager != null)
+        {
+            inputManager.OnLeftClickDown.RemoveListener(OnLeftClickDownHandler);
+            inputManager.OnDragStart.RemoveListener(OnDragStartHandler);
+            inputManager.OnDragUpdate.RemoveListener(OnDragUpdateHandler);
+            inputManager.OnLeftClickUp.RemoveListener(OnLeftClickUpHandler);
+            inputManager.OnDragEnd.RemoveListener(OnDragEndHandler);
+        }
     }
 
     // === METHODES PUBLIQUES POUR ACCES EXTERNE ===
