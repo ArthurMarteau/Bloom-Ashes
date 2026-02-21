@@ -2,21 +2,19 @@ using UnityEngine;
 using UnityEngine.UI;
 
 // Affiche une barre de vie au-dessus d'une unité
-// Se met à jour automatiquement selon les HP de UnitStats ou UnitStatsComponent
+// Se met à jour automatiquement selon les HP de UnitStatsComponent
 // Suit l'unité en mouvement et s'adapte à la caméra
-// RÉTROCOMPATIBILITÉ: Supporte ancien (UnitStats) et nouveau (UnitStatsComponent) système
 public class HealthBar : MonoBehaviour
 {
     [Header("References")]
-    [SerializeField] private UnitStats unitStats;                   // ANCIEN: Stats de l'unité (déprécié)
-    [SerializeField] private UnitStatsComponent unitStatsComponent; // NOUVEAU: Stats de l'unité (recommandé)
+    [SerializeField] private UnitStatsComponent unitStatsComponent; // Stats de l'unité
     [SerializeField] private Image fillImage;                       // Image de remplissage de la barre
     [SerializeField] private Canvas canvas;                         // Canvas pour orientation caméra
 
     [Header("Visual Settings")]
     [SerializeField] private Vector3 offset = new Vector3(0, 1.5f, 0); // Offset au-dessus de l'unité
-    [SerializeField] private Color healthyColor = Color.green;          // Couleur > 50% HP
-    [SerializeField] private Color damagedColor = Color.yellow;         // Couleur 25-50% HP
+    [SerializeField] private Color healthyColor = Color.green;          // Couleur > 65% HP
+    [SerializeField] private Color damagedColor = Color.yellow;         // Couleur 25-65% HP
     [SerializeField] private Color criticalColor = Color.red;           // Couleur < 25% HP
     [SerializeField] private bool hideWhenFull = true;                  // Cacher si HP max
 
@@ -25,63 +23,36 @@ public class HealthBar : MonoBehaviour
 
     private Transform unitTransform;
     private Camera mainCamera;
-    private bool usingNewSystem; // Flag pour savoir quel système utiliser
 
-    // Initialise les références
+    // Initialise les références et s'abonne aux événements de UnitStatsComponent
     private void Awake()
     {
-        // Cherche d'abord le nouveau système (UnitStatsComponent)
+        // Cherche UnitStatsComponent dans le parent si non assigné en Inspector
         if (unitStatsComponent == null)
         {
             unitStatsComponent = GetComponentInParent<UnitStatsComponent>();
         }
 
-        // Si nouveau système trouvé, l'utilise en priorité
-        if (unitStatsComponent != null)
+        if (unitStatsComponent == null)
         {
-            usingNewSystem = true;
-            unitTransform = unitStatsComponent.transform;
-
-            // S'abonne aux événements du nouveau système
-            unitStatsComponent.OnDamaged.AddListener(UpdateHealthBar);
-            unitStatsComponent.OnHealed.AddListener(UpdateHealthBar);
-            unitStatsComponent.OnDeath.AddListener(OnUnitDeath);
-
-            if (debugHealthBar)
-            {
-                Debug.Log($"HealthBar {gameObject.name}: Utilise NOUVEAU système (UnitStatsComponent)");
-            }
-        }
-        // Sinon fallback sur l'ancien système (rétrocompatibilité)
-        else
-        {
-            if (unitStats == null)
-            {
-                unitStats = GetComponentInParent<UnitStats>();
-            }
-
-            if (unitStats == null)
-            {
-                Debug.LogError($"HealthBar sur {gameObject.name}: Ni UnitStatsComponent ni UnitStats trouvé !");
-                enabled = false;
-                return;
-            }
-
-            usingNewSystem = false;
-            unitTransform = unitStats.transform;
-
-            // S'abonne aux événements de l'ancien système
-            unitStats.OnDamaged.AddListener(UpdateHealthBar);
-            unitStats.OnHealed.AddListener(UpdateHealthBar);
-            unitStats.OnDeath.AddListener(OnUnitDeath);
-
-            if (debugHealthBar)
-            {
-                Debug.LogWarning($"HealthBar {gameObject.name}: Utilise ANCIEN système (UnitStats) - Migrer vers UnitStatsComponent recommandé");
-            }
+            Debug.LogError($"HealthBar sur {gameObject.name}: UnitStatsComponent non trouvé !");
+            enabled = false;
+            return;
         }
 
-        // Trouve le Canvas si non assigné
+        unitTransform = unitStatsComponent.transform;
+
+        // S'abonne aux événements du système de stats
+        unitStatsComponent.OnDamaged.AddListener(UpdateHealthBar);
+        unitStatsComponent.OnHealed.AddListener(UpdateHealthBar);
+        unitStatsComponent.OnDeath.AddListener(OnUnitDeath);
+
+        if (debugHealthBar)
+        {
+            Debug.Log($"HealthBar {gameObject.name}: UnitStatsComponent trouvé sur {unitTransform.name}");
+        }
+
+        // Trouve le Canvas si non assigné en Inspector
         if (canvas == null)
         {
             canvas = GetComponentInChildren<Canvas>();
@@ -95,11 +66,11 @@ public class HealthBar : MonoBehaviour
             canvas.renderMode = RenderMode.WorldSpace;
         }
 
-        // Initialise la barre
+        // Initialise la barre au bon état dès le départ
         UpdateHealthBar();
     }
 
-    // Force la mise à jour après l'initialisation complète
+    // Force la mise à jour après l'initialisation complète de la scène
     private void Start()
     {
         UpdateHealthBar();
@@ -132,7 +103,7 @@ public class HealthBar : MonoBehaviour
             return;
         }
 
-        // Récupère le pourcentage selon le système utilisé
+        // Récupère le pourcentage de vie depuis UnitStatsComponent
         float healthPercentage = GetHealthPercentage();
 
         // Met à jour le remplissage
@@ -152,40 +123,30 @@ public class HealthBar : MonoBehaviour
             fillImage.color = criticalColor;
         }
 
-        // Cache la barre si HP max (optionnel)
-        if (hideWhenFull && healthPercentage >= 1f)
+        // Cache la barre si HP max
+        if (canvas != null)
         {
-            canvas.gameObject.SetActive(false);
-        }
-        else
-        {
-            canvas.gameObject.SetActive(true);
+            canvas.gameObject.SetActive(!(hideWhenFull && healthPercentage >= 1f));
         }
 
         if (debugHealthBar)
         {
-            string systemName = usingNewSystem ? "UnitStatsComponent" : "UnitStats";
-            Debug.Log($"HealthBar ({systemName}): {healthPercentage * 100:F1}% HP");
+            Debug.Log($"HealthBar {gameObject.name}: {healthPercentage * 100:F1}% HP");
         }
     }
 
-    // Récupère le pourcentage de santé selon le système utilisé
+    // Récupère le pourcentage de santé depuis UnitStatsComponent
     private float GetHealthPercentage()
     {
-        if (usingNewSystem && unitStatsComponent != null)
+        if (unitStatsComponent != null)
         {
             return unitStatsComponent.GetHealthPercentage();
-        }
-        else if (!usingNewSystem && unitStats != null)
-        {
-            return unitStats.GetHealthPercentage();
         }
 
         return 0f;
     }
 
-    // Gère la mort de l'unité
-    // Cache la barre de vie
+    // Cache la barre de vie quand l'unité meurt
     private void OnUnitDeath()
     {
         if (canvas != null)
@@ -195,24 +156,18 @@ public class HealthBar : MonoBehaviour
 
         if (debugHealthBar)
         {
-            Debug.Log($"HealthBar: Unité morte, barre cachée");
+            Debug.Log($"HealthBar {gameObject.name}: Unité morte, barre cachée");
         }
     }
 
-    // Nettoie les événements lors de la destruction
+    // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
     private void OnDestroy()
     {
-        if (usingNewSystem && unitStatsComponent != null)
+        if (unitStatsComponent != null)
         {
             unitStatsComponent.OnDamaged.RemoveListener(UpdateHealthBar);
             unitStatsComponent.OnHealed.RemoveListener(UpdateHealthBar);
             unitStatsComponent.OnDeath.RemoveListener(OnUnitDeath);
-        }
-        else if (!usingNewSystem && unitStats != null)
-        {
-            unitStats.OnDamaged.RemoveListener(UpdateHealthBar);
-            unitStats.OnHealed.RemoveListener(UpdateHealthBar);
-            unitStats.OnDeath.RemoveListener(OnUnitDeath);
         }
     }
 }
