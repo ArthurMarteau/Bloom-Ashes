@@ -51,6 +51,7 @@ public class MovementController : MonoBehaviour
     // Références cached pour performance
     private GameObject unitGameObject;
     private AnimatorController animatorController;
+    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
 
     // Variables de contrôle temporel
     private Coroutine interpolationCoroutine;
@@ -79,6 +80,8 @@ public class MovementController : MonoBehaviour
         {
             Debug.LogWarning($"MovementController sur {gameObject.name}: AnimatorController non trouvé!");
         }
+
+        _statsComponent = GetComponent<UnitStatsComponent>();
     }
 
     // Interface publique principale pour demander un déplacement vers une destination
@@ -569,10 +572,11 @@ public class MovementController : MonoBehaviour
         }
     }
 
-    // Vérifie si cette unité est un Rootborn
-    // Utilise le nom du GameObject pour identifier les Rootborn
+    // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
+    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
     private bool IsRootborn()
     {
+        if (_statsComponent != null) return _statsComponent.IsRootborn();
         return gameObject.name.Contains("Rootborn");
     }
 

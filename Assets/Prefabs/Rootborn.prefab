@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 6825426482597005728}
   - component: {fileID: 5930733243826866042}
   - component: {fileID: 7426287070818110966}
+  - component: {fileID: -5370382545427022799}
   m_Layer: 8
   m_Name: Rootborn
   m_TagString: GroundUnit
@@ -159,7 +160,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 0.8471429, y: 0.94142854}
+    oldSize: {x: 6.4, y: 3.6}
     newSize: {x: 0.58, y: 1.012}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -189,7 +190,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 41387421219258777}
-  m_Enabled: 1
+  m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4918fc93086a0814bb81608ee3bd27dd, type: 3}
   m_Name: 
@@ -198,6 +199,7 @@ MonoBehaviour:
   attackDamage: 10
   attackRange: 1
   defense: 0
+  attackSpeed: 1
   moveSpeed: 1
   OnDamaged:
     m_PersistentCalls:
@@ -262,9 +264,34 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 65396f899a0963b409e228436a0a7602, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  attackInterval: 1
   checkInterval: 0.2
   debugAttack: 1
+  autoAttackEnabled: 1
+  projectileTravelTimePerCell: 0.2
+  projectilePrefab: {fileID: 0}
+--- !u!114 &-5370382545427022799
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 41387421219258777}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 633fe6ec96fd0dd42996688316c2e36c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UnitStatsComponent
+  baseStats: {fileID: 11400000, guid: 4e864d1c8ba716c4980b12c563a810aa, type: 2}
+  OnDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnHealed:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDeath:
+    m_PersistentCalls:
+      m_Calls: []
+  debugStats: 1
 --- !u!1 &3446565920279820328
 GameObject:
   m_ObjectHideFlags: 0
@@ -532,6 +559,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   unitStats: {fileID: 0}
+  unitStatsComponent: {fileID: 0}
   fillImage: {fileID: 5246787314957091009}
   canvas: {fileID: 953588619764230310}
   offset: {x: 0, y: 0.52, z: 0}

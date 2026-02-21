@@ -24,6 +24,7 @@ public class AttackController : MonoBehaviour
     // Références
     private MovementController movementController;
     private UnitStats unitStats;
+    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
     private TeamComponent teamComponent;
     private GameObject unitGameObject;
     private Coroutine damageCoroutine;
@@ -73,6 +74,7 @@ public class AttackController : MonoBehaviour
     {
         unitGameObject = gameObject;
         unitStats = GetComponent<UnitStats>();
+        _statsComponent = GetComponent<UnitStatsComponent>();
         teamComponent = GetComponent<TeamComponent>();
 
         if (unitStats == null)
@@ -849,10 +851,11 @@ public class AttackController : MonoBehaviour
         damageCoroutine = null;
     }
 
-    // Vérifie si cette unité est un Rootborn
-    // Utilise le nom du GameObject pour identifier les Rootborn
+    // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
+    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
     private bool IsRootborn()
     {
+        if (_statsComponent != null) return _statsComponent.IsRootborn();
         return gameObject.name.Contains("Rootborn");
     }
 

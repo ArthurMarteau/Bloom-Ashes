@@ -32,6 +32,7 @@ public class AnimatorController : MonoBehaviour
     // Variables d'état d'animation
     private Animator unitAnimator;
     private SpriteRenderer spriteRenderer;
+    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
     private Coroutine idleReversedCoroutine;
 
     // Cache des noms d'animations universels
@@ -46,6 +47,7 @@ public class AnimatorController : MonoBehaviour
         // Cache les composants requis
         unitAnimator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
+        _statsComponent = GetComponent<UnitStatsComponent>();
 
         // Valide que les composants existent
         if (unitAnimator == null)
@@ -454,10 +456,11 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
-    // Vérifie si cette unité est un Rootborn basé sur le nom du GameObject
-    // Méthode simple et fiable pour identifier les Rootborn
+    // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
+    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
     private bool IsRootborn()
     {
+        if (_statsComponent != null) return _statsComponent.IsRootborn();
         return gameObject.name.Contains("Rootborn");
     }
 

@@ -1,5 +1,4 @@
-﻿using UnityEditor.Experimental.GraphView;
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 // Gère les statistiques et l'état de santé d'une unité
@@ -30,6 +29,9 @@ public class UnitStats : MonoBehaviour
 
     private bool isDead = false;
 
+    // Pont de redirection vers UnitStatsComponent (Phase 0 - temporaire, supprimé en Phase 1)
+    private UnitStatsComponent _bridge;
+
     // Initialise les HP au maximum au démarrage
     private void Awake()
     {
@@ -45,12 +47,21 @@ public class UnitStats : MonoBehaviour
         {
             movementController.SetMovementSpeed(moveSpeed);
         }
+
+        // Détecte UnitStatsComponent pour redirection (Phase 0 - pont temporaire)
+        _bridge = GetComponent<UnitStatsComponent>();
+        if (_bridge != null)
+        {
+            Debug.Log($"[PONT] UnitStats redirige vers UnitStatsComponent sur {gameObject.name}");
+        }
     }
 
     // Applique des dégâts à l'unité avec formule damage - defense
     // Déclenche l'événement OnDamaged et vérifie la mort
     public void TakeDamage(int damage, GameObject attacker = null)
     {
+        if (_bridge != null) { _bridge.TakeDamage(damage, attacker); return; }
+
         if (isDead)
         {
             return; // Unité déjà morte, ignore les dégâts
@@ -95,6 +106,8 @@ public class UnitStats : MonoBehaviour
     // Ne peut pas dépasser MaxHP
     public void Heal(int amount)
     {
+        if (_bridge != null) { _bridge.Heal(amount); return; }
+
         if (isDead)
         {
             return; // Unité morte, ne peut pas être soignée
@@ -213,18 +226,21 @@ public class UnitStats : MonoBehaviour
     // Retourne les HP actuels
     public int GetCurrentHP()
     {
+        if (_bridge != null) return _bridge.GetCurrentHP();
         return currentHP;
     }
 
     // Retourne les HP maximum
     public int GetMaxHP()
     {
+        if (_bridge != null) return _bridge.GetMaxHP();
         return maxHP;
     }
 
     // Retourne le pourcentage de vie (0.0 à 1.0)
     public float GetHealthPercentage()
     {
+        if (_bridge != null) return _bridge.GetHealthPercentage();
         if (maxHP == 0) return 0f;
         return (float)currentHP / maxHP;
     }
@@ -232,39 +248,49 @@ public class UnitStats : MonoBehaviour
     // Retourne les dégâts d'attaque
     public int GetAttackDamage()
     {
+        if (_bridge != null) return _bridge.GetAttackDamage();
         return attackDamage;
     }
 
     // Retourne la portée d'attaque (en cases)
     public int GetAttackRange()
     {
+        if (_bridge != null) return _bridge.GetAttackRange();
         return attackRange;
     }
 
     // Retourne la défense
     public int GetDefense()
     {
+        if (_bridge != null) return _bridge.GetDefense();
         return defense;
     }
 
     // Retourne la vitesse de déplacement
     public float GetMoveSpeed()
     {
+        if (_bridge != null) return _bridge.GetMoveSpeed();
         return moveSpeed;
     }
 
     // Retourne la vitesse d'attaque
-    public float GetAttackSpeed() { return attackSpeed; }
+    public float GetAttackSpeed()
+    {
+        if (_bridge != null) return _bridge.GetAttackSpeed();
+        return attackSpeed;
+    }
 
     // Vérifie si l'unité est morte
     public bool IsDead()
     {
+        if (_bridge != null) return _bridge.IsDead();
         return isDead;
     }
 
     // Vérifie si l'unité est vivante
     public bool IsAlive()
     {
+        if (_bridge != null) return _bridge.IsAlive();
         return !isDead;
     }
 

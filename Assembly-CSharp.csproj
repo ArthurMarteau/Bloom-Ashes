@@ -56,14 +56,17 @@
     <Compile Include="Assets\Scripts\Core\Controller\MovementController.cs" />
     <Compile Include="Assets\Scripts\Core\Managers\GridManager.cs" />
     <Compile Include="Assets\Scripts\Core\SelectionSquare.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Units\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Core\Controller\AttackController.cs" />
+    <Compile Include="Assets\Scripts\Data\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Core\Controller\ChaseController.cs" />
     <Compile Include="Assets\Scripts\Core\Team\TeamComponent.cs" />
     <Compile Include="Assets\Scripts\Core\Controller\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Core\PathFinding.cs" />
     <Compile Include="Assets\Scripts\Units\UnitType.cs" />
     <Compile Include="Assets\Scripts\Core\ProjectileVisual.cs" />
+    <Compile Include="Assets\Scripts\Systems\UnitStatsLogic.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="UnityEngine">
