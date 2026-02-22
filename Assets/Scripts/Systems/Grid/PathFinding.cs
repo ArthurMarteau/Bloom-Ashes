@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 // Calculateur de chemin pur utilisant l'algorithme A*
@@ -12,11 +13,12 @@ public static class PathFinding
 
     // Structure de données représentant une case pendant le calcul A*
     // Contient les coûts et le lien vers le parent pour reconstitution du chemin
-    private class PathNode
+    // IComparable<PathNode> requis par MinHeap : compare par fCost, puis hCost en égalité
+    private class PathNode : IComparable<PathNode>
     {
         public Vector2Int position;
         public int gCost; // Coût réel depuis le départ
-        public int hCost; // Coût estimé vers la destination  
+        public int hCost; // Coût estimé vers la destination
         public int fCost => gCost + hCost; // Coût total pour priorisation
         public PathNode parent; // Nœud précédent pour reconstitution
 
@@ -26,6 +28,17 @@ public static class PathFinding
             gCost = 0;
             hCost = 0;
             parent = null;
+        }
+
+        // Compare par fCost d'abord, puis hCost en cas d'égalité (même logique que GetLowestFCostNode)
+        public int CompareTo(PathNode other)
+        {
+            int comparison = fCost.CompareTo(other.fCost);
+            if (comparison == 0)
+            {
+                comparison = hCost.CompareTo(other.hCost);
+            }
+            return comparison;
         }
     }
 
@@ -48,26 +61,29 @@ public static class PathFinding
         return calculatedPath;
     }
 
-    // Implémentation pure de l'algorithme A* sans optimisations
-    // Trouve le chemin optimal en explorant les possibilités de manière intelligente
-    // Utilise heuristique pour guider la recherche vers la destination
+    // Implémentation A* avec MinHeap pour extraction O(log n) du nœud optimal
+    // openList (MinHeap) : extraction du meilleur nœud en O(log n) au lieu de O(n)
+    // openDict (Dictionary) : lookup d'un nœud existant par position en O(1) au lieu de O(n)
     private static List<Vector2Int> ExecuteAStar(Vector2Int startPosition, Vector2Int endPosition, GameObject unit)
     {
-        // Initialise les collections de travail pour le calcul
-        List<PathNode> openList = new List<PathNode>();
+        // MinHeap pour extraire le nœud de coût minimal en O(log n)
+        MinHeap<PathNode> openList = new MinHeap<PathNode>();
+        // Dictionnaire pour retrouver un nœud par position en O(1) (remplace openList.Find)
+        Dictionary<Vector2Int, PathNode> openDict = new Dictionary<Vector2Int, PathNode>();
         HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
 
-        // Crée le nœud de départ et l'ajoute à la liste ouverte
+        // Crée le nœud de départ et l'ajoute aux deux structures
         PathNode startNode = CreateNode(startPosition);
         startNode.hCost = CalculateHCost(startPosition, endPosition);
-        openList.Add(startNode);
+        openList.Insert(startNode);
+        openDict[startNode.position] = startNode;
 
         // Boucle principale A* : explore jusqu'à trouver destination ou épuiser possibilités
         while (openList.Count > 0)
         {
-            // Sélectionne le nœud avec le coût total le plus bas
-            PathNode currentNode = GetLowestFCostNode(openList);
-            openList.Remove(currentNode);
+            // Extrait le nœud de coût minimal en O(log n) via MinHeap
+            PathNode currentNode = openList.ExtractMin();
+            openDict.Remove(currentNode.position);
             closedSet.Add(currentNode.position);
 
             // Vérifie si la destination est atteinte
@@ -88,23 +104,23 @@ public static class PathFinding
                 // Calcule le nouveau coût pour atteindre ce voisin
                 int tentativeGCost = currentNode.gCost + CalculateGCost(currentNode, neighborNode.position);
 
-                // Trouve le nœud existant dans openList ou utilise le nouveau
-                PathNode existingNode = openList.Find(node => node.position == neighborNode.position);
-                bool isNewNode = existingNode == null;
-
-                if (isNewNode)
+                // Cherche un nœud existant dans openDict en O(1) (remplace openList.Find O(n))
+                if (!openDict.TryGetValue(neighborNode.position, out PathNode existingNode))
                 {
-                    // Nouveau nœud : configure et ajoute à openList
+                    // Nouveau nœud : configure et ajoute aux deux structures
                     neighborNode.gCost = tentativeGCost;
                     neighborNode.hCost = CalculateHCost(neighborNode.position, endPosition);
                     neighborNode.parent = currentNode;
-                    openList.Add(neighborNode);
+                    openList.Insert(neighborNode);
+                    openDict[neighborNode.position] = neighborNode;
                 }
                 else if (tentativeGCost < existingNode.gCost)
                 {
-                    // Chemin plus court trouvé : met à jour le nœud existant
+                    // Chemin plus court trouvé : met à jour le nœud et réorganise le tas
+                    // UpdateItem remonte le nœud dans le MinHeap car son fCost a diminué
                     existingNode.gCost = tentativeGCost;
                     existingNode.parent = currentNode;
+                    openList.UpdateItem(existingNode);
                 }
             }
         }
@@ -125,7 +141,7 @@ public static class PathFinding
         // Définit les 8 directions possibles (4 cardinales + 4 diagonales)
         Vector2Int[] directions = {
             new Vector2Int(-1, 0),  // Gauche
-            new Vector2Int(1, 0),   // Droite  
+            new Vector2Int(1, 0),   // Droite
             new Vector2Int(0, 1),   // Haut
             new Vector2Int(0, -1),  // Bas
             new Vector2Int(-1, 1),  // Haut-Gauche
@@ -167,7 +183,6 @@ public static class PathFinding
 
     // Calcule le coût réel de déplacement entre deux cases adjacentes
     // Détermine le coût précis selon le type de mouvement (droit ou diagonal)
-    // Ajoute le coût au gCost du nœud parent pour progression
     private static int CalculateGCost(PathNode fromNode, Vector2Int toPosition)
     {
         Vector2Int fromPosition = fromNode.position;
@@ -209,35 +224,9 @@ public static class PathFinding
 
     // Crée un nouveau nœud temporaire pour ce calcul
     // Factory simple pour instancier des nœuds pendant l'exploration
-    // Chaque nœud est unique à ce calcul spécifique
     private static PathNode CreateNode(Vector2Int position)
     {
         return new PathNode(position);
-    }
-
-    // Trouve le nœud avec le coût total (fCost) le plus bas dans une liste
-    // Sélectionne le prochain nœud optimal à traiter selon la stratégie A*
-    // En cas d'égalité fCost, privilégie le plus proche de la destination (hCost plus bas)
-    private static PathNode GetLowestFCostNode(List<PathNode> nodeList)
-    {
-        if (nodeList.Count == 0)
-            return null;
-
-        PathNode lowestFCostNode = nodeList[0];
-
-        for (int i = 1; i < nodeList.Count; i++)
-        {
-            PathNode currentNode = nodeList[i];
-
-            // Compare d'abord fCost, puis hCost en cas d'égalité
-            if (currentNode.fCost < lowestFCostNode.fCost ||
-                (currentNode.fCost == lowestFCostNode.fCost && currentNode.hCost < lowestFCostNode.hCost))
-            {
-                lowestFCostNode = currentNode;
-            }
-        }
-
-        return lowestFCostNode;
     }
 
     // Vérifie la validité des paramètres avant de lancer le calcul

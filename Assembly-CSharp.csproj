@@ -49,6 +49,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
+    <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Components\Units\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
@@ -60,6 +61,7 @@
     <Compile Include="Assets\Scripts\Components\Units\UnitType.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
+    <Compile Include="Assets\Scripts\Tests\MinHeapTests.cs" />
     <Compile Include="Assets\Scripts\Components\Units\ChaseController.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GridManager.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />
