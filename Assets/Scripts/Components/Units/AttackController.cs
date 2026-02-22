@@ -29,45 +29,6 @@ public class AttackController : MonoBehaviour
     private Coroutine damageCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
 
-    // Offsets prédéfinis pour chaque portée d'attaque (même logique que ChaseController)
-    // Range 1 : Mêlée - 8 cases adjacentes
-    private static readonly Vector2Int[] range1Offsets = {
-    new Vector2Int(0, 1),   // Nord
-    new Vector2Int(1, 0),   // Est
-    new Vector2Int(0, -1),  // Sud
-    new Vector2Int(-1, 0),  // Ouest
-    new Vector2Int(1, 1),   // Nord-Est
-    new Vector2Int(1, -1),  // Sud-Est
-    new Vector2Int(-1, -1), // Sud-Ouest
-    new Vector2Int(-1, 1)   // Nord-Ouest
-};
-
-    // Range 2 : Portée 1 case - 16 cases (carré 5x5 sans centre)
-    private static readonly Vector2Int[] range2Offsets = {
-    // Reprend range1
-    new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(0, -1), new Vector2Int(-1, 0),
-    new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1), new Vector2Int(-1, 1),
-    // Deuxième couronne
-    new Vector2Int(0, 2), new Vector2Int(2, 0), new Vector2Int(0, -2), new Vector2Int(-2, 0),
-    new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
-    new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2)
-};
-
-    // Range 3 : Portée 2 cases - 24 cases (carré 7x7 sans centre et coins extrêmes)
-    private static readonly Vector2Int[] range3Offsets = {
-    // Reprend range2
-    new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(0, -1), new Vector2Int(-1, 0),
-    new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1), new Vector2Int(-1, 1),
-    new Vector2Int(0, 2), new Vector2Int(2, 0), new Vector2Int(0, -2), new Vector2Int(-2, 0),
-    new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
-    new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2),
-    // Troisième couronne
-    new Vector2Int(0, 3), new Vector2Int(3, 0), new Vector2Int(0, -3), new Vector2Int(-3, 0),
-    new Vector2Int(1, 3), new Vector2Int(3, 1), new Vector2Int(3, -1), new Vector2Int(1, -3),
-    new Vector2Int(-1, -3), new Vector2Int(-3, -1), new Vector2Int(-3, 1), new Vector2Int(-1, 3),
-    new Vector2Int(2, 2), new Vector2Int(2, -2), new Vector2Int(-2, -2), new Vector2Int(-2, 2)
-};
-
     // Initialise les références
     private void Awake()
     {
@@ -586,31 +547,12 @@ public class AttackController : MonoBehaviour
     }
 
     // Trouve la case à portée d'attaque avec le chemin le plus court
-    // Utilise des listes d'offsets prédéfinies (même logique que ChaseController)
+    // Délègue la sélection des offsets à RangeOffsets (source unique de vérité)
     // Calcule le vrai chemin vers chaque case et retourne la meilleure
     private Vector2Int FindPositionInRange(Vector2Int targetPosition, Vector2Int myPosition, int attackRange)
     {
-        // Sélectionne la liste d'offsets selon la portée
-        Vector2Int[] offsets;
-        switch (attackRange)
-        {
-            case 1:
-                offsets = range1Offsets;
-                break;
-            case 2:
-                offsets = range2Offsets;
-                break;
-            case 3:
-                offsets = range3Offsets;
-                break;
-            default:
-                if (debugAttack)
-                {
-                    Debug.LogWarning($"AttackController {gameObject.name}: Range {attackRange} non supportée, utilisation range 1");
-                }
-                offsets = range1Offsets;
-                break;
-        }
+        // Sélectionne la liste d'offsets selon la portée via RangeOffsets
+        Vector2Int[] offsets = RangeOffsets.GetOffsets(attackRange);
 
         Vector2Int bestCell = Vector2Int.zero;
         int shortestPathLength = int.MaxValue;

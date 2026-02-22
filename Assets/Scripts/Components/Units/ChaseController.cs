@@ -221,17 +221,8 @@ public class ChaseController : MonoBehaviour
     // Prend en compte les obstacles pour trouver la vraie case optimale
     private Vector2Int FindClosestAccessibleCell(Vector2Int targetPosition, Vector2Int myPosition)
     {
-        // Toutes les 8 directions adjacentes
-        Vector2Int[] adjacentOffsets = {
-        new Vector2Int(0, 1),   // Nord
-        new Vector2Int(1, 0),   // Est
-        new Vector2Int(0, -1),  // Sud
-        new Vector2Int(-1, 0),  // Ouest
-        new Vector2Int(1, 1),   // Nord-Est
-        new Vector2Int(1, -1),  // Sud-Est
-        new Vector2Int(-1, -1), // Sud-Ouest
-        new Vector2Int(-1, 1)   // Nord-Ouest
-    };
+        // Toutes les 8 directions adjacentes via RangeOffsets (source unique de vérité)
+        Vector2Int[] adjacentOffsets = RangeOffsets.GetOffsets(1);
 
         Vector2Int bestAdjacentCell = Vector2Int.zero;
         int shortestPathLength = int.MaxValue;
