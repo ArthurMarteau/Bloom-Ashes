@@ -13,7 +13,6 @@ GameObject:
   - component: {fileID: 8826654984410517023}
   - component: {fileID: 6089708986104746477}
   - component: {fileID: 7328684417417109104}
-  - component: {fileID: 5085808041317068649}
   - component: {fileID: 202372915752260335}
   - component: {fileID: 6825426482597005728}
   - component: {fileID: 5930733243826866042}
@@ -183,34 +182,6 @@ MonoBehaviour:
   rootbornIdleReversedDuration: 0.5
   syncAnimationWithDuration: 1
   debugAnimations: 0
---- !u!114 &5085808041317068649
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 41387421219258777}
-  m_Enabled: 0
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4918fc93086a0814bb81608ee3bd27dd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  maxHP: 100
-  attackDamage: 10
-  attackRange: 1
-  defense: 0
-  attackSpeed: 1
-  moveSpeed: 1
-  OnDamaged:
-    m_PersistentCalls:
-      m_Calls: []
-  OnHealed:
-    m_PersistentCalls:
-      m_Calls: []
-  OnDeath:
-    m_PersistentCalls:
-      m_Calls: []
-  debugStats: 0
 --- !u!114 &202372915752260335
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -558,7 +529,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 774c5eb231b262546948ae3a3cab7214, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  unitStats: {fileID: 0}
   unitStatsComponent: {fileID: 0}
   fillImage: {fileID: 5246787314957091009}
   canvas: {fileID: 953588619764230310}

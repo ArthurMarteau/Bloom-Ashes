@@ -18,3 +18,4 @@ MonoBehaviour:
   defense: 0
   attackSpeed: 2
   moveSpeed: 2
+  isRootborn: 1

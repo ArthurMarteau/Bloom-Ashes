@@ -23,63 +23,22 @@ public class AttackController : MonoBehaviour
 
     // Références
     private MovementController movementController;
-    private UnitStats unitStats;
-    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
+    private UnitStatsComponent unitStatsComponent;
     private TeamComponent teamComponent;
     private GameObject unitGameObject;
     private Coroutine damageCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
 
-    // Offsets prédéfinis pour chaque portée d'attaque (même logique que ChaseController)
-    // Range 1 : Mêlée - 8 cases adjacentes
-    private static readonly Vector2Int[] range1Offsets = {
-    new Vector2Int(0, 1),   // Nord
-    new Vector2Int(1, 0),   // Est
-    new Vector2Int(0, -1),  // Sud
-    new Vector2Int(-1, 0),  // Ouest
-    new Vector2Int(1, 1),   // Nord-Est
-    new Vector2Int(1, -1),  // Sud-Est
-    new Vector2Int(-1, -1), // Sud-Ouest
-    new Vector2Int(-1, 1)   // Nord-Ouest
-};
-
-    // Range 2 : Portée 1 case - 16 cases (carré 5x5 sans centre)
-    private static readonly Vector2Int[] range2Offsets = {
-    // Reprend range1
-    new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(0, -1), new Vector2Int(-1, 0),
-    new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1), new Vector2Int(-1, 1),
-    // Deuxième couronne
-    new Vector2Int(0, 2), new Vector2Int(2, 0), new Vector2Int(0, -2), new Vector2Int(-2, 0),
-    new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
-    new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2)
-};
-
-    // Range 3 : Portée 2 cases - 24 cases (carré 7x7 sans centre et coins extrêmes)
-    private static readonly Vector2Int[] range3Offsets = {
-    // Reprend range2
-    new Vector2Int(0, 1), new Vector2Int(1, 0), new Vector2Int(0, -1), new Vector2Int(-1, 0),
-    new Vector2Int(1, 1), new Vector2Int(1, -1), new Vector2Int(-1, -1), new Vector2Int(-1, 1),
-    new Vector2Int(0, 2), new Vector2Int(2, 0), new Vector2Int(0, -2), new Vector2Int(-2, 0),
-    new Vector2Int(1, 2), new Vector2Int(2, 1), new Vector2Int(2, -1), new Vector2Int(1, -2),
-    new Vector2Int(-1, -2), new Vector2Int(-2, -1), new Vector2Int(-2, 1), new Vector2Int(-1, 2),
-    // Troisième couronne
-    new Vector2Int(0, 3), new Vector2Int(3, 0), new Vector2Int(0, -3), new Vector2Int(-3, 0),
-    new Vector2Int(1, 3), new Vector2Int(3, 1), new Vector2Int(3, -1), new Vector2Int(1, -3),
-    new Vector2Int(-1, -3), new Vector2Int(-3, -1), new Vector2Int(-3, 1), new Vector2Int(-1, 3),
-    new Vector2Int(2, 2), new Vector2Int(2, -2), new Vector2Int(-2, -2), new Vector2Int(-2, 2)
-};
-
     // Initialise les références
     private void Awake()
     {
         unitGameObject = gameObject;
-        unitStats = GetComponent<UnitStats>();
-        _statsComponent = GetComponent<UnitStatsComponent>();
+        unitStatsComponent = GetComponent<UnitStatsComponent>();
         teamComponent = GetComponent<TeamComponent>();
 
-        if (unitStats == null)
+        if (unitStatsComponent == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: UnitStats non trouvé !");
+            Debug.LogError($"AttackController sur {gameObject.name}: UnitStatsComponent non trouvé !");
         }
 
         if (teamComponent == null)
@@ -103,7 +62,7 @@ public class AttackController : MonoBehaviour
     private void Update()
     {
         // Vérifie si l'unité est morte (ne doit plus rien faire)
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -170,7 +129,7 @@ public class AttackController : MonoBehaviour
     private void CheckForAutoAttack()
     {
         // Vérifie si l'unité attaquante est morte
-        if (unitStats.IsDead())
+        if (unitStatsComponent.IsDead())
         {
             if (debugAttack)
             {
@@ -220,13 +179,13 @@ public class AttackController : MonoBehaviour
     // Retourne null si aucun ennemi trouvé
     private GameObject FindNearestEnemyInRange()
     {
-        if (unitStats == null || teamComponent == null)
+        if (unitStatsComponent == null || teamComponent == null)
         {
             return null;
         }
 
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-        int attackRange = unitStats.GetAttackRange();
+        int attackRange = unitStatsComponent.GetAttackRange();
 
         GameObject nearestEnemy = null;
         int shortestDistance = int.MaxValue;
@@ -240,7 +199,7 @@ public class AttackController : MonoBehaviour
 
         foreach (Collider2D collider in nearbyColliders)
         {
-            UnitStats unitStat = collider.GetComponent<UnitStats>();
+            UnitStatsComponent unitStat = collider.GetComponent<UnitStatsComponent>();
             if (unitStat == null) continue;
 
             GameObject otherUnit = unitStat.gameObject;
@@ -417,7 +376,7 @@ public class AttackController : MonoBehaviour
                     }
 
                     // Lance directement l'attaque pour déclencher IdleReversed
-                    float attackSpeedR = unitStats.GetAttackSpeed();
+                    float attackSpeedR = unitStatsComponent.GetAttackSpeed();
                     bool cooldownReadyR = Time.time - lastAttackTime >= attackSpeedR;
 
                     if (!isPerformingAttack && cooldownReadyR)
@@ -438,7 +397,7 @@ public class AttackController : MonoBehaviour
             }
 
             // Lance l'attaque si aucune attaque n'est en cours ET si le cooldown est écoulé
-            float attackSpeed = unitStats.GetAttackSpeed();
+            float attackSpeed = unitStatsComponent.GetAttackSpeed();
             bool cooldownReady = Time.time - lastAttackTime >= attackSpeed;
 
             // Lance l'attaque si aucune attaque n'est en cours
@@ -483,7 +442,7 @@ public class AttackController : MonoBehaviour
         }
 
         // Cible morte
-        UnitStats targetStats = currentTarget.GetComponent<UnitStats>();
+        UnitStatsComponent targetStats = currentTarget.GetComponent<UnitStatsComponent>();
         if (targetStats != null && targetStats.IsDead())
         {
             return false;
@@ -499,11 +458,11 @@ public class AttackController : MonoBehaviour
     }
 
     // Vérifie si la cible est à portée d'attaque ET si l'unité est au centre de sa case
-    // Utilise la portée définie dans UnitStats
+    // Utilise la portée définie dans UnitStatsComponent
     // Utilise la position de grille actuelle (transform.position converti)
     private bool IsTargetInRange()
     {
-        if (unitStats == null || currentTarget == null)
+        if (unitStatsComponent == null || currentTarget == null)
         {
             return false;
         }
@@ -512,7 +471,7 @@ public class AttackController : MonoBehaviour
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
-        int attackRange = unitStats.GetAttackRange();
+        int attackRange = unitStatsComponent.GetAttackRange();
         int distance = Mathf.Max(Mathf.Abs(myPosition.x - targetPosition.x), Mathf.Abs(myPosition.y - targetPosition.y));
 
         bool inRange = distance <= attackRange;
@@ -538,7 +497,7 @@ public class AttackController : MonoBehaviour
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
 
-        int attackRange = unitStats.GetAttackRange();
+        int attackRange = unitStatsComponent.GetAttackRange();
 
         // DEBUG: Vérifie si on est déjà à portée
         int currentDistance = Mathf.Max(Mathf.Abs(myPosition.x - targetPosition.x), Mathf.Abs(myPosition.y - targetPosition.y));
@@ -588,31 +547,12 @@ public class AttackController : MonoBehaviour
     }
 
     // Trouve la case à portée d'attaque avec le chemin le plus court
-    // Utilise des listes d'offsets prédéfinies (même logique que ChaseController)
+    // Délègue la sélection des offsets à RangeOffsets (source unique de vérité)
     // Calcule le vrai chemin vers chaque case et retourne la meilleure
     private Vector2Int FindPositionInRange(Vector2Int targetPosition, Vector2Int myPosition, int attackRange)
     {
-        // Sélectionne la liste d'offsets selon la portée
-        Vector2Int[] offsets;
-        switch (attackRange)
-        {
-            case 1:
-                offsets = range1Offsets;
-                break;
-            case 2:
-                offsets = range2Offsets;
-                break;
-            case 3:
-                offsets = range3Offsets;
-                break;
-            default:
-                if (debugAttack)
-                {
-                    Debug.LogWarning($"AttackController {gameObject.name}: Range {attackRange} non supportée, utilisation range 1");
-                }
-                offsets = range1Offsets;
-                break;
-        }
+        // Sélectionne la liste d'offsets selon la portée via RangeOffsets
+        Vector2Int[] offsets = RangeOffsets.GetOffsets(attackRange);
 
         Vector2Int bestCell = Vector2Int.zero;
         int shortestPathLength = int.MaxValue;
@@ -685,16 +625,16 @@ public class AttackController : MonoBehaviour
             return;
         }
 
-        if (currentTarget == null || unitStats == null)
+        if (currentTarget == null || unitStatsComponent == null)
         {
             return;
         }
 
-        UnitStats targetStats = currentTarget.GetComponent<UnitStats>();
+        UnitStatsComponent targetStats = currentTarget.GetComponent<UnitStatsComponent>();
 
         if (targetStats == null)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: Cible {currentTarget.name} n'a pas de UnitStats");
+            Debug.LogWarning($"AttackController {gameObject.name}: Cible {currentTarget.name} n'a pas de UnitStatsComponent");
             return;
         }
 
@@ -720,7 +660,7 @@ public class AttackController : MonoBehaviour
 
     // Coroutine pour gérer l'animation pré-attaque du Rootborn
     // Bloque l'attaque jusqu'à ce que IdleReversed soit terminé
-    private IEnumerator PlayRootbornPreAttackAnimation(UnitStats targetStats)
+    private IEnumerator PlayRootbornPreAttackAnimation(UnitStatsComponent targetStats)
     {
         if (animatorController == null || !IsRootborn())
         {
@@ -750,7 +690,7 @@ public class AttackController : MonoBehaviour
     }
 
     // Exécute l'animation d'attaque et inflige les dégâts immédiatement
-    private void ExecuteAttackAnimation(UnitStats targetStats)
+    private void ExecuteAttackAnimation(UnitStatsComponent targetStats)
     {
         if (animatorController != null && currentTarget != null)
         {
@@ -772,14 +712,14 @@ public class AttackController : MonoBehaviour
     }
 
     // Inflige les dégâts à la fin de l'animation et reset le flag
-    private IEnumerator DealDamageAtEndOfAnimation(UnitStats targetStats)
+    private IEnumerator DealDamageAtEndOfAnimation(UnitStatsComponent targetStats)
     {
         // Attend la fin de l'animation d'attaque (durée fixe)
         yield return new WaitForSeconds(0.2f);
 
         // Calcule le temps de trajet du projectile si attaque à distance
         float projectileTravelTime = 0f;
-        int attackRange = unitStats.GetAttackRange();
+        int attackRange = unitStatsComponent.GetAttackRange();
 
         // Si portée > 1, calcule le temps de trajet
         if (attackRange > 1 && currentTarget != null)
@@ -820,7 +760,7 @@ public class AttackController : MonoBehaviour
         // Inflige les dégâts
         if (targetStats != null && !targetStats.IsDead() && IsTargetInRange())
         {
-            int damage = unitStats.GetAttackDamage();
+            int damage = unitStatsComponent.GetAttackDamage();
             targetStats.TakeDamage(damage, unitGameObject);
 
             if (debugAttack)
@@ -829,8 +769,8 @@ public class AttackController : MonoBehaviour
             }
         }
 
-        // Récupère attackSpeed depuis UnitStats
-        float attackSpeed = unitStats.GetAttackSpeed();
+        // Récupère attackSpeed depuis UnitStatsComponent
+        float attackSpeed = unitStatsComponent.GetAttackSpeed();
 
         // Calcule le cooldown restant (attackSpeed - animation - projectile)
         float totalAttackTime = AnimatorController.ATTACK_ANIMATION_DURATION + projectileTravelTime;
@@ -852,11 +792,10 @@ public class AttackController : MonoBehaviour
     }
 
     // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
-    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
     private bool IsRootborn()
     {
-        if (_statsComponent != null) return _statsComponent.IsRootborn();
-        return gameObject.name.Contains("Rootborn");
+        if (unitStatsComponent != null) return unitStatsComponent.IsRootborn();
+        return false;
     }
 
     // Retourne si l'unité est actuellement en train d'attaquer
@@ -879,6 +818,6 @@ public class AttackController : MonoBehaviour
         Debug.Log($"En attaque: {isAttacking}");
         Debug.Log($"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}");
         Debug.Log($"À portée: {(isAttacking ? IsTargetInRange() : false)}");
-        Debug.Log($"Portée d'attaque: {(unitStats != null ? unitStats.GetAttackRange() : 0)} cases");
+        Debug.Log($"Portée d'attaque: {(unitStatsComponent != null ? unitStatsComponent.GetAttackRange() : 0)} cases");
     }
 }

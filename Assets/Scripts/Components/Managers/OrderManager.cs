@@ -1,8 +1,9 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 // Gère les ordres donnés aux unités sélectionnées
 // Fait le lien entre SelectionManager et les controllers d'unités (MovementController, AttackController, etc.)
 // Extensible pour différents types d'ordres (mouvement, attaque, patrouille, etc.)
+// Consomme les events de InputManager — aucun accès direct à Input.*
 public class OrderManager : MonoBehaviour
 {
     public static OrderManager Instance { get; private set; }
@@ -10,7 +11,8 @@ public class OrderManager : MonoBehaviour
     [Header("References")]
     [SerializeField] private SelectionManager selectionManager;
 
-    private Camera mainCamera;
+    // Référence à l'InputManager pour l'abonnement aux events
+    private InputManager inputManager;
 
     // Initialise le singleton et les références
     private void Awake()
@@ -22,13 +24,6 @@ public class OrderManager : MonoBehaviour
             return;
         }
         Instance = this;
-
-        // Trouve la caméra principale
-        mainCamera = Camera.main;
-        if (mainCamera == null)
-        {
-            Debug.LogError("OrderManager: Pas de caméra principale trouvée !");
-        }
 
         // Trouve les références si non assignées
         if (selectionManager == null)
@@ -43,27 +38,24 @@ public class OrderManager : MonoBehaviour
         Debug.Log("OrderManager initialisé");
     }
 
-    // Écoute les inputs d'ordres chaque frame
-    private void Update()
+    // S'abonne aux events de InputManager pour découpler la lecture d'input
+    private void Start()
     {
-        HandleOrderInput();
-    }
-
-    // Point d'entrée pour gérer tous les types d'ordres
-    // Actuellement : clic droit = mouvement
-    // Extensible pour : touche A = attaque, P = patrouille, etc.
-    private void HandleOrderInput()
-    {
-        // Clic droit = ordre de mouvement
-        if (Input.GetMouseButtonDown(1))
+        inputManager = InputManager.Instance;
+        if (inputManager == null)
         {
-            HandleMovementOrder();
+            Debug.LogError("OrderManager: InputManager introuvable dans la scène !");
+            return;
         }
+
+        // Clic droit = ordre de mouvement, d'attaque ou de chase selon la cible
+        inputManager.OnRightClickDown.AddListener(HandleMovementOrder);
     }
 
     // Traite les ordres de mouvement, chase ou attaque via clic droit
+    // Reçoit la position monde depuis InputManager (Z=0 pour la grille 2D)
     // Détecte automatiquement : ennemi = attaque, allié/neutre = chase, case vide = mouvement
-    private void HandleMovementOrder()
+    private void HandleMovementOrder(Vector3 worldPosition)
     {
         // Vérifie qu'il y a des unités sélectionnées
         if (selectionManager == null || !selectionManager.HasUnitsSelected())
@@ -72,22 +64,18 @@ public class OrderManager : MonoBehaviour
             return;
         }
 
-        // Convertit la position de la souris en rayon 3D
-        Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
+        // Vérifie s'il y a une unité sous le curseur via overlap 2D
+        Collider2D unitCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), 1 << 8); // Layer Units
 
-        // Vérifie d'abord s'il y a une unité sous le curseur
-        RaycastHit2D unitHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, 1 << 8); // Layer Units
-
-        if (unitHit.collider != null)
+        if (unitCollider != null)
         {
             // Unité détectée → Vérifie si ennemi ou allié
-            GameObject targetUnit = unitHit.collider.gameObject;
-            HandleUnitTargetOrder(targetUnit);
+            HandleUnitTargetOrder(unitCollider.gameObject);
         }
         else
         {
             // Pas d'unité → Ordre de mouvement classique
-            HandleSimpleMovementOrder();
+            HandleSimpleMovementOrder(worldPosition);
         }
     }
 
@@ -170,12 +158,12 @@ public class OrderManager : MonoBehaviour
         }
     }
 
-    // Gère l'ordre de mouvement simple vers une position
-    private void HandleSimpleMovementOrder()
+    // Gère l'ordre de mouvement simple vers une position monde
+    // Reçoit directement la position monde depuis HandleMovementOrder
+    private void HandleSimpleMovementOrder(Vector3 worldPosition)
     {
-        // Convertit la position de la souris en coordonnées de grille
-        Vector3 mouseWorldPosition = GetMouseWorldPosition();
-        Vector2Int targetGridPosition = GridManager.Instance.WorldToGrid(mouseWorldPosition);
+        // Convertit la position monde en coordonnées de grille
+        Vector2Int targetGridPosition = GridManager.Instance.WorldToGrid(worldPosition);
 
         // Vérifie que la destination est dans les limites
         if (!GridManager.Instance.IsInBounds(targetGridPosition))
@@ -223,12 +211,12 @@ public class OrderManager : MonoBehaviour
         Debug.Log($"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités");
     }
 
-    // Convertit la position de la souris en position monde
-    private Vector3 GetMouseWorldPosition()
+    // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
+    private void OnDestroy()
     {
-        Vector3 mouseScreenPosition = Input.mousePosition;
-        Vector3 mouseWorldPosition = mainCamera.ScreenToWorldPoint(mouseScreenPosition);
-        mouseWorldPosition.z = 0f;
-        return mouseWorldPosition;
+        if (inputManager != null)
+        {
+            inputManager.OnRightClickDown.RemoveListener(HandleMovementOrder);
+        }
     }
 }

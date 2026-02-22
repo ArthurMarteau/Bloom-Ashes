@@ -32,7 +32,7 @@ public class AnimatorController : MonoBehaviour
     // Variables d'état d'animation
     private Animator unitAnimator;
     private SpriteRenderer spriteRenderer;
-    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
+    private UnitStatsComponent unitStatsComponent;
     private Coroutine idleReversedCoroutine;
 
     // Cache des noms d'animations universels
@@ -47,7 +47,7 @@ public class AnimatorController : MonoBehaviour
         // Cache les composants requis
         unitAnimator = GetComponent<Animator>();
         spriteRenderer = GetComponent<SpriteRenderer>();
-        _statsComponent = GetComponent<UnitStatsComponent>();
+        unitStatsComponent = GetComponent<UnitStatsComponent>();
 
         // Valide que les composants existent
         if (unitAnimator == null)
@@ -97,8 +97,7 @@ public class AnimatorController : MonoBehaviour
         if (unitAnimator == null) return;
 
         // Ne joue pas d'animation si l'unité est morte
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -132,8 +131,7 @@ public class AnimatorController : MonoBehaviour
         if (unitAnimator == null) return;
 
         // Ne joue pas d'animation si l'unité est morte
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -182,8 +180,7 @@ public class AnimatorController : MonoBehaviour
         if (unitAnimator == null) return;
 
         // Ne joue pas d'animation si l'unité est morte
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -237,8 +234,7 @@ public class AnimatorController : MonoBehaviour
         if (unitAnimator == null) return;
 
         // Ne joue pas d'animation si l'unité est morte
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -275,8 +271,7 @@ public class AnimatorController : MonoBehaviour
         }
 
         // Ne joue pas d'animation si l'unité est morte
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
@@ -457,11 +452,10 @@ public class AnimatorController : MonoBehaviour
     }
 
     // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
-    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
     private bool IsRootborn()
     {
-        if (_statsComponent != null) return _statsComponent.IsRootborn();
-        return gameObject.name.Contains("Rootborn");
+        if (unitStatsComponent != null) return unitStatsComponent.IsRootborn();
+        return false;
     }
 
     // Retourne l'état actuel des animations
@@ -500,7 +494,7 @@ public class AnimatorController : MonoBehaviour
 
 
     // Joue l'animation de mort de l'unité
-    // Appelée par UnitStats quand l'unité meurt
+    // Appelée par UnitStatsComponent quand l'unité meurt
     public void PlayDeathAnimation()
     {
         if (unitAnimator == null) return;
@@ -529,8 +523,7 @@ public class AnimatorController : MonoBehaviour
     public void PlayHitAnimation(Vector2Int attackerPosition, Vector2Int victimPosition)
     {
         // Ne joue pas Hit si l'unité est morte (elle doit rester en Death)
-        UnitStats unitStats = GetComponent<UnitStats>();
-        if (unitStats != null && unitStats.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             if (debugAnimations)
             {
