@@ -185,7 +185,20 @@
   },
   "active": "c99a3dc5ad6ee8ae",
   "lastOpenFiles": [
+    "Components/Managers/GridManager.cs~",
     "GDD.md",
+    "Components/Buildings/BuildingStatsComponent.cs.meta",
+    "Components/Buildings.meta",
+    "Components/Buildings/BuildingStatsComponent.cs",
+    "Components/Buildings",
+    "Data/Buildings/BuildingStatsData.cs.meta",
+    "Data/Buildings.meta",
+    "Data/Buildings/BuildingStatsData.cs",
+    "Data/Buildings",
+    "REFACTORING_STRATEGY.md",
+    "Components/Interfaces/ITeamMember.cs.meta",
+    "Components/Interfaces/ITeamMember.cs",
+    "REFACTORING_PROMPTS.md",
     "claude.md"
   ]
 }

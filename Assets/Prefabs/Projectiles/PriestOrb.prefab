@@ -12,7 +12,7 @@ GameObject:
   - component: {fileID: 2446174227014436268}
   - component: {fileID: -6180979899280568782}
   - component: {fileID: -3092359265613880066}
-  m_Layer: 0
+  m_Layer: 10
   m_Name: PriestOrb
   m_TagString: Untagged
   m_Icon: {fileID: 0}

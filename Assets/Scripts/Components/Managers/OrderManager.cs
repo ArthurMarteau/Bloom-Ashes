@@ -95,16 +95,17 @@ public class OrderManager : MonoBehaviour
                 continue;
             }
 
-            // Récupère le TeamComponent de l'unité
-            TeamComponent teamComponent = unit.GetComponent<TeamComponent>();
-            if (teamComponent == null)
+            // Récupère l'appartenance d'équipe via ITeamMember (unités ET bâtiments futurs)
+            ITeamMember unitTeamMember = unit.GetComponent<ITeamMember>();
+            if (unitTeamMember == null)
             {
-                Debug.LogWarning($"OrderManager: {unit.name} n'a pas de TeamComponent");
+                Debug.LogWarning($"OrderManager: {unit.name} n'a pas d'ITeamMember (TeamComponent manquant ?)");
                 continue;
             }
 
-            // Vérifie si la cible est ennemie
-            if (teamComponent.IsEnemy(targetUnit))
+            // Vérifie si la cible est ennemie via ITeamMember
+            ITeamMember targetTeamMember = targetUnit.GetComponent<ITeamMember>();
+            if (unitTeamMember.IsEnemy(targetTeamMember))
             {
                 // ENNEMI → Ordre d'attaque
                 AttackController attackController = unit.GetComponent<AttackController>();

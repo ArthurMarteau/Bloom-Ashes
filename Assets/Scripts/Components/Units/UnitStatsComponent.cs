@@ -5,7 +5,7 @@ using UnityEngine.Events;
 // Pont entre ScriptableObject (données) et Systems (logique)
 // Responsable du cycle de vie Unity (events, intégration composants)
 // Interface principale pour le système de combat
-public class UnitStatsComponent : MonoBehaviour
+public class UnitStatsComponent : MonoBehaviour, IDamageable
 {
     [Header("Stats Data")]
     [SerializeField] private UnitStatsData baseStats; // ScriptableObject avec stats de base

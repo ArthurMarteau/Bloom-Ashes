@@ -13,7 +13,7 @@ GameObject:
   - component: {fileID: 1565153533547901365}
   - component: {fileID: 8059236044502505505}
   - component: {fileID: 5199176525476721512}
-  m_Layer: 8
+  m_Layer: 9
   m_Name: HealthBar
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -135,7 +135,7 @@ GameObject:
   - component: {fileID: 838253949989894503}
   - component: {fileID: 4022154473136906636}
   - component: {fileID: 4663450249577796155}
-  m_Layer: 8
+  m_Layer: 9
   m_Name: Fill
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -210,7 +210,7 @@ GameObject:
   - component: {fileID: 7425647365724475605}
   - component: {fileID: 7098811156758491138}
   - component: {fileID: 4629622774158744968}
-  m_Layer: 8
+  m_Layer: 9
   m_Name: Background
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -293,7 +293,7 @@ GameObject:
   - component: {fileID: 1368353542087516101}
   - component: {fileID: 4175757163065614216}
   - component: {fileID: 8946003045647189545}
-  m_Layer: 8
+  m_Layer: 9
   m_Name: MycelianPriest
   m_TagString: GroundUnit
   m_Icon: {fileID: 0}

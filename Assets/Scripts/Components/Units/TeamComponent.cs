@@ -3,7 +3,7 @@ using UnityEngine;
 // Gère l'appartenance d'une unité à une équipe
 // Permet de déterminer les relations ennemi/allié entre unités
 // Prépare le système d'alliances pour multi-joueurs futur
-public class TeamComponent : MonoBehaviour
+public class TeamComponent : MonoBehaviour, ITeamMember
 {
     [Header("Team Settings")]
     [SerializeField] private int teamID = 1; // 0 = Neutre, 1-6 = Joueurs
@@ -67,64 +67,43 @@ public class TeamComponent : MonoBehaviour
         return Color.white;
     }
 
-    // Vérifie si une autre unité est ennemie
-    // Retourne true si les équipes sont différentes et non-neutres
-    public bool IsEnemy(GameObject otherUnit)
+    // Vérifie si une entité est ennemie via interface ITeamMember
+    // Permet de comparer unités ET bâtiments sans GetComponent<TeamComponent>
+    public bool IsEnemy(ITeamMember other)
     {
-        if (otherUnit == null)
+        if (other == null)
             return false;
-
-        TeamComponent otherTeam = otherUnit.GetComponent<TeamComponent>();
-        if (otherTeam == null)
-        {
-            if (debugTeam)
-                Debug.LogWarning($"TeamComponent {gameObject.name}: {otherUnit.name} n'a pas de TeamComponent");
-            return false;
-        }
 
         // Neutres (teamID = 0) ne sont ennemis avec personne
-        if (teamID == 0 || otherTeam.teamID == 0)
+        if (teamID == 0 || other.GetTeamID() == 0)
             return false;
 
-        // TODO: Vérifier alliances ici quand implémenté
-        // Pour l'instant : équipes différentes = ennemis
-        bool isEnemy = teamID != otherTeam.teamID;
+        bool isEnemy = teamID != other.GetTeamID();
 
         if (debugTeam && isEnemy)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): {otherUnit.name} (Team {otherTeam.teamID}) est ENNEMI");
+            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ENNEMI");
 
         return isEnemy;
     }
 
-    // Vérifie si une autre unité est alliée
-    // Retourne true si même équipe ou alliance active
-    public bool IsAlly(GameObject otherUnit)
+    // Vérifie si une entité est alliée via interface ITeamMember
+    public bool IsAlly(ITeamMember other)
     {
-        if (otherUnit == null)
+        if (other == null)
             return false;
 
-        // Une unité est toujours alliée avec elle-même
-        if (otherUnit == gameObject)
+        // Soi-même est toujours allié
+        if (other == (ITeamMember)this)
             return true;
 
-        TeamComponent otherTeam = otherUnit.GetComponent<TeamComponent>();
-        if (otherTeam == null)
-        {
-            if (debugTeam)
-                Debug.LogWarning($"TeamComponent {gameObject.name}: {otherUnit.name} n'a pas de TeamComponent");
-            return false;
-        }
-
         // Neutres ne sont alliés avec personne (sauf eux-mêmes)
-        if (teamID == 0 || otherTeam.teamID == 0)
+        if (teamID == 0 || other.GetTeamID() == 0)
             return false;
 
-        // TODO: Vérifier alliances ici quand implémenté
-        // Pour l'instant : même équipe = alliés
-        bool isAlly = teamID == otherTeam.teamID;
+        bool isAlly = teamID == other.GetTeamID();
 
         if (debugTeam && isAlly)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): {otherUnit.name} (Team {otherTeam.teamID}) est ALLIÉ");
+            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ALLIÉ");
 
         return isAlly;
     }

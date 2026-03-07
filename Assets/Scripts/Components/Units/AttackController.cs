@@ -24,7 +24,7 @@ public class AttackController : MonoBehaviour
     // Références
     private MovementController movementController;
     private UnitStatsComponent unitStatsComponent;
-    private TeamComponent teamComponent;
+    private ITeamMember teamMember;
     private GameObject unitGameObject;
     private Coroutine damageCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
@@ -34,16 +34,16 @@ public class AttackController : MonoBehaviour
     {
         unitGameObject = gameObject;
         unitStatsComponent = GetComponent<UnitStatsComponent>();
-        teamComponent = GetComponent<TeamComponent>();
+        teamMember = GetComponent<ITeamMember>();
 
         if (unitStatsComponent == null)
         {
             Debug.LogError($"AttackController sur {gameObject.name}: UnitStatsComponent non trouvé !");
         }
 
-        if (teamComponent == null)
+        if (teamMember == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: TeamComponent non trouvé !");
+            Debug.LogError($"AttackController sur {gameObject.name}: ITeamMember (TeamComponent) non trouvé !");
         }
 
         animatorController = GetComponent<AnimatorController>();
@@ -178,7 +178,7 @@ public class AttackController : MonoBehaviour
     // Retourne null si aucun ennemi trouvé
     public GameObject FindNearestEnemyInRange()
     {
-        if (unitStatsComponent == null || teamComponent == null)
+        if (unitStatsComponent == null || teamMember == null)
         {
             return null;
         }
@@ -193,15 +193,17 @@ public class AttackController : MonoBehaviour
         float boxSize = (attackRange * 2 + 1) * GridManager.Instance.GetCellSize();
         Vector2 center = transform.position;
 
-        // Détecte tous les colliders dans la zone (layer Units = 8)
-        Collider2D[] nearbyColliders = Physics2D.OverlapBoxAll(center, new Vector2(boxSize, boxSize), 0f, 1 << 8);
+        // Détecte tous les colliders dans la zone (sans filtre de layer pour inclure unités ET bâtiments)
+        // Le filtre IDamageable agit comme discriminant naturel
+        Collider2D[] nearbyColliders = Physics2D.OverlapBoxAll(center, new Vector2(boxSize, boxSize), 0f);
 
         foreach (Collider2D collider in nearbyColliders)
         {
-            UnitStatsComponent unitStat = collider.GetComponent<UnitStatsComponent>();
-            if (unitStat == null) continue;
+            // Cible doit implémenter IDamageable (unité ou bâtiment)
+            IDamageable damageable = collider.GetComponent<IDamageable>();
+            if (damageable == null) continue;
 
-            GameObject otherUnit = unitStat.gameObject;
+            GameObject otherUnit = collider.gameObject;
 
             // Ignore soi-même
             if (otherUnit == unitGameObject)
@@ -209,13 +211,14 @@ public class AttackController : MonoBehaviour
                 continue;
             }
 
-            // Vérifie que c'est un ennemi vivant
-            if (!teamComponent.IsEnemy(otherUnit) || unitStat.IsDead())
+            // Vérifie que c'est un ennemi vivant (via ITeamMember : fonctionne pour unités ET bâtiments)
+            ITeamMember otherTeamMember = collider.GetComponent<ITeamMember>();
+            if (otherTeamMember == null || !teamMember.IsEnemy(otherTeamMember) || damageable.IsDead())
             {
                 continue;
             }
 
-            // Calcule la distance
+            // Calcule la distance (Chebyshev)
             Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(otherUnit.transform.position);
             int distance = Mathf.Max(Mathf.Abs(myPosition.x - enemyPosition.x),
                                     Mathf.Abs(myPosition.y - enemyPosition.y));
@@ -252,11 +255,15 @@ public class AttackController : MonoBehaviour
             return;
         }
 
-        // Vérifie que la cible est bien ennemie
-        if (teamComponent != null && !teamComponent.IsEnemy(target))
+        // Vérifie que la cible est bien ennemie (via ITeamMember)
+        if (teamMember != null)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: {target.name} n'est pas un ennemi");
-            return;
+            ITeamMember targetTeamMember = target.GetComponent<ITeamMember>();
+            if (targetTeamMember == null || !teamMember.IsEnemy(targetTeamMember))
+            {
+                Debug.LogWarning($"AttackController {gameObject.name}: {target.name} n'est pas un ennemi ou n'a pas d'ITeamMember");
+                return;
+            }
         }
 
         // Arrête l'attaque précédente si existe
@@ -438,17 +445,21 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
-        // Cible morte
-        UnitStatsComponent targetStats = currentTarget.GetComponent<UnitStatsComponent>();
-        if (targetStats != null && targetStats.IsDead())
+        // Cible morte (via IDamageable : fonctionne pour unités ET bâtiments)
+        IDamageable targetDamageable = currentTarget.GetComponent<IDamageable>();
+        if (targetDamageable != null && targetDamageable.IsDead())
         {
             return false;
         }
 
-        // Cible plus ennemie (changement d'équipe)
-        if (teamComponent != null && !teamComponent.IsEnemy(currentTarget))
+        // Cible plus ennemie (changement d'équipe) — comparaison via ITeamMember
+        if (teamMember != null)
         {
-            return false;
+            ITeamMember targetTeamMember = currentTarget.GetComponent<ITeamMember>();
+            if (targetTeamMember == null || !teamMember.IsEnemy(targetTeamMember))
+            {
+                return false;
+            }
         }
 
         return true;
@@ -627,11 +638,12 @@ public class AttackController : MonoBehaviour
             return;
         }
 
-        UnitStatsComponent targetStats = currentTarget.GetComponent<UnitStatsComponent>();
+        // Cible doit implémenter IDamageable (unité ou bâtiment)
+        IDamageable targetDamageable = currentTarget.GetComponent<IDamageable>();
 
-        if (targetStats == null)
+        if (targetDamageable == null)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: Cible {currentTarget.name} n'a pas de UnitStatsComponent");
+            Debug.LogWarning($"AttackController {gameObject.name}: Cible {currentTarget.name} n'implémente pas IDamageable !");
             return;
         }
 
@@ -646,18 +658,18 @@ public class AttackController : MonoBehaviour
         // Gestion spéciale Rootborn : IdleReversed avant première attaque de la session
         if (IsRootborn())
         {
-            StartCoroutine(PlayRootbornPreAttackAnimation(targetStats));
+            StartCoroutine(PlayRootbornPreAttackAnimation(targetDamageable));
         }
         else
         {
             // Lance directement l'attaque normale
-            ExecuteAttackAnimation(targetStats);
+            ExecuteAttackAnimation(targetDamageable);
         }
     }
 
     // Coroutine pour gérer l'animation pré-attaque du Rootborn
     // Bloque l'attaque jusqu'à ce que IdleReversed soit terminé
-    private IEnumerator PlayRootbornPreAttackAnimation(UnitStatsComponent targetStats)
+    private IEnumerator PlayRootbornPreAttackAnimation(IDamageable targetDamageable)
     {
         if (animatorController == null || !IsRootborn())
         {
@@ -683,11 +695,11 @@ public class AttackController : MonoBehaviour
         }
 
         // Lance l'attaque normale maintenant
-        ExecuteAttackAnimation(targetStats);
+        ExecuteAttackAnimation(targetDamageable);
     }
 
     // Exécute l'animation d'attaque et inflige les dégâts immédiatement
-    private void ExecuteAttackAnimation(UnitStatsComponent targetStats)
+    private void ExecuteAttackAnimation(IDamageable targetDamageable)
     {
         if (animatorController != null && currentTarget != null)
         {
@@ -705,11 +717,11 @@ public class AttackController : MonoBehaviour
         }
 
         // Inflige les dégâts à la fin de l'animation
-        damageCoroutine = StartCoroutine(DealDamageAtEndOfAnimation(targetStats));
+        damageCoroutine = StartCoroutine(DealDamageAtEndOfAnimation(targetDamageable));
     }
 
     // Inflige les dégâts à la fin de l'animation et reset le flag
-    private IEnumerator DealDamageAtEndOfAnimation(UnitStatsComponent targetStats)
+    private IEnumerator DealDamageAtEndOfAnimation(IDamageable targetDamageable)
     {
         // Attend la fin de l'animation d'attaque (durée fixe)
         yield return new WaitForSeconds(0.2f);
@@ -754,15 +766,15 @@ public class AttackController : MonoBehaviour
             yield return new WaitForSeconds(projectileTravelTime);
         }
 
-        // Inflige les dégâts
-        if (targetStats != null && !targetStats.IsDead() && IsTargetInRange())
+        // Inflige les dégâts via IDamageable (fonctionne pour unités ET bâtiments)
+        if (targetDamageable != null && !targetDamageable.IsDead() && IsTargetInRange())
         {
             int damage = unitStatsComponent.GetAttackDamage();
-            targetStats.TakeDamage(damage, unitGameObject);
+            targetDamageable.TakeDamage(damage, unitGameObject);
 
             if (debugAttack)
             {
-                Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à fin d'animation");
+                Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable");
             }
         }
 

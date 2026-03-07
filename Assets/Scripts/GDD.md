@@ -78,7 +78,11 @@ The base unit shared by all factions, created at the Nexus.
 | Defense | Invulnerable |
 | Size    | 1x1          |
 
-**Function**: Spawns Rootborn units. Reverse battle unit in Rootborn for 20 Watersap.
+**Function**: 
+- Spawns Rootborn units. Reverse battle unit in Rootborn for 20 Watersap. 
+- Unique state : Iswalkable by every units ans IsUnvulnerable.
+- Unique ground : +2 DEF and +2 ATT. 1 DMG/sec on ennemies.
+
 
 ---
 
@@ -697,22 +701,23 @@ Aggressive creatures not affiliated with any faction. One per biome.
 
 ### Terrain Types
 
-| Terrain         | Path Cost  | Move Speed Mod | Defense Mod | Notes                                         |
-| --------------- | ---------- | -------------- | ----------- | --------------------------------------------- |
-| Grass           | 1.0        | 0              | 0           | Default terrain                               |
-| Dirt            | 1.0        | 0              | 0           | Default terrain                               |
-| Path            | 0.5        | +1             | 0           | A* prefers paths for faster routes            |
-| Rocky           | 2.0        | -1 (min 1)     | +2          | Slows but protects                            |
-| Swamp           | 1.5        | -1 (min 1)     | 0           | Slow, potential poison for non-Abyss          |
-| Brambles        | 1.5        | -1 (min 1)     | +1          | Deals 1 dmg/cell to non-Charmers             |
-| Sand            | 1.5        | -1 (min 1)     | 0           | Desert terrain                                |
-| Scorched        | 1.0        | 0              | 0           | Deals 1 dmg/turn to non-Scorched             |
-| Lava            | 1.0        | 0              | 0           | Kills instantly to non-Scorched               |
-| Water           | Impassable | —              | —           | Only aquatic/flying units                     |
-| Mountain        | Impassable | —              | —           | Only flying units                             |
-| Ravine          | Impassable | —              | —           | Only flying units. Kills instantly.           |
-| Bush            | 1.0        | 0              | +1          | Provides camouflage for Puffball Scout        |
-| Watersap Source | 1.0        | 0              | +1          | Doubles Watersap collection for the Rootborn. |
+| Terrain         | Path Cost  | Move Speed Mod | Attribut Mod | Notes                                         |
+| --------------- | ---------- | -------------- | ------------ | --------------------------------------------- |
+| Grass           | 1.0        | 0              | 0            | Default terrain                               |
+| Dirt            | 1.0        | 0              | 0            | Default terrain                               |
+| Path            | 0.5        | +1             | 0            | A* prefers paths for faster routes            |
+| Rocky           | 2.0        | -1 (min 1)     | +2 DEF       | Slows but protects                            |
+| Swamp           | 1.5        | -1 (min 1)     | 0            | Slow, potential poison for non-Abyss          |
+| Brambles        | 1.5        | -1 (min 1)     | +1 DEF       | Deals 1 dmg/cell to non-Charmers              |
+| Sand            | 1.5        | -1 (min 1)     | 0            | Desert terrain                                |
+| Scorched        | 1.0        | 0              | 0            | Deals 1 dmg/sec to non-Scorched               |
+| Lava            | 1.0        | 0              | 0            | Kills instantly to non-Scorched               |
+| Water           | Impassable | —              | —            | Only aquatic/flying units                     |
+| Mountain        | Impassable | —              | —            | Only flying units                             |
+| Ravine          | Impassable | —              | —            | Only flying units. Kills instantly.           |
+| Bush            | 1.0        | 0              | +1 DEF       | Provides camouflage for Puffball Scout        |
+| Watersap Source | 1.0        | 0              | +1 DEF       | Doubles Watersap collection for the Rootborn. |
+| Nexus           | 1.0        | 0              | +2 ATT       | Deals 1 dmg/sec to non-Allies                 |
 
 ### Faction-Terrain Interactions
 

@@ -9,8 +9,10 @@ public class GridManager : MonoBehaviour
     private Vector3 gridOrigin;
 
     [Header("Layer Settings")]
-    [SerializeField] private LayerMask unitLayer = 1 << 8;      // Layer pour détecter les unités
+    [SerializeField] private LayerMask unitLayer = 1 << 9;      // Layer pour détecter les unités
     [SerializeField] private LayerMask obstacleLayer = 1 << 6;  // Layer pour détecter les obstacles
+    [SerializeField] private LayerMask buildingLayer = 1 << 8;           // Layer "Buildings" — bâtiments de faction qui bloquent le passage
+                                                                // Le Nexus reste sur Environment_Walkable et N'EST PAS dans ce mask
 
     [Header("Ground Type Configuration")]
     [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
@@ -144,6 +146,16 @@ public class GridManager : MonoBehaviour
             }
         }
 
+        // Règle bâtiments de faction : bloquent le passage sauf pour les unités volantes
+        // Le Nexus (layer Environment_Walkable) n'est PAS détecté ici → les unités passent dessus
+        if (GetBuildingAt(gridPosition))
+        {
+            if (!UnitTypeHelper.CanFlyOverObstacles(unit))
+            {
+                return false;
+            }
+        }
+
         // Règle terrain : accessible selon les capacités de déplacement de l'unité
         GroundType terrainType = GetGroundTypeAt(gridPosition);
         if (!UnitTypeHelper.CanWalkOnGround(unit, terrainType))
@@ -202,6 +214,22 @@ public class GridManager : MonoBehaviour
         Vector3 worldPosition = GridToWorld(gridPosition);
         Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
         return obstacleCollider?.gameObject;
+    }
+
+    // Retourne le bâtiment de faction présent sur une position de grille (null si aucun)
+    // Utilise le layer Buildings — le Nexus (Environment_Walkable) n'est PAS détecté ici
+    // Appelé par IsWalkableFor() pour bloquer le passage à travers les bâtiments de faction
+    public GameObject GetBuildingAt(Vector2Int gridPosition)
+    {
+        // Aucun layer configuré → pas de bâtiments à détecter
+        if (buildingLayer.value == 0)
+        {
+            return null;
+        }
+
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D buildingCollider = Physics2D.OverlapPoint(worldPosition, buildingLayer);
+        return buildingCollider?.gameObject;
     }
 
     // Getter pour les dimensions de la grille
