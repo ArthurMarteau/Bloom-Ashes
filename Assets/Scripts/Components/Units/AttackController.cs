@@ -175,7 +175,8 @@ public class AttackController : MonoBehaviour
     }
 
     // Trouve l'ennemi le plus proche à portée d'attaque
-    // Retourne null si aucun ennemi trouvé
+    // Utilise EntityRegistry au lieu de Physics2D.OverlapBoxAll — O(n) sur entités enregistrées, zéro Physics2D
+    // Retourne null si aucun ennemi trouvé ou si EntityRegistry indisponible
     public GameObject FindNearestEnemyInRange()
     {
         if (unitStatsComponent == null || teamMember == null)
@@ -183,51 +184,36 @@ public class AttackController : MonoBehaviour
             return null;
         }
 
+        if (EntityRegistry.Instance == null)
+        {
+            Debug.LogWarning($"⚠️ AttackController {gameObject.name}: EntityRegistry introuvable, auto-attaque désactivée");
+            return null;
+        }
+
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
         int attackRange = unitStatsComponent.GetAttackRange();
+
+        // Récupère les ennemis vivants à portée via le registre centralisé (pas de Physics2D.OverlapBoxAll)
+        // FindEnemiesInRange filtre : vivant + équipe ennemie + distance Chebyshev <= attackRange
+        List<GameObject> enemies = EntityRegistry.Instance.FindEnemiesInRange(myPosition, attackRange, teamMember.GetTeamID());
 
         GameObject nearestEnemy = null;
         int shortestDistance = int.MaxValue;
 
-        // Récupère toutes les unités ennemies dans la scène
-        float boxSize = (attackRange * 2 + 1) * GridManager.Instance.GetCellSize();
-        Vector2 center = transform.position;
-
-        // Détecte tous les colliders dans la zone (sans filtre de layer pour inclure unités ET bâtiments)
-        // Le filtre IDamageable agit comme discriminant naturel
-        Collider2D[] nearbyColliders = Physics2D.OverlapBoxAll(center, new Vector2(boxSize, boxSize), 0f);
-
-        foreach (Collider2D collider in nearbyColliders)
+        foreach (GameObject enemy in enemies)
         {
-            // Cible doit implémenter IDamageable (unité ou bâtiment)
-            IDamageable damageable = collider.GetComponent<IDamageable>();
-            if (damageable == null) continue;
+            // Ignore soi-même (cas défensif)
+            if (enemy == unitGameObject) continue;
 
-            GameObject otherUnit = collider.gameObject;
-
-            // Ignore soi-même
-            if (otherUnit == unitGameObject)
-            {
-                continue;
-            }
-
-            // Vérifie que c'est un ennemi vivant (via ITeamMember : fonctionne pour unités ET bâtiments)
-            ITeamMember otherTeamMember = collider.GetComponent<ITeamMember>();
-            if (otherTeamMember == null || !teamMember.IsEnemy(otherTeamMember) || damageable.IsDead())
-            {
-                continue;
-            }
-
-            // Calcule la distance (Chebyshev)
-            Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(otherUnit.transform.position);
+            // Trouve le plus proche par distance Chebyshev
+            Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(enemy.transform.position);
             int distance = Mathf.Max(Mathf.Abs(myPosition.x - enemyPosition.x),
-                                    Mathf.Abs(myPosition.y - enemyPosition.y));
+                                     Mathf.Abs(myPosition.y - enemyPosition.y));
 
-            // Vérifie si à portée
-            if (distance <= attackRange && distance < shortestDistance)
+            if (distance < shortestDistance)
             {
                 shortestDistance = distance;
-                nearestEnemy = otherUnit;
+                nearestEnemy = enemy;
             }
         }
 
@@ -252,6 +238,18 @@ public class AttackController : MonoBehaviour
         if (target == unitGameObject)
         {
             Debug.LogWarning($"AttackController {gameObject.name}: Une unité ne peut pas s'attaquer elle-même");
+            return;
+        }
+
+        // Rejette les cibles invulnérables (ex: Nexus en phase d'invulnérabilité initiale)
+        // Évite qu'une unité s'acharne inutilement contre une entité imperméable aux dégâts
+        IDamageable targetDamageableCheck = target.GetComponent<IDamageable>();
+        if (targetDamageableCheck != null && targetDamageableCheck.IsInvulnerable())
+        {
+            if (debugAttack)
+            {
+                Debug.Log($"🛡️ AttackController {gameObject.name}: {target.name} est invulnérable — ordre d'attaque ignoré");
+            }
             return;
         }
 
@@ -452,6 +450,12 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
+        // Cible devenue invulnérable en cours d'attaque — inutile de continuer
+        if (targetDamageable != null && targetDamageable.IsInvulnerable())
+        {
+            return false;
+        }
+
         // Cible plus ennemie (changement d'équipe) — comparaison via ITeamMember
         if (teamMember != null)
         {
@@ -480,9 +484,9 @@ public class AttackController : MonoBehaviour
         Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
 
         int attackRange = unitStatsComponent.GetAttackRange();
-        int distance = Mathf.Max(Mathf.Abs(myPosition.x - targetPosition.x), Mathf.Abs(myPosition.y - targetPosition.y));
 
-        bool inRange = distance <= attackRange;
+        // Délègue le calcul de portée à CombatSystem (source unique de vérité)
+        bool inRange = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
 
         if (debugAttack && inRange)
         {
@@ -507,15 +511,21 @@ public class AttackController : MonoBehaviour
 
         int attackRange = unitStatsComponent.GetAttackRange();
 
-        // DEBUG: Vérifie si on est déjà à portée
-        int currentDistance = Mathf.Max(Mathf.Abs(myPosition.x - targetPosition.x), Mathf.Abs(myPosition.y - targetPosition.y));
+        // DEBUG: Vérifie la distance actuelle jusqu'à la cible
         if (debugAttack)
         {
+            int currentDistance = CombatSystem.CalculateChebyshevDistance(myPosition, targetPosition);
             Debug.Log($"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}");
         }
 
-        // Trouve une position à portée de la cible
-        Vector2Int bestPosition = FindPositionInRange(targetPosition, myPosition, attackRange);
+        // Délègue la sélection de position à CombatSystem (POCO, sans dépendance Unity)
+        // isWalkable injecte les contraintes Unity (bounds + walkability) dans la logique pure
+        Vector2Int bestPosition = CombatSystem.FindBestAttackPosition(
+            targetPosition,
+            myPosition,
+            attackRange,
+            pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
+        );
 
         if (bestPosition == Vector2Int.zero)
         {
@@ -552,70 +562,6 @@ public class AttackController : MonoBehaviour
         {
             Debug.Log($"AttackController {gameObject.name}: Déplacement vers {bestPosition} (cible: {targetPosition}, portée: {attackRange})");
         }
-    }
-
-    // Trouve la case à portée d'attaque avec le chemin le plus court
-    // Délègue la sélection des offsets à RangeOffsets (source unique de vérité)
-    // Calcule le vrai chemin vers chaque case et retourne la meilleure
-    private Vector2Int FindPositionInRange(Vector2Int targetPosition, Vector2Int myPosition, int attackRange)
-    {
-        // Sélectionne la liste d'offsets selon la portée via RangeOffsets
-        Vector2Int[] offsets = RangeOffsets.GetOffsets(attackRange);
-
-        Vector2Int bestCell = Vector2Int.zero;
-        int shortestPathLength = int.MaxValue;
-
-        // Cherche la case avec le chemin le plus court
-        foreach (Vector2Int offset in offsets)
-        {
-            Vector2Int cellInRange = targetPosition + offset;
-
-            // Vérifie limites de grille
-            if (!GridManager.Instance.IsInBounds(cellInRange))
-            {
-                continue;
-            }
-
-            // Vérifie que la case est accessible
-            if (!GridManager.Instance.IsWalkableFor(cellInRange, unitGameObject))
-            {
-                continue;
-            }
-
-            // Calcule le vrai chemin depuis notre position
-            List<Vector2Int> path = PathFinding.FindPath(myPosition, cellInRange, unitGameObject);
-
-            // Ignore si pas de chemin trouvé
-            if (path == null || path.Count == 0)
-            {
-                continue;
-            }
-
-            // Compare la longueur du chemin
-            if (path.Count < shortestPathLength)
-            {
-                shortestPathLength = path.Count;
-                bestCell = cellInRange;
-            }
-        }
-
-        // Retourne la meilleure case trouvée
-        if (bestCell != Vector2Int.zero)
-        {
-            if (debugAttack)
-            {
-                Debug.Log($"AttackController {gameObject.name}: Meilleure case trouvée {bestCell} avec chemin de {shortestPathLength} cases (range {attackRange})");
-            }
-            return bestCell;
-        }
-
-        // Aucune case à portée accessible
-        if (debugAttack)
-        {
-            Debug.LogWarning($"AttackController {gameObject.name}: Aucune case à portée {attackRange} accessible");
-        }
-
-        return Vector2Int.zero;
     }
 
     // Exécute l'attaque sur la cible

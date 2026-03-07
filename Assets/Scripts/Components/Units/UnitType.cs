@@ -39,22 +39,63 @@ public static class UnitTypeHelper
 
         if (unit.CompareTag(GROUND_UNIT_TAG))
         {
-            // Unité terrestre : marche seulement sur terrain normal
-            return groundType == GroundType.Ground;
+            // Unité terrestre : terrain ferme standard (pas eau, marécage, montagne, lave, ravin)
+            switch (groundType)
+            {
+                case GroundType.Grass:
+                case GroundType.Dirt:
+                case GroundType.Path:
+                case GroundType.Rocky:
+                case GroundType.Sand:
+                case GroundType.Scorched:
+                case GroundType.Brambles:
+                case GroundType.Bush:
+                case GroundType.WatersapSource:
+                    return true;
+                default:
+                    return false; // Swamp, Water, Mountain, Lava, Ravine
+            }
         }
         else if (unit.CompareTag(WATER_UNIT_TAG))
         {
-            // Unité amphibie : marche sur terrain normal ET eau
-            return groundType == GroundType.Ground || groundType == GroundType.Water;
+            // Unité amphibie : terrain standard + terrains aquatiques (eau, marécage, source)
+            switch (groundType)
+            {
+                case GroundType.Grass:
+                case GroundType.Dirt:
+                case GroundType.Path:
+                case GroundType.Rocky:
+                case GroundType.Sand:
+                case GroundType.Scorched:
+                case GroundType.Water:
+                case GroundType.Swamp:
+                case GroundType.WatersapSource:
+                    return true;
+                default:
+                    return false; // Brambles, Bush, Mountain, Lava, Ravine
+            }
         }
         else if (unit.CompareTag(MOUNTAIN_UNIT_TAG))
         {
-            // Unité alpiniste : marche sur terrain normal ET montagne
-            return groundType == GroundType.Ground || groundType == GroundType.Mountain;
+            // Unité montagnarde : terrain standard + terrains élevés (montagne, rocailleux)
+            switch (groundType)
+            {
+                case GroundType.Grass:
+                case GroundType.Dirt:
+                case GroundType.Path:
+                case GroundType.Rocky:
+                case GroundType.Scorched:
+                case GroundType.Brambles:
+                case GroundType.Bush:
+                case GroundType.Mountain:
+                    return true;
+                default:
+                    return false; // Sand, Swamp, Water, WatersapSource, Lava, Ravine
+            }
         }
         else if (unit.CompareTag(AIR_UNIT_TAG))
         {
-            // Unité volante : vole partout, tous terrains accessibles
+            // Unité volante : survole tous les terrains sans restriction
             return true;
         }
         else
@@ -135,15 +176,15 @@ public static class UnitTypeHelper
 
         if (unit.CompareTag(GROUND_UNIT_TAG))
         {
-            return "Terrain Normal uniquement";
+            return "Prairie, Terre, Chemin, Rocailleux, Sable, Brûlé, Ronces, Buissons, Source";
         }
         else if (unit.CompareTag(WATER_UNIT_TAG))
         {
-            return "Terrain Normal et Eau";
+            return "Prairie, Terre, Chemin, Rocailleux, Sable, Brûlé, Eau, Marécage, Source";
         }
         else if (unit.CompareTag(MOUNTAIN_UNIT_TAG))
         {
-            return "Terrain Normal et Montagne";
+            return "Prairie, Terre, Chemin, Rocailleux, Brûlé, Ronces, Buissons, Montagne";
         }
         else if (unit.CompareTag(AIR_UNIT_TAG))
         {

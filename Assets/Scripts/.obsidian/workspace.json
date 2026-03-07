@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "REFACTORING_STRATEGY.md",
+                "file": "GDD.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "REFACTORING_STRATEGY"
+              "title": "GDD"
             }
           }
         ]
@@ -185,19 +185,20 @@
   },
   "active": "c99a3dc5ad6ee8ae",
   "lastOpenFiles": [
+    "NEW_FEATURES_IMPLEMENTATION.md.meta",
+    "NEW FEATURES IMPLEMENTATION.md",
+    "NEW_FEATURES_IMPLEMENTATION.md",
+    "NEW FEATURES IMPLEMENTATION.md.meta",
+    "Systems/Grid/GridSystem.cs.meta",
+    "Systems/Grid/GridSystem.cs",
+    "Systems/Combat/CombatSystem.cs.meta",
+    "Systems/Combat/CombatSystem.cs",
+    "Systems/EntityRegistry.cs.meta",
+    "Systems/EntityRegistry.cs",
     "Components/Managers/GridManager.cs~",
     "GDD.md",
     "Components/Buildings/BuildingStatsComponent.cs.meta",
     "Components/Buildings.meta",
-    "Components/Buildings/BuildingStatsComponent.cs",
-    "Components/Buildings",
-    "Data/Buildings/BuildingStatsData.cs.meta",
-    "Data/Buildings.meta",
-    "Data/Buildings/BuildingStatsData.cs",
-    "Data/Buildings",
-    "REFACTORING_STRATEGY.md",
-    "Components/Interfaces/ITeamMember.cs.meta",
-    "Components/Interfaces/ITeamMember.cs",
     "REFACTORING_PROMPTS.md",
     "claude.md"
   ]

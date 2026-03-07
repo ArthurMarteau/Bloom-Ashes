@@ -52,6 +52,25 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         {
             movementController.SetMovementSpeed(baseStats.moveSpeed);
         }
+
+        // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.RegisterEntity(this, gameObject);
+        }
+        else if (debugStats)
+        {
+            Debug.LogWarning($"⚠️ UnitStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré");
+        }
+    }
+
+    // Désenregistre l'unité de l'EntityRegistry lors de la destruction
+    private void OnDestroy()
+    {
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.UnregisterEntity(gameObject);
+        }
     }
 
     // Applique des dégâts à l'unité avec formule damage - defense
@@ -242,7 +261,6 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
     }
 
     // Retourne les dégâts d'attaque de base
-    // NOTE: Dans Phase 3, passera par StatsModifierSystem pour buffs/debuffs
     public int GetAttackDamage()
     {
         if (baseStats == null) return 0;
@@ -289,59 +307,18 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         return !isDead;
     }
 
+    // Les unités ne sont jamais invulnérables — implémentation du contrat IDamageable
+    // Seuls certains bâtiments (ex: Nexus) peuvent l'être via BuildingStatsData.isInvulnerable
+    public bool IsInvulnerable()
+    {
+        return false;
+    }
+
     // Retourne si l'unité est un Rootborn (lu depuis le ScriptableObject)
     public bool IsRootborn()
     {
         if (baseStats == null) return false;
         return baseStats.isRootborn;
-    }
-
-    // === SETTERS PUBLICS (pour buffs/debuffs futurs via SO override temporaire) ===
-    // NOTE: Phase 3 remplacera ces setters par StatsModifierSystem
-
-    // Modifie les HP max temporairement
-    public void SetMaxHP(int newMaxHP)
-    {
-        int clampedMaxHP = statsLogic.ClampStat(newMaxHP, 1, int.MaxValue);
-        
-        // Crée une copie runtime du SO pour modifier sans affecter l'asset
-        if (baseStats != null)
-        {
-            // TODO Phase 3: Utiliser StatsModifierSystem au lieu de modification directe
-            Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetMaxHP utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-        }
-    }
-
-    // Modifie l'attaque temporairement
-    public void SetAttackDamage(int newAttack)
-    {
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetAttackDamage utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-    }
-
-    // Modifie la défense temporairement
-    public void SetDefense(int newDefense)
-    {
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetDefense utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-    }
-
-    // Modifie la vitesse de déplacement
-    public void SetMoveSpeed(float newSpeed)
-    {
-        float clampedSpeed = statsLogic.ClampStat(newSpeed, 0.1f, float.MaxValue);
-
-        // Met à jour MovementController
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
-        {
-            movementController.SetMovementSpeed(clampedSpeed);
-        }
-
-        if (debugStats)
-        {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: Vitesse modifiée -> {clampedSpeed}");
-        }
-
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetMoveSpeed utilisé - sera remplacé par StatsModifierSystem en Phase 3");
     }
 
     // === MÉTHODES DE DEBUG ===
@@ -387,19 +364,4 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         TakeDamage(20);
     }
 
-    // Test de vitesse
-    [ContextMenu("Test: Double Speed")]
-    private void TestDoubleSpeed()
-    {
-        if (baseStats == null) return;
-        SetMoveSpeed(baseStats.moveSpeed * 2f);
-    }
-
-    // Reset vitesse
-    [ContextMenu("Test: Reset Speed")]
-    private void TestResetSpeed()
-    {
-        if (baseStats == null) return;
-        SetMoveSpeed(baseStats.moveSpeed);
-    }
 }

@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(ls dir:*)"
+      "Bash(ls dir:*)",
+      "mcp__ide__getDiagnostics"
     ]
   }
 }

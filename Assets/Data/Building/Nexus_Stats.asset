@@ -12,7 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f2e3b82689d27d4f8086d8fc78a2663, type: 3}
   m_Name: Nexus_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
-  buildingName: "B\xE2timent"
+  buildingName: Nexus
   maxHP: 100
   defense: 0
-  isInvulnerable: 0
+  isInvulnerable: 1

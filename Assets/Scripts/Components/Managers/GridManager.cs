@@ -71,49 +71,41 @@ public class GridManager : MonoBehaviour
         {
             for (int y = 0; y < gridHeight; y++)
             {
-                groundTypeGrid[x, y] = GroundType.Ground;
+                groundTypeGrid[x, y] = GroundType.Grass;
             }
         }
 
         Debug.Log("Grille de terrain initialisée avec terrain normal");
     }
 
-    // Recalcule l'origine de la grille pour centrer la grille
+    // Recalcule l'origine de la grille pour centrer la grille sur le monde
+    // Délègue le calcul à GridSystem — GridManager ne stocke que le résultat en Vector3
     private void CalculateGridOrigin()
     {
-        float originX = -gridWidth * cellSize * 0.5f;
-        float originY = -gridHeight * cellSize * 0.5f;
+        var (originX, originY) = GridSystem.CalculateOrigin(gridWidth, gridHeight, cellSize);
         gridOrigin = new Vector3(originX, originY, 0);
     }
 
     // Convertit une position Unity en coordonnées de grille
-    // Utilisé pour savoir dans quelle case se trouve un objet (unité, clic souris, bâtiment)
-    // Permet de passer du système de coordonnées Unity au système de cases du jeu
+    // Pont Unity → GridSystem : extrait les floats de Vector3, délègue le calcul pur
     public Vector2Int WorldToGrid(Vector3 worldPosition)
     {
-        Vector3 localPosition = worldPosition - gridOrigin;
-        int x = Mathf.FloorToInt(localPosition.x / cellSize);
-        int y = Mathf.FloorToInt(localPosition.y / cellSize);
-        return new Vector2Int(x, y);
+        return GridSystem.WorldToGrid(worldPosition.x, worldPosition.y, cellSize, gridOrigin.x, gridOrigin.y);
     }
 
     // Convertit des coordonnées de grille en position Unity centrée sur la case
-    // Utilisé pour placer visuellement les objets au centre exact d'une case
-    // Permet de passer du système de cases du jeu au système de coordonnées Unity
+    // Pont GridSystem → Unity : reçoit le tuple (float, float) et construit le Vector3
     public Vector3 GridToWorld(Vector2Int gridPosition)
     {
-        float x = gridPosition.x * cellSize + cellSize * 0.5f;
-        float y = gridPosition.y * cellSize + cellSize * 0.5f;
-        return gridOrigin + new Vector3(x, y, 0);
+        var (x, y) = GridSystem.GridToWorld(gridPosition.x, gridPosition.y, cellSize, gridOrigin.x, gridOrigin.y);
+        return new Vector3(x, y, 0);
     }
 
     // Vérifie si les coordonnées sont dans les limites de la grille
-    // Évite les crashes et comportements bizarres en validant chaque position avant utilisation
-    // (mouvements d'unités, clics joueur, calculs de pathfinding, placement d'objets)
+    // Pont Vector2Int → GridSystem : délègue la vérification entière pure
     public bool IsInBounds(Vector2Int coordinates)
     {
-        return coordinates.x >= 0 && coordinates.x < gridWidth &&
-               coordinates.y >= 0 && coordinates.y < gridHeight;
+        return GridSystem.IsInBounds(coordinates.x, coordinates.y, gridWidth, gridHeight);
     }
 
     // Méthode principale pour PathFinding - détermine si une case est accessible pour une unité
@@ -174,7 +166,7 @@ public class GridManager : MonoBehaviour
     {
         if (!IsInBounds(gridPosition))
         {
-            return GroundType.Ground; // Valeur par défaut pour positions invalides
+            return GroundType.Grass; // Valeur par défaut pour positions invalides
         }
 
         return groundTypeGrid[gridPosition.x, gridPosition.y];
@@ -350,6 +342,18 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Terrain de test créé : Eau en bas-gauche, Montagne en haut-droite");
+        // Crée une zone de ronces (centre gauche)
+        for (int x = 1; x < 4; x++)
+        {
+            SetGroundTypeAt(new Vector2Int(x, gridHeight / 2), GroundType.Brambles);
+        }
+
+        // Crée un chemin diagonal (centre)
+        for (int i = 0; i < 4; i++)
+        {
+            SetGroundTypeAt(new Vector2Int(gridWidth / 2 + i, gridHeight / 2 + i), GroundType.Path);
+        }
+
+        Debug.Log("🗺️ Terrain de test créé : Eau bas-gauche, Montagne haut-droite, Ronces centre, Chemin diagonal");
     }
 }

@@ -585,11 +585,11 @@ public class MovementController : MonoBehaviour
     }
 
     // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
-    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
+    // Retourne false si UnitStatsComponent absent plutôt que de deviner via le nom de l'objet
     private bool IsRootborn()
     {
         if (_statsComponent != null) return _statsComponent.IsRootborn();
-        return gameObject.name.Contains("Rootborn");
+        return false;
     }
 
     // Méthode de debug pour afficher l'état du contrôleur

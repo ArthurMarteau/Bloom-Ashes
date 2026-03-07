@@ -213,7 +213,13 @@ public class PathFindingTester : MonoBehaviour
         Debug.Log($"Capacités: {UnitTypeHelper.GetAccessibleTerrains(currentTestUnit)}");
 
         // Test chaque type de terrain
-        GroundType[] terrainTypes = { GroundType.Ground, GroundType.Water, GroundType.Mountain };
+        GroundType[] terrainTypes =
+        {
+            GroundType.Grass, GroundType.Dirt, GroundType.Path, GroundType.Rocky,
+            GroundType.Swamp, GroundType.Brambles, GroundType.Sand, GroundType.Scorched,
+            GroundType.Lava, GroundType.Water, GroundType.Mountain, GroundType.Ravine,
+            GroundType.Bush, GroundType.WatersapSource
+        };
 
         foreach (GroundType terrainType in terrainTypes)
         {

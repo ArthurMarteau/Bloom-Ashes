@@ -247,8 +247,10 @@ public static class PathFinding
             return false;
         }
 
-        // Vérifie que les positions sont dans les limites de la grille
-        if (!GridManager.Instance.IsInBounds(startPosition) || !GridManager.Instance.IsInBounds(endPosition))
+        // Vérifie que les positions sont dans les limites de la grille via GridSystem (calcul pur)
+        Vector2Int gridSize = GridManager.Instance.GetGridSize();
+        if (!GridSystem.IsInBounds(startPosition.x, startPosition.y, gridSize.x, gridSize.y) ||
+            !GridSystem.IsInBounds(endPosition.x, endPosition.y, gridSize.x, gridSize.y))
         {
             return false;
         }

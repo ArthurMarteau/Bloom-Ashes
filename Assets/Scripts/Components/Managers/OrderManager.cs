@@ -11,6 +11,10 @@ public class OrderManager : MonoBehaviour
     [Header("References")]
     [SerializeField] private SelectionManager selectionManager;
 
+    [Header("Detection")]
+    // LayerMask combinant Units + Buildings + Environment_Walkable pour la détection au clic droit
+    [SerializeField] private LayerMask targetableLayer;
+
     // Référence à l'InputManager pour l'abonnement aux events
     private InputManager inputManager;
 
@@ -64,13 +68,13 @@ public class OrderManager : MonoBehaviour
             return;
         }
 
-        // Vérifie s'il y a une unité sous le curseur via overlap 2D
-        Collider2D unitCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), 1 << 8); // Layer Units
+        // Vérifie s'il y a une entité ciblable sous le curseur (unité ou bâtiment) via overlap 2D
+        Collider2D targetCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), targetableLayer);
 
-        if (unitCollider != null)
+        if (targetCollider != null)
         {
-            // Unité détectée → Vérifie si ennemi ou allié
-            HandleUnitTargetOrder(unitCollider.gameObject);
+            // Entité détectée → Vérifie si ennemie ou alliée
+            HandleUnitTargetOrder(targetCollider.gameObject);
         }
         else
         {
@@ -79,7 +83,8 @@ public class OrderManager : MonoBehaviour
         }
     }
 
-    // Gère l'ordre sur une unité cible (attaque si ennemi, chase si allié/neutre)
+    // Gère l'ordre sur une entité cible (unité ou bâtiment)
+    // Attaque si ennemi (via IDamageable + ITeamMember), chase si allié/neutre
     // Détermine automatiquement le comportement selon la relation d'équipe
     private void HandleUnitTargetOrder(GameObject targetUnit)
     {

@@ -43,6 +43,25 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
             string invulnerableStr = baseStats.isInvulnerable ? " | INVULNÉRABLE" : "";
             Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): HP={currentHP}, DEF={baseStats.defense}{invulnerableStr}, Équipe={teamID}");
         }
+
+        // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.RegisterEntity(this, gameObject);
+        }
+        else if (debugStats)
+        {
+            Debug.LogWarning($"⚠️ BuildingStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré");
+        }
+    }
+
+    // Désenregistre le bâtiment de l'EntityRegistry lors de la destruction
+    private void OnDestroy()
+    {
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.UnregisterEntity(gameObject);
+        }
     }
 
     // === IDamageable ===

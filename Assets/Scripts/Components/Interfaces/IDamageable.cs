@@ -23,4 +23,8 @@ public interface IDamageable
 
     // Vérifie si l'entité est morte
     bool IsDead();
+
+    // Vérifie si l'entité est invulnérable (ignore tous les dégâts entrants)
+    // Permet de filtrer les cibles sans coupler au type concret (UnitStatsComponent vs BuildingStatsComponent)
+    bool IsInvulnerable();
 }
