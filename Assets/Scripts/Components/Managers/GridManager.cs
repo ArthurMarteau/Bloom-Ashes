@@ -36,6 +36,15 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    // Nettoie la référence singleton pour éviter les références fantômes entre sessions Play Mode
+    private void OnDestroy()
+    {
+        if (Instance == this)
+        {
+            Instance = null;
+        }
+    }
+
     // Recalcule l'origine de la grille à chaque modification dans l'inspecteur (initialisation et édition)
     private void OnValidate()
     {

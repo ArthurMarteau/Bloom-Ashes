@@ -9,8 +9,8 @@ using UnityEngine;
 public class AnimatorController : MonoBehaviour
 {
     [Header("Animation Settings")]
-    [SerializeField] private float rootbornIdleReversedDuration = 1f;  // Durée IdleReversed Rootborn
-    [SerializeField] private bool syncAnimationWithDuration = true;     // Synchronise animation avec durée
+    private float rootbornIdleReversedDuration = 0.5f;  // Durée IdleReversed Rootborn
+    private bool syncAnimationWithDuration = true;     // Synchronise animation avec durée
     public const float ATTACK_ANIMATION_DURATION = 0.5f;
 
     [Header("Debug")]
@@ -33,6 +33,8 @@ public class AnimatorController : MonoBehaviour
     private Animator unitAnimator;
     private SpriteRenderer spriteRenderer;
     private UnitStatsComponent unitStatsComponent;
+    private MovementController movementController;
+    private AttackController attackController;
     private Coroutine idleReversedCoroutine;
 
     // Cache des noms d'animations universels
@@ -61,6 +63,12 @@ public class AnimatorController : MonoBehaviour
             Debug.LogError($"AnimatorController sur {gameObject.name}: Composant SpriteRenderer manquant!");
             return;
         }
+
+        movementController = GetComponent<MovementController>();
+        attackController = GetComponent<AttackController>();
+
+        // Initialise la vitesse d'animation à 1 pour toutes les unités
+        unitAnimator.speed = 1f;
 
         // Configure les noms d'animations universels
         SetupAnimationNames();
@@ -423,7 +431,7 @@ public class AnimatorController : MonoBehaviour
 
     // Retourne le nom de l'animation actuellement jouée
     // Utilisé pour sauvegarder l'état avant une interruption (Hit, etc.)
-    private string GetCurrentAnimationName()
+    public string GetCurrentAnimationName()
     {
         AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
 
@@ -546,9 +554,6 @@ public class AnimatorController : MonoBehaviour
         }
 
         // Vérifie si l'unité est un Rootborn en état Idle
-        MovementController movementController = GetComponent<MovementController>();
-        AttackController attackController = GetComponent<AttackController>();
-
         if (IsRootborn() && movementController != null &&
             movementController.GetCurrentState() == MovementController.MovementState.Idle &&
             attackController != null && !attackController.IsAttacking())

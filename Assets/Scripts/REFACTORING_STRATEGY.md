@@ -1,307 +1,334 @@
-# STRATÉGIE DE REFACTORING - CLEAN ARCHITECTURE
-
-## Vue d'Ensemble
-
-Plan de refactoring progressif du projet Bloom & Ashes vers une architecture clean, production-ready, compatible netcode et performante sur grilles 80x80+. Chaque phase garde le jeu fonctionnel. La réorganisation des dossiers est intégrée dans chaque phase.
-
-### Contraintes structurantes
-- **Netcode réseau** : Input découplé, pas de singleton static, logique serveur-ready
-- **Grille 80x80+** : PathFinding performant (MinHeap), recherche par Registry (pas Physics2D)
-- **25+ prefabs** : 1 par unité par faction, configurés par ScriptableObjects
-- **Interfaces à la demande** : créées seulement quand 2ème implémentation concrète arrive
-- **Organisation hybride** : couche archi au top (Data/Systems/Components), feature en sous-dossiers
+# REFACTORING PROMPTS — BLOOM & ASHES
+# Fichier unique : stratégie + prompts copier-coller pour Claude Code
+# Teste en Play Mode entre chaque sous-étape
 
 ---
 
-## Phase 0 — Corrections Bloquantes
+# PHASE 4 — Interfaces
 
-**Objectif** : Rendre le code compilable en build, éliminer les incohérences critiques, et commencer la réorg dossiers.
+**Déclencheur** : Bâtiments implémentés (Nexus + bâtiments de faction) → 2 types d'entités prennent des dégâts → justifie `IDamageable`.
 
-### 0.1 — Supprimer import Editor dans UnitStats.cs
-- Supprimer `using UnityEditor.Experimental.GraphView;` (ligne 1)
-- Casse la build standalone
+## 4.1 — IDamageable
 
-### 0.2 — Pont UnitStats → UnitStatsComponent
-- Modifier `UnitStats.Awake()` pour détecter `UnitStatsComponent` et rediriger
-- Rediriger `TakeDamage`, `Heal`, `GetCurrentHP`, `GetMaxHP`, `GetHealthPercentage`, `GetAttackDamage`, `GetAttackRange`, `GetDefense`, `GetMoveSpeed`, `GetAttackSpeed`, `IsDead`, `IsAlive`
-- Résultat : AttackController continue de fonctionner via UnitStats, mais les dégâts passent par UnitStatsComponent
-
-### 0.3 — Centraliser IsRootborn()
-- Ajouter `bool isRootborn` dans `UnitStatsData` (SO)
-- Ajouter getter `IsRootborn()` dans `UnitStatsComponent` qui lit le SO
-- Remplacer les 3 occurrences de `gameObject.name.Contains("Rootborn")` dans :
-  - `AttackController.cs`
-  - `MovementController.cs`
-  - `AnimatorController.cs`
-
-### 0.4 — Réorg dossiers : déplacer PathFinding
-- Créer `Systems/Grid/`
-- Déplacer `Core/PathFinding.cs` → `Systems/Grid/PathFinding.cs`
-- Créer `Data/Units/` (sous-dossier)
-- Déplacer `Data/UnitStatsData.cs` → `Data/Units/UnitStatsData.cs`
-- Créer `Shared/`
-- Déplacer `Ground/GroundType.cs` → `Shared/GroundType.cs`
-- Supprimer dossier `Ground/`
-
-### Validation Phase 0
-- [ ] Build standalone compile sans erreur
-- [ ] Dégâts passent par UnitStatsComponent (vérifier logs)
-- [ ] HealthBar se met à jour quand unité prend des dégâts
-- [ ] IsRootborn fonctionne via SO au lieu de string matching
-- [ ] PathFinding dans `Systems/Grid/`, GroundType dans `Shared/`
-- [ ] Play Mode identique au comportement actuel
-
----
-
-## Phase 1 — Supprimer UnitStats.cs + Réorg Controllers
-
-**Objectif** : Un seul système de stats, zéro duplication. Les Controllers et composants d'unités sont dans Components/Units/.
-
-### 1.1 — Migrer toutes les références UnitStats → UnitStatsComponent
-Fichiers à modifier :
-- `AttackController.cs` : remplacer `GetComponent<UnitStats>()` par `GetComponent<UnitStatsComponent>()`
-- `AnimatorController.cs` : toutes les vérifications `IsDead()` via UnitStatsComponent
-- `HealthBar.cs` : supprimer le fallback UnitStats, garder uniquement UnitStatsComponent
-
-### 1.2 — Supprimer UnitStats.cs
-- Supprimer le fichier `Core/UnitStats.cs`
-- Supprimer le composant UnitStats de tous les prefabs dans Unity
-- Vérifier qu'aucun script ne référence encore UnitStats (compilation = validation)
-
-### 1.3 — Nettoyer HealthBar
-- Supprimer le champ `unitStats` (ancien)
-- Supprimer le flag `usingNewSystem` et la logique de fallback
-- Simplifier : ne garde que `unitStatsComponent`
-
-### 1.4 — Réorg dossiers : regrouper composants d'unités
-- Déplacer `Core/Controller/MovementController.cs` → `Components/Units/`
-- Déplacer `Core/Controller/AttackController.cs` → `Components/Units/`
-- Déplacer `Core/Controller/ChaseController.cs` → `Components/Units/`
-- Déplacer `Core/Controller/AnimatorController.cs` → `Components/Units/`
-- Déplacer `Core/Team/TeamComponent.cs` → `Components/Units/`
-- Déplacer `Units/HealthBar.cs` → `Components/Units/`
-- Déplacer `Units/UnitType.cs` → `Components/Units/UnitTypeHelper.cs`
-- Créer `Components/Visual/`
-- Déplacer `Core/SelectionSquare.cs` → `Components/Visual/`
-- Déplacer `Core/ProjectileVisual.cs` → `Components/Visual/`
-- Supprimer dossiers `Core/Controller/`, `Core/Team/`, `Units/`
-
-### Validation Phase 1
-- [ ] `UnitStats.cs` supprimé du projet
-- [ ] Compilation sans erreur
-- [ ] Aucune référence à `UnitStats` dans le code (Ctrl+Shift+F)
-- [ ] Dégâts, mort, HealthBar fonctionnent
-- [ ] Animations Hit/Death fonctionnent
-- [ ] Tous les controllers dans `Components/Units/`
-- [ ] Visuels dans `Components/Visual/`
-- [ ] Dossiers `Core/Controller/`, `Core/Team/`, `Units/` supprimés
-
----
-
-## Phase 2 — Découplage Input + Réorg Managers
-
-**Objectif** : Séparer capture d'input et logique métier. Core/ disparaît complètement.
-
-### 2.1 — Créer InputManager
-- Créer `Components/Managers/InputManager.cs` (MonoBehaviour)
-- Capture tous les inputs souris/clavier
-- Émet des UnityEvents : `OnLeftClickDown`, `OnRightClickDown`, `OnDragStart`, `OnDragUpdate`, `OnDragEnd`
-- Seul script qui lit `Input.GetMouseButton*` dans tout le projet
-
-### 2.2 — Migrer SelectionManager
-- Supprimer `HandleSelectionInput()` et lecture Input directe
-- S'abonner aux events de InputManager dans `Start()`
-- Logique de sélection inchangée, juste la source d'input qui change
-
-### 2.3 — Migrer OrderManager
-- Supprimer `HandleOrderInput()` et lecture Input directe
-- S'abonner à `OnRightClickDown` de InputManager
-- Logique d'ordres inchangée
-
-### 2.4 — Réorg dossiers : déplacer Managers, supprimer Core/
-- Déplacer `Core/Managers/GridManager.cs` → `Components/Managers/`
-- Déplacer `Core/Managers/SelectionManager.cs` → `Components/Managers/`
-- Déplacer `Core/Managers/OrderManager.cs` → `Components/Managers/`
-- Supprimer dossier `Core/` entièrement (doit être vide)
-
-### Validation Phase 2
-- [ ] Aucun `Input.GetMouseButton` en dehors de InputManager
-- [ ] Sélection clic simple / rectangle / Shift fonctionne
-- [ ] Ordres mouvement / attaque / chase fonctionnent
-- [ ] Dossier `Core/` supprimé
-- [ ] Tous les Managers dans `Components/Managers/`
-- [ ] Structure projet correspond à "Structure cible" dans claude.md
-
----
-
-## Phase 3 — Performance Grille 80x80+
-
-**Objectif** : Rendre le PathFinding viable sur grandes grilles et mutualiser le code dupliqué.
-
-### 3.1 — PathFinding : List → MinHeap
-- Créer `Systems/Grid/MinHeap.cs` (classe générique ~30 lignes)
-- Remplacer `List<PathNode> openList` par `MinHeap<PathNode>` dans PathFinding
-- Gain : O(n²) → O(n log n), facteur ~500x sur 80x80
-
-### 3.2 — Extraire offsets partagés
-- Créer `Systems/Combat/RangeOffsets.cs` (static class)
-- Centraliser `range1Offsets`, `range2Offsets`, `range3Offsets`
-- Utilisé par AttackController et ChaseController
-- Supprimer les arrays dupliqués dans les deux controllers
-
-### 3.3 — GridManager cleanup
-- Ajouter `OnDestroy() { Instance = null; }` (évite références fantômes entre sessions Play Mode)
-- Préparer extraction logique pure (Phase 5)
-
-### Validation Phase 3
-- [ ] PathFinding fonctionne identiquement (mêmes chemins)
-- [ ] Tests PathFinding passent toujours
-- [ ] Performance mesurable : profiler sur grille 80x80 avec 30+ unités
-- [ ] Offsets dans `Systems/Combat/RangeOffsets.cs`, plus de duplication
-
----
-
-## Phase 4 — Interfaces (à la demande)
-
-**Objectif** : Créer les interfaces quand un 2ème type d'entité les justifie.
-
-### Déclencheur : arrivée des bâtiments
-Quand le système de bâtiments est implémenté (Nexus, bâtiments de faction), on aura 2 implémentations de "chose qui prend des dégâts" → justifie `IDamageable`.
-
-### 4.1 — IDamageable
-```csharp
-public interface IDamageable
-{
-    void TakeDamage(int damage, GameObject attacker = null);
-    void Heal(int amount);
-    int GetCurrentHP();
-    int GetMaxHP();
-    float GetHealthPercentage();
-    bool IsDead();
-}
 ```
-- `UnitStatsComponent` implémente IDamageable
-- Nouveau `BuildingStatsComponent` implémente IDamageable
-- `AttackController` cible `IDamageable` au lieu de `UnitStatsComponent`
+Contexte : Lis claude.md et REFACTORING_STRATEGY.md.
 
-### 4.2 — ITeamMember (si bâtiments ont des équipes)
-```csharp
-public interface ITeamMember
-{
-    int GetTeamID();
-    bool IsEnemy(ITeamMember other);
-    bool IsAlly(ITeamMember other);
-}
+Phase 4.1 — Créer l'interface IDamageable.
+
+Objectif : Abstraire "chose qui prend des dégâts" pour que AttackController puisse cibler unités ET bâtiments.
+
+À faire :
+1. Créer Components/Interfaces/IDamageable.cs avec : TakeDamage(int damage, GameObject attacker = null), Heal(int amount), GetCurrentHP(), GetMaxHP(), GetHealthPercentage(), IsDead()
+2. Faire implémenter IDamageable par UnitStatsComponent (les méthodes existent déjà, ajouter juste ": IDamageable")
+3. Modifier AttackController pour cibler IDamageable au lieu de UnitStatsComponent dans : IsTargetValid(), FindNearestEnemyInRange(), PerformAttack(), DealDamageAtEndOfAnimation()
+4. Le FindNearestEnemyInRange() doit aussi détecter les bâtiments (pas juste layer Units)
+
+Règles :
+- Migration progressive : le jeu doit compiler et fonctionner après cette étape
+- Ne PAS créer d'autres interfaces (IMovable, ISelectable, etc.) — seulement quand justifié
+- Commentaires en français avec // devant chaque méthode
+- Debug.Log informatifs avec contexte et emojis
 ```
 
-### Note
-Ne PAS créer `IMovable`, `ISelectable`, `IAttacker` tant qu'il n'y a pas de 2ème implémentation concrète. Éviter l'over-engineering.
+## 4.2 — ITeamMember
+
+```
+Contexte : Lis claude.md. Phase 4.2 du refactoring.
+
+Phase 4.2 — Créer l'interface ITeamMember.
+
+Objectif : Abstraire l'appartenance à une équipe pour que les bâtiments puissent aussi être amis/ennemis.
+
+À faire :
+1. Créer Components/Interfaces/ITeamMember.cs avec : GetTeamID(), IsEnemy(ITeamMember other), IsAlly(ITeamMember other)
+2. Faire implémenter ITeamMember par TeamComponent
+3. Adapter les signatures IsEnemy/IsAlly dans TeamComponent pour accepter ITeamMember en plus de GameObject (surcharge)
+4. Dans AttackController, utiliser ITeamMember au lieu de TeamComponent directement quand possible
+
+Règles :
+- Le jeu doit compiler et fonctionner après cette étape
+- Les méthodes existantes avec GameObject restent pour rétrocompatibilité
+- Commentaires en français
+```
+
+## 4.3 — BuildingStatsComponent
+
+```
+Contexte : Lis claude.md et GDD.md (section Buildings). Phase 4.3 du refactoring.
+
+Phase 4.3 — Créer BuildingStatsComponent.
+
+Objectif : Premier composant bâtiment qui implémente IDamageable et ITeamMember, validant les interfaces créées en 4.1/4.2.
+
+À faire :
+1. Créer Data/Buildings/BuildingStatsData.cs (ScriptableObject) avec : maxHP, defense, buildingName, isInvulnerable (bool pour le Nexus)
+2. Créer Components/Buildings/BuildingStatsComponent.cs qui implémente IDamageable et ITeamMember
+3. Le composant doit gérer : prise de dégâts (avec invulnérabilité), mort/destruction, appartenance équipe
+4. Créer un BuildingStatsData.asset pour le Nexus (HP=1, Defense=Invulnerable) et un pour Great Oak (HP=100, Defense=3)
+
+Règles :
+- Clean Architecture : SO pour données, MonoBehaviour pour cycle de vie
+- Le Nexus est invulnérable (isInvulnerable=true dans le SO)
+- Commentaires en français, Debug.Log avec emojis
+- Le jeu compile et fonctionne
+```
 
 ### Validation Phase 4
-- [ ] AttackController cible IDamageable (unités + bâtiments)
-- [ ] Bâtiments prennent des dégâts et meurent
+
+```
+Contexte : Phase 4 terminée. Vérifie que tout fonctionne.
+
+Checklist à valider :
+- [ ] AttackController cible IDamageable (peut attaquer unités ET bâtiments)
+- [ ] Bâtiments avec BuildingStatsComponent prennent des dégâts et sont détruits
+- [ ] Le Nexus est invulnérable (ne prend pas de dégâts)
+- [ ] Bâtiments ont une équipe (TeamComponent + ITeamMember)
 - [ ] Aucune interface inutilisée (chaque interface a 2+ implémentations)
+- [ ] Pas de régression : le combat unité vs unité fonctionne toujours
+
+Propose des corrections si un point échoue.
+```
 
 ---
 
-## Phase 5 — EntityRegistry + Systems POCO
+# PHASE 5 — EntityRegistry + Systems POCO
 
-**Objectif** : Performance recherche d'entités et extraction logique pure pour serveur autoritaire futur.
+**Déclencheur** : Contenu gameplay commence, besoin de performance sur 80x80 et préparation serveur autoritaire.
 
-### 5.1 — EntityRegistry (MonoBehaviour singleton, PAS static)
-```
-Systems/EntityRegistry.cs
-```
-- Auto-register/unregister dans Awake/OnDestroy des unités
-- Recherche par équipe, par zone, par type
-- Remplace `Physics2D.OverlapBoxAll` dans AttackController (auto-attaque)
-- MonoBehaviour singleton pour lifecycle Unity propre (compatible netcode)
+## 5.1 — EntityRegistry
 
-### 5.2 — CombatSystem (POCO)
 ```
-Systems/Combat/CombatSystem.cs
-```
-- `IsInRange(attackerPos, targetPos, range)` : calcul portée pur
-- `CalculateDamage(baseDamage, defense, modifiers)` : formule dégâts
-- `FindBestAttackPosition(targetPos, currentPos, range, grid)` : position optimale
-- AttackController délègue les calculs au CombatSystem
+Contexte : Lis claude.md. Phase 5.1 du refactoring.
 
-### 5.3 — GridSystem (POCO)
+Phase 5.1 — Créer EntityRegistry (MonoBehaviour singleton).
+
+Objectif : Remplacer Physics2D.OverlapBoxAll par un registre centralisé pour la recherche d'entités. Performance critique pour 80x80 avec 50+ unités.
+
+Problème actuel : AttackController.FindNearestEnemyInRange() utilise Physics2D.OverlapBoxAll à chaque check — coûteux et pas compatible serveur.
+
+À faire :
+1. Créer Systems/EntityRegistry.cs (MonoBehaviour singleton, PAS static)
+2. Auto-register dans Awake() des UnitStatsComponent et BuildingStatsComponent (via IDamageable)
+3. Auto-unregister dans OnDestroy()
+4. API publique :
+   - RegisterEntity(IDamageable entity, GameObject go)
+   - UnregisterEntity(GameObject go)
+   - FindEntitiesInRange(Vector2Int center, int range) → List<GameObject>
+   - FindEnemiesInRange(Vector2Int center, int range, int teamID) → List<GameObject>
+   - GetAllEntities() → List<GameObject>
+5. Stocker les entités dans un Dictionary<GameObject, IDamageable>
+6. Modifier AttackController.FindNearestEnemyInRange() pour utiliser EntityRegistry au lieu de Physics2D.OverlapBoxAll
+
+Règles :
+- MonoBehaviour singleton (pas static) pour compatibilité netcode
+- Le jeu doit fonctionner identiquement après migration
+- Aucun Physics2D.OverlapBoxAll ne doit rester pour la recherche d'unités
+- Commentaires en français, Debug.Log avec emojis
 ```
-Systems/Grid/GridSystem.cs
+
+## 5.2 — CombatSystem POCO
+
 ```
-- Extraire logique pure de GridManager (WorldToGrid, GridToWorld, IsWalkable, IsInBounds)
-- GridManager devient juste un pont Unity (Gizmos, singleton, lifecycle)
-- Prépare serveur autoritaire : GridSystem peut tourner côté serveur sans Unity
+Contexte : Lis claude.md. Phase 5.2 du refactoring.
+
+Phase 5.2 — Extraire la logique de combat en POCO (Systems/Combat/CombatSystem.cs).
+
+Objectif : Logique de combat pure, testable sans Unity, prête pour serveur autoritaire.
+
+À faire :
+1. Créer Systems/Combat/CombatSystem.cs (classe static ou POCO, PAS MonoBehaviour)
+2. Extraire depuis AttackController :
+   - IsInRange(Vector2Int attackerPos, Vector2Int targetPos, int range) → bool
+   - CalculateDamage(int baseDamage, int defense) → int (déjà dans UnitStatsLogic, centraliser ici)
+   - FindBestAttackPosition(Vector2Int targetPos, Vector2Int currentPos, int range, Func<Vector2Int, bool> isWalkable) → Vector2Int
+   - CalculateChebyshevDistance(Vector2Int a, Vector2Int b) → int
+3. AttackController délègue les calculs à CombatSystem
+4. RangeOffsets.cs reste tel quel (déjà dans Systems/Combat/)
+
+Règles :
+- POCO : aucune dépendance Unity (pas de MonoBehaviour, pas de GameObject, pas de Vector3)
+- Utiliser Vector2Int pour les positions de grille
+- Le jeu doit fonctionner identiquement
+- Commentaires en français
+```
+
+## 5.3 — GridSystem POCO
+
+```
+Contexte : Lis claude.md. Phase 5.3 du refactoring.
+
+Phase 5.3 — Extraire la logique de grille en POCO (Systems/Grid/GridSystem.cs).
+
+Objectif : Logique de grille pure, testable sans Unity, prête pour serveur autoritaire.
+
+À faire :
+1. Créer Systems/Grid/GridSystem.cs (classe POCO, PAS MonoBehaviour)
+2. Extraire depuis GridManager la logique pure :
+   - WorldToGrid(float x, float y, float cellSize, float originX, float originY) → Vector2Int
+   - GridToWorld(int gridX, int gridY, float cellSize, float originX, float originY) → (float x, float y)
+   - IsInBounds(int x, int y, int width, int height) → bool
+   - IsWalkable(int x, int y, ...) → bool
+3. GridManager devient un pont Unity :
+   - Conserve : singleton, Gizmos, Awake/lifecycle, SerializeField
+   - Délègue les calculs à GridSystem
+   - Ses méthodes publiques appellent GridSystem en interne
+4. PathFinding.cs utilise GridSystem au lieu de GridManager pour les calculs purs (si possible sans casser)
+
+Règles :
+- POCO : aucune dépendance Unity dans GridSystem
+- GridManager garde son API publique identique (pas de breaking change)
+- Le jeu doit fonctionner identiquement
+- Commentaires en français
+```
 
 ### Validation Phase 5
-- [ ] Plus de `Physics2D.OverlapBoxAll` pour recherche d'unités
-- [ ] CombatSystem testable unitairement (pas de dépendance Unity)
-- [ ] GridSystem testable unitairement
-- [ ] Performance auto-attaque stable avec 50+ unités sur 80x80
+
+```
+Contexte : Phase 5 terminée. Vérifie que tout fonctionne.
+
+Checklist à valider :
+- [ ] Plus aucun Physics2D.OverlapBoxAll pour recherche d'unités
+- [ ] EntityRegistry enregistre/désenregistre correctement les entités
+- [ ] CombatSystem est testable unitairement (pas de dépendance Unity)
+- [ ] GridSystem est testable unitairement (pas de dépendance Unity)
+- [ ] Auto-attaque fonctionne toujours correctement
+- [ ] PathFinding fonctionne toujours
+- [ ] Performance stable avec les unités existantes
+
+Propose des corrections si un point échoue.
+```
 
 ---
 
-## Phase 6 — Broker Chain (quand factions arrivent)
+# PHASE 6 — Broker Chain (Modificateurs de stats)
 
-**Objectif** : Système de buffs/debuffs extensible pour les capacités des 5 factions.
+**Déclencheur** : Implémentation des premières capacités de faction (poison, slow, buffs).
 
-### Déclencheur : implémentation des premières capacités de faction
+## 6.1 — IStatModifier + StatModifierMediator
 
-### 6.1 — IStatModifier + StatModifierMediator
 ```
-Systems/Modifiers/IStatModifier.cs
-Systems/Modifiers/StatModifierMediator.cs
+Contexte : Lis claude.md et GDD.md (section abilities des factions). Phase 6.1 du refactoring.
+
+Phase 6.1 — Créer le système de modificateurs de stats.
+
+Objectif : Système extensible de buffs/debuffs pour les capacités des 5 factions. Pattern Broker Chain : Stats de base (SO) → Mediator → Modificateurs → Valeur finale.
+
+À faire :
+1. Créer Systems/Modifiers/IStatModifier.cs (interface) :
+   - int Priority (ordre d'application)
+   - float Duration (durée en secondes, -1 = permanent)
+   - float RemainingTime (temps restant)
+   - bool IsExpired()
+   - int ModifyAttack(int baseValue)
+   - int ModifyDefense(int baseValue)
+   - float ModifyMoveSpeed(float baseValue)
+   - int ModifyMaxHP(int baseValue)
+
+2. Créer Systems/Modifiers/StatModifierMediator.cs (POCO) :
+   - List<IStatModifier> de modificateurs actifs
+   - AddModifier(IStatModifier mod)
+   - RemoveModifier(IStatModifier mod)
+   - UpdateTimers(float deltaTime) — décrémente les durées, retire les expirés
+   - GetModifiedAttack(int baseValue) → applique tous les mods triés par Priority
+   - GetModifiedDefense(int baseValue)
+   - GetModifiedMoveSpeed(float baseValue)
+   - GetModifiedMaxHP(int baseValue)
+
+Règles :
+- POCO : aucune dépendance Unity dans les Systems
+- Triés par Priority (plus bas = appliqué en premier)
+- Commentaires en français
 ```
-- Interface modificateur : `Priority`, `Duration`, `ModifyAttack()`, `ModifyDefense()`, etc.
-- Mediator : stack de modificateurs triés par priorité, gestion durée
-- Pattern : Stats de base (SO) → Mediator → Modificateurs → Valeur finale
 
-### 6.2 — Intégrer dans UnitStatsComponent
-- Getters passent par le Mediator : `GetAttackDamage()` → `mediator.GetModifiedAttack(baseStats.attackDamage)`
-- API publique : `AddModifier()`, `RemoveModifier()`
-- Update timers dans `Update()` du component
+## 6.2 — Intégration UnitStatsComponent
 
-### 6.3 — Exemples concrets
-- Poison Mycélien : -2 HP/s pendant 5s
-- Bouclier Crocs Sauvages : +10 defense pendant 8s
-- Haste Calcinés : +50% moveSpeed pendant 3s
+```
+Contexte : Lis claude.md. Phase 6.2 du refactoring.
+
+Phase 6.2 — Intégrer le StatModifierMediator dans UnitStatsComponent.
+
+Objectif : Les getters de stats passent par le Mediator pour appliquer buffs/debuffs en temps réel.
+
+À faire :
+1. Ajouter un StatModifierMediator privé dans UnitStatsComponent
+2. Modifier les getters pour passer par le Mediator :
+   - GetAttackDamage() → mediator.GetModifiedAttack(baseStats.attackDamage)
+   - GetDefense() → mediator.GetModifiedDefense(baseStats.defense)
+   - GetMoveSpeed() → mediator.GetModifiedMoveSpeed(baseStats.moveSpeed)
+   - GetMaxHP() → mediator.GetModifiedMaxHP(baseStats.maxHP)
+3. Ajouter API publique :
+   - AddModifier(IStatModifier mod)
+   - RemoveModifier(IStatModifier mod)
+4. Dans Update(), appeler mediator.UpdateTimers(Time.deltaTime) pour gérer les expirations
+5. Supprimer les anciens setters (SetMaxHP, SetAttackDamage, SetDefense, SetMoveSpeed) qui étaient des placeholders
+
+Règles :
+- Les stats de base dans le SO ne sont JAMAIS modifiées
+- Le Mediator calcule les valeurs finales à chaque appel
+- Le jeu doit fonctionner identiquement (sans mods, les getters retournent les valeurs de base)
+- Commentaires en français, Debug.Log avec emojis
+```
+
+## 6.3 — Exemples concrets de modificateurs
+
+```
+Contexte : Lis claude.md et GDD.md. Phase 6.3 du refactoring.
+
+Phase 6.3 — Créer des modificateurs concrets pour tester le système.
+
+Objectif : Valider le Broker Chain avec des exemples réels tirés du GDD.
+
+À faire :
+1. Créer Systems/Modifiers/PoisonModifier.cs :
+   - Implémente IStatModifier
+   - Durée : 3 secondes
+   - Effet : inflige 2 HP/sec (via un callback ou event, pas via ModifyAttack)
+   - Note : le poison est un DoT, pas un modifier de stat — adapter l'interface si nécessaire (ajouter ApplyEffect(UnitStatsComponent target, float deltaTime) ?)
+
+2. Créer Systems/Modifiers/SlowModifier.cs :
+   - Implémente IStatModifier
+   - Durée : 3 secondes
+   - ModifyMoveSpeed : -1 (min 1)
+
+3. Créer Systems/Modifiers/DefenseBuffModifier.cs :
+   - Implémente IStatModifier
+   - Durée : configurable
+   - ModifyDefense : +valeur configurable
+
+4. Tester : ajouter un [ContextMenu] sur UnitStatsComponent pour appliquer chaque modifier et vérifier que les stats changent puis reviennent à la normale.
+
+Règles :
+- Chaque modifier est une classe séparée
+- Les DoT (poison) nécessitent peut-être une extension de l'interface — propose la meilleure approche
+- Commentaires en français, Debug.Log avec emojis
+```
 
 ### Validation Phase 6
-- [ ] Buffs/debuffs s'appliquent et expirent correctement
-- [ ] Stack de modificateurs fonctionne (2+ buffs simultanés)
-- [ ] Stats reviennent à la normale après expiration
+
+```
+Contexte : Phase 6 terminée. Vérifie que tout fonctionne.
+
+Checklist à valider :
+- [ ] Buffs/debuffs s'appliquent correctement (stats modifiées visibles dans les logs)
+- [ ] Les modificateurs expirent après leur durée
+- [ ] Stack de modificateurs fonctionne (2+ mods simultanés sur une unité)
+- [ ] Les stats reviennent exactement à la normale après expiration
+- [ ] Le poison (DoT) fonctionne et inflige des dégâts sur la durée
+- [ ] Le slow réduit la vitesse et elle revient à la normale
+- [ ] Pas de régression sur le combat existant
 - [ ] Pas d'impact performance notable
 
----
-
-## Checklist Globale
-
-| Phase | Statut | Dépendance | Déclencheur | Réorg dossiers |
-|---|---|---|---|---|
-| Phase 0 | 🔴 À faire | Aucune | Immédiat | PathFinding → Systems/Grid/, GroundType → Shared/ |
-| Phase 1 | 🔴 À faire | Phase 0 | Après Phase 0 | Controllers → Components/Units/, visuels → Components/Visual/ |
-| Phase 2 | 🔴 À faire | Phase 1 | Après Phase 1 | Managers → Components/Managers/, Core/ supprimé |
-| Phase 3 | 🔴 À faire | Aucune (indépendant) | Immédiat ou après Phase 1 | MinHeap → Systems/Grid/, RangeOffsets → Systems/Combat/ |
-| Phase 4 | ⏳ En attente | Phase 1 | Quand bâtiments arrivent | — |
-| Phase 5 | ⏳ En attente | Phase 3 | Quand contenu gameplay commence | EntityRegistry, CombatSystem, GridSystem dans Systems/ |
-| Phase 6 | ⏳ En attente | Phase 5 | Quand factions arrivent | Modifiers dans Systems/Modifiers/ |
-
-### Règles de progression
-- **Toujours fonctionnel** : le jeu tourne après chaque sous-étape
-- **Compiler = valider** : aucun warning ignoré
-- **Tester en Play Mode** après chaque phase
-- **Phase 3 peut être parallélisée** avec Phase 1-2 (PathFinding est isolé)
-- **Phases 4-5-6 sont déclenchées par le contenu**, pas par le calendrier
-- **Déplacer les fichiers dans Unity** (pas dans l'explorateur) pour préserver les .meta
+Propose des corrections si un point échoue.
+```
 
 ---
 
-## Points d'Attention Netcode
+# Points d'Attention Netcode (Hors Phases)
 
-Ces éléments ne sont pas dans les phases actuelles mais doivent être gardés en tête :
-- `GridManager.Instance` (singleton static) devra devenir un service injecté ou MonoBehaviour singleton
-- `OrderManager` devra valider les ordres côté serveur
-- `PathFinding` devra potentiellement tourner côté serveur (GridSystem POCO le prépare)
-- Les positions logiques (`logicalPosition` dans MovementController) sont la source de vérité — bon pattern pour netcode
-- `EntityRegistry` en MonoBehaviour singleton est compatible avec le lifecycle réseau
+À garder en tête pour le futur :
+- New Input System (migration dans InputManager.cs uniquement)
+- `GridManager.Instance` (singleton static) → service injecté ou MonoBehaviour singleton
+- `OrderManager` → validation ordres côté serveur
+- `PathFinding` → potentiellement côté serveur (GridSystem POCO le prépare)
+- Positions logiques (`logicalPosition` dans MovementController) = source de vérité → bon pattern netcode
+- `EntityRegistry` en MonoBehaviour singleton = compatible lifecycle réseau

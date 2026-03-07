@@ -80,10 +80,9 @@ public class AttackController : MonoBehaviour
         }
 
         // Vérifie l'état du mouvement
-        MovementController mc = GetComponent<MovementController>();
-        if (mc != null)
+        if (movementController != null)
         {
-            MovementController.MovementState state = mc.GetCurrentState();
+            MovementController.MovementState state = movementController.GetCurrentState();
 
 
             // Si en mouvement, on attend
@@ -177,7 +176,7 @@ public class AttackController : MonoBehaviour
 
     // Trouve l'ennemi le plus proche à portée d'attaque
     // Retourne null si aucun ennemi trouvé
-    private GameObject FindNearestEnemyInRange()
+    public GameObject FindNearestEnemyInRange()
     {
         if (unitStatsComponent == null || teamComponent == null)
         {
@@ -388,20 +387,18 @@ public class AttackController : MonoBehaviour
                 }
             }
 
-            // Cible à portée, joue Idle_Attack
-            if (animatorController != null)
+            // Lance l'attaque si aucune attaque n'est en cours ET si le cooldown est écoulé
+            float attackSpeed = unitStatsComponent.GetAttackSpeed();
+            bool cooldownReady = Time.time - lastAttackTime >= attackSpeed;
+
+            // Joue AttackIdle seulement si on n'est pas en train d'attaquer
+            if (!isPerformingAttack && animatorController != null)
             {
                 Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
                 Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
                 animatorController.PlayIdleAttackAnimation(myPosition, targetPosition);
             }
 
-            // Lance l'attaque si aucune attaque n'est en cours ET si le cooldown est écoulé
-            float attackSpeed = unitStatsComponent.GetAttackSpeed();
-            bool cooldownReady = Time.time - lastAttackTime >= attackSpeed;
-
-            // Lance l'attaque si aucune attaque n'est en cours
-            // Le cooldown est géré automatiquement dans la coroutine DealDamageAtEndOfAnimation
             if (!isPerformingAttack && cooldownReady)
             {
                 PerformAttack();

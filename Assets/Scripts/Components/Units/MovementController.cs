@@ -52,6 +52,7 @@ public class MovementController : MonoBehaviour
     private GameObject unitGameObject;
     private AnimatorController animatorController;
     private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
+    private AttackController attackController;
 
     // Variables de contrôle temporel
     private Coroutine interpolationCoroutine;
@@ -82,6 +83,7 @@ public class MovementController : MonoBehaviour
         }
 
         _statsComponent = GetComponent<UnitStatsComponent>();
+        attackController = GetComponent<AttackController>();
     }
 
     // Interface publique principale pour demander un déplacement vers une destination
@@ -288,8 +290,8 @@ public class MovementController : MonoBehaviour
                 // Restaure position logique à fromCell
                 logicalPosition = fromCell;
 
-                // Arrête l'animation de marche et retourne à Idle
-                if (animatorController != null)
+                // Arrête l'animation de marche et retourne à Idle (sauf si en train d'attaquer)
+                if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
                 {
                     animatorController.PlayIdleAnimation();
                 }
@@ -335,8 +337,8 @@ public class MovementController : MonoBehaviour
             Debug.LogWarning($"MovementController {gameObject.name}: Chemin bloqué à {logicalPosition}");
         }
 
-        // Arrête l'animation
-        if (animatorController != null)
+        // Arrête l'animation (sauf si en train d'attaquer)
+        if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
         {
             animatorController.PlayIdleAnimation();
         }
@@ -357,8 +359,18 @@ public class MovementController : MonoBehaviour
         }
 
         // Vérifie si une attaque est en cours
-        AttackController attackController = GetComponent<AttackController>();
         bool isAttacking = attackController != null && attackController.IsAttacking();
+
+        // Si ennemi à portée et pas déjà en train d'attaquer, déclenche l'attaque immédiatement
+        if (!isAttacking && attackController != null)
+        {
+            GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
+            if (nearestEnemy != null)
+            {
+                attackController.StartAttack(nearestEnemy);
+                return;
+            }
+        }
 
         // Animation idle SEULEMENT si pas en train d'attaquer
         if (animatorController != null && !isAttacking)
