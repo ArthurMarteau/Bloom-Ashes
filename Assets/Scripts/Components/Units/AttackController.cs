@@ -397,11 +397,15 @@ public class AttackController : MonoBehaviour
             bool cooldownReady = Time.time - lastAttackTime >= attackSpeed;
 
             // Joue AttackIdle seulement si on n'est pas en train d'attaquer
+            // et qu'aucune animation Hit n'est en cours (évite d'écraser le trigger Hit)
             if (!isPerformingAttack && animatorController != null)
             {
-                Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
-                Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-                animatorController.PlayIdleAttackAnimation(myPosition, targetPosition);
+                if (!animatorController.IsPlayingHitAnimation())
+                {
+                    Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
+                    Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+                    animatorController.PlayIdleAttackAnimation(myPosition, targetPosition);
+                }
             }
 
             if (!isPerformingAttack && cooldownReady)

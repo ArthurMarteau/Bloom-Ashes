@@ -23,6 +23,8 @@ public class AnimatorController : MonoBehaviour
     private MovementController movementController;
     private AttackController attackController;
     private Coroutine idleReversedCoroutine;
+    // Alterne à chaque fin de IdleMove pour le cycle Idle_SW ↔ Idle_SW miroir
+    private bool isIdleMirrored = false;
 
     // Cache des noms d'animations universels
     private Dictionary<AnimationDirection, string> walkAnimations;
@@ -59,6 +61,11 @@ public class AnimatorController : MonoBehaviour
 
         // Configure les noms d'animations universels
         SetupAnimationNames();
+
+        // Récupère le behaviour sur l'état IdleMove et s'abonne au callback de sortie
+        IdleMoveExitBehaviour idleMoveBehaviour = unitAnimator.GetBehaviour<IdleMoveExitBehaviour>();
+        if (idleMoveBehaviour != null)
+            idleMoveBehaviour.onIdleMoveExit = OnIdleMoveCompleted;
 
         if (debugAnimations)
         {
@@ -100,6 +107,9 @@ public class AnimatorController : MonoBehaviour
         // Calcule la direction du mouvement
         AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
 
+        // Réinitialise le cycle idle miroir — le mouvement annule l'alternance en cours
+        isIdleMirrored = false;
+
         // Détermine si un miroir est requis
         bool requiresMirror = RequiresMirror(direction);
         SetMirror(requiresMirror);
@@ -132,6 +142,10 @@ public class AnimatorController : MonoBehaviour
         }
 
         AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
+
+        // Réinitialise le cycle idle miroir — l'attaque annule l'alternance en cours
+        isIdleMirrored = false;
+
         bool requiresMirror = RequiresMirror(direction);
         SetMirror(requiresMirror);
 
@@ -158,6 +172,9 @@ public class AnimatorController : MonoBehaviour
 
         // Calcule la direction
         AnimationDirection direction = CalculateDirection(fromPosition, toPosition);
+
+        // Réinitialise le cycle idle miroir — le combat annule l'alternance en cours
+        isIdleMirrored = false;
 
         // Gère le miroir
         bool requiresMirror = RequiresMirror(direction);
@@ -392,26 +409,6 @@ public class AnimatorController : MonoBehaviour
                direction == AnimationDirection.SouthEast;
     }
 
-    // Retourne le nom de l'animation actuellement jouée
-    // Utilisé pour sauvegarder l'état avant une interruption (Hit, etc.)
-    public string GetCurrentAnimationName()
-    {
-        AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
-
-        // Le nom complet contient le layer, on extrait juste le nom de l'animation
-        // Format: "Base Layer.Move_N" -> "Move_N"
-        AnimatorClipInfo[] clipInfo = unitAnimator.GetCurrentAnimatorClipInfo(0);
-
-        if (clipInfo.Length > 0)
-        {
-            return clipInfo[0].clip.name;
-        }
-
-        // Fallback si pas de clip trouvé
-        return AnimationNames.Idle;
-    }
-
-
     // Active/désactive le miroir du SpriteRenderer
     // Utilise flipX pour inverser horizontalement le sprite
     private void SetMirror(bool mirror)
@@ -427,6 +424,17 @@ public class AnimatorController : MonoBehaviour
     {
         if (unitStatsComponent != null) return unitStatsComponent.IsRootborn();
         return false;
+    }
+
+    // Retourne true si l'Animator est actuellement dans un état Hit
+    // Utilisé par AttackController pour ne pas écraser le trigger Hit avec PlayIdleAttackAnimation
+    public bool IsPlayingHitAnimation()
+    {
+        if (unitAnimator == null) return false;
+        AnimatorStateInfo stateInfo = unitAnimator.GetCurrentAnimatorStateInfo(0);
+        return stateInfo.IsName(AnimationNames.HitNW)
+            || stateInfo.IsName(AnimationNames.HitSW)
+            || stateInfo.IsName(AnimationNames.HitIdle);
     }
 
     // Retourne l'état actuel des animations
@@ -449,10 +457,15 @@ public class AnimatorController : MonoBehaviour
         // Reset le flag de session pour permettre le prochain cycle IdleReversed
         hasPlayedIdleReversedThisSession = false;
 
+        // Reset le cycle idle miroir
+        isIdleMirrored = false;
+
         // Reset la vitesse d'animation
         if (unitAnimator != null)
         {
             unitAnimator.speed = 1f;
+            // Annule tout trigger Hit en attente pour éviter un déclenchement parasite
+            unitAnimator.ResetTrigger("Hit");
         }
 
         PlayIdleAnimation();
@@ -477,6 +490,9 @@ public class AnimatorController : MonoBehaviour
             idleReversedCoroutine = null;
         }
 
+        // Annule tout trigger Hit en attente pour éviter un flash d'animation après la mort
+        unitAnimator.ResetTrigger("Hit");
+
         // Remet le miroir par défaut
         SetMirror(false);
 
@@ -489,89 +505,66 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
-    // Joue l'animation Hit selon la direction de l'attaquant
-    // Sauvegarde l'animation en cours et la reprend exactement où elle en était après le Hit
+    // Joue l'animation Hit via les paramètres Animator (Trigger + Bools)
+    // La machine d'états Unity gère la transition et le retour à l'animation précédente
     public void PlayHitAnimation(Vector2Int attackerPosition, Vector2Int victimPosition)
     {
+        if (unitAnimator == null) return;
+
         // Ne joue pas Hit si l'unité est morte (elle doit rester en Death)
-        if (unitStatsComponent != null && unitStatsComponent.IsDead())
+        if (unitStatsComponent != null && unitStatsComponent.IsDead()) return;
+
+        // Hit reset le cycle idle → retour Idle_SW sans miroir au prochain idle
+        isIdleMirrored = false;
+        SetMirror(false);
+
+        // Ignore si un état tagué "Attack" est actif — AttackIdle_ (non tagué) reste interruptible
+        if (unitAnimator.GetCurrentAnimatorStateInfo(0).IsTag("Attack")) return;
+
+        // Cas spécial Rootborn en Idle : joue Hit_Idle sans calcul de direction
+        if (IsRootborn()
+            && movementController != null
+            && movementController.GetCurrentState() == MovementController.MovementState.Idle
+            && attackController != null
+            && !attackController.IsAttacking())
         {
             if (debugAnimations)
-            {
-                Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - unité morte");
-            }
+                Debug.Log($"AnimatorController {gameObject.name}: Hit_Idle (Rootborn en Idle)");
+
+            unitAnimator.SetBool("IsHitIdle", true);
+            unitAnimator.SetBool("IsHitNW", false);
+            unitAnimator.SetTrigger("Hit");
             return;
         }
 
-        // Sauvegarde l'animation actuelle
-        string currentAnimationName = GetCurrentAnimationName();
+        // Calcule la direction du coup (attaquant vers victime) pour choisir Hit_NW ou Hit_SW
+        // N, NW → Hit_NW | NE → Hit_NW miroir
+        // W, SW, S → Hit_SW | E, SE → Hit_SW miroir
+        Vector2Int delta = attackerPosition - victimPosition;
+        int dx = Mathf.Clamp(delta.x, -1, 1);
+        int dy = Mathf.Clamp(delta.y, -1, 1);
 
-        // Si on est en train de jouer une animation Attack
-        if (currentAnimationName.StartsWith(AnimationNames.PrefixAttack) 
-            && !currentAnimationName.StartsWith(AnimationNames.PrefixAttackIdle))
-        {
-            if (debugAnimations)
-            {
-                Debug.Log($"AnimatorController {gameObject.name}: Hit ignoré - animation Attack en cours");
-            }
-            return;
-        }
-
-        // Vérifie si l'unité est un Rootborn en état Idle
-        if (IsRootborn() && movementController != null &&
-            movementController.GetCurrentState() == MovementController.MovementState.Idle &&
-            attackController != null && !attackController.IsAttacking())
-        {
-            // Rootborn idle utilise toujours Hit_Idle
-            if (debugAnimations)
-            {
-                Debug.Log($"AnimatorController {gameObject.name}: Animation Hit_Idle (Rootborn en Idle)");
-            }
-            unitAnimator.Play(AnimationNames.HitIdle, 0, 0f);
-            // Rootborn : restaure la dernière frame de l'idle (forme pyramidale) pour ne pas rejouer l'animation entière
-            StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, 0.333f, 0.999f));
-            return;
-        }
-
-        // Calcule la direction du coup (attaquant vers victime)
-        int deltaY = attackerPosition.y - victimPosition.y;
-
-        // Détermine quelle animation Hit jouer selon direction verticale
-        string hitAnimation;
-        if (deltaY > 0)
-        {
-            // Coup vient du haut (N, NE, NW)
-            hitAnimation = AnimationNames.HitNW;
-        }
-        else
-        {
-            // Coup vient du bas ou du côté (E, SE, S, SW, W)
-            hitAnimation = AnimationNames.HitSW;
-        }
+        bool isHitNW = (dy > 0) || (dy == 0 && dx == 0);
+        bool mirror  = (dx > 0); // NE, E, SE → miroir horizontal
 
         if (debugAnimations)
-        {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {hitAnimation} (attaquant {attackerPosition} -> victime {victimPosition}), restaurera {currentAnimationName}");
-        }
+            Debug.Log($"AnimatorController {gameObject.name}: Hit_{(isHitNW ? "NW" : "SW")} (attaquant {attackerPosition} -> victime {victimPosition}, miroir: {mirror})");
 
-        unitAnimator.Play(hitAnimation);
-        StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, 0.333f));
+        SetMirror(mirror);
+        unitAnimator.SetBool("IsHitIdle", false);
+        unitAnimator.SetBool("IsHitNW", isHitNW);
+        unitAnimator.SetTrigger("Hit");
     }
 
-    // Coroutine pour restaurer l'animation précédente après le Hit
-    // Rejoue l'animation exactement à la frame où elle en était
-    private IEnumerator RestoreAnimationAfterHit(string animationName, float delay, float normalizedTime = 0f)
+    // Appelé par IdleMoveExitBehaviour quand l'état IdleMove se termine
+    // Toggle le miroir pour alterner Idle_SW normal et Idle_SW miroir
+    private void OnIdleMoveCompleted()
     {
-        // Attend la fin de l'animation Hit
-        yield return new WaitForSeconds(delay);
-
-        // Rejoue l'animation à la position indiquée (0f = début, 0.999f = dernière frame)
-        unitAnimator.Play(animationName, -1, normalizedTime);
+        isIdleMirrored = !isIdleMirrored;
+        SetMirror(isIdleMirrored);
 
         if (debugAnimations)
-        {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName}");
-        }
+            Debug.Log($"AnimatorController {gameObject.name}: Alternance idle miroir → {isIdleMirrored}");
     }
 
     // Méthode de debug pour afficher l'état de l'animator
@@ -581,6 +574,7 @@ public class AnimatorController : MonoBehaviour
         Debug.Log($"=== AnimatorController Debug - {gameObject.name} ===");
         Debug.Log($"Est Rootborn: {IsRootborn()}");
         Debug.Log($"IdleReversed en cours: {idleReversedCoroutine != null}");
+        Debug.Log($"Cycle idle miroir actif: {isIdleMirrored}");
         Debug.Log($"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}");
         Debug.Log($"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName(AnimationNames.Idle) : "Animator null")}");
         Debug.Log($"Miroir actif: {(spriteRenderer != null ? spriteRenderer.flipX : false)}");

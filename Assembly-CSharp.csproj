@@ -51,6 +51,7 @@
     <Compile Include="Assets\Scripts\Components\Units\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\IdleMoveExitBehaviour.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />

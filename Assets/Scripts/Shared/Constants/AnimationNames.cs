@@ -4,6 +4,7 @@ public static class AnimationNames
 {
     // Animations de base
     public const string Idle         = "Idle";
+    public const string IdleMove     = "IdleMove";       // Transition d'alternance du cycle idle
     public const string IdleReversed = "Idle_Reversed"; // Spécifique Rootborn
     public const string Death        = "Death";
 
