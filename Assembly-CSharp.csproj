@@ -50,6 +50,7 @@
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Components\Units\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
+    <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
@@ -62,6 +63,7 @@
     <Compile Include="Assets\Scripts\Data\Buildings\BuildingStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\RangeOffsets.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
+    <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Tests\MinHeapTests.cs" />
     <Compile Include="Assets\Scripts\Components\Units\ChaseController.cs" />

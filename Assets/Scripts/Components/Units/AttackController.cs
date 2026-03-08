@@ -676,9 +676,13 @@ public class AttackController : MonoBehaviour
         float projectileTravelTime = 0f;
         int attackRange = unitStatsComponent.GetAttackRange();
 
-        // Si portée > 1, calcule le temps de trajet
+        // Si portée > 1, calcule le temps de trajet et délègue les dégâts au projectile
         if (attackRange > 1 && currentTarget != null)
         {
+            // Capture les références avant tout yield (l'attaquant peut mourir pendant le vol)
+            Transform capturedTargetTransform = currentTarget.transform;
+            int capturedDamage = unitStatsComponent.GetAttackDamage();
+
             // Calcule la distance en cases entre attaquant et cible
             Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
             Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
@@ -692,35 +696,36 @@ public class AttackController : MonoBehaviour
                 Debug.Log($"🏹 AttackController {gameObject.name}: Projectile lancé, distance {distanceInCells} cases, trajet {projectileTravelTime}s");
             }
 
-            // NOUVEAU CODE ICI
-            // Spawne le projectile visuel
-            if (projectilePrefab != null && currentTarget != null)
+            // Spawne le projectile avec payload de dégâts autonomes
+            if (projectilePrefab != null)
             {
                 Vector3 startPos = transform.position;
-                Vector3 endPos = currentTarget.transform.position;
 
                 GameObject projectile = Instantiate(projectilePrefab, startPos, Quaternion.identity);
                 ProjectileVisual visual = projectile.GetComponent<ProjectileVisual>();
 
                 if (visual != null)
                 {
-                    visual.Initialize(startPos, endPos, projectileTravelTime);
+                    // Le projectile est autonome : suit la cible (homing) et applique les dégâts à l'impact
+                    visual.Initialize(startPos, capturedTargetTransform, projectileTravelTime, targetDamageable, unitGameObject, capturedDamage);
                 }
             }
 
-            // Attend que le projectile arrive
-            yield return new WaitForSeconds(projectileTravelTime);
+            // Pas de yield ici : le projectile gère les dégâts de façon autonome
+            // L'attaquant peut enchaîner l'attaque suivante pendant le vol
         }
-
-        // Inflige les dégâts via IDamageable (fonctionne pour unités ET bâtiments)
-        if (targetDamageable != null && !targetDamageable.IsDead() && IsTargetInRange())
+        else if (attackRange <= 1)
         {
-            int damage = unitStatsComponent.GetAttackDamage();
-            targetDamageable.TakeDamage(damage, unitGameObject);
-
-            if (debugAttack)
+            // Attaque mêlée : inflige les dégâts directement via IDamageable
+            if (targetDamageable != null && !targetDamageable.IsDead() && IsTargetInRange())
             {
-                Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable");
+                int damage = unitStatsComponent.GetAttackDamage();
+                targetDamageable.TakeDamage(damage, unitGameObject);
+
+                if (debugAttack)
+                {
+                    Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable");
+                }
             }
         }
 

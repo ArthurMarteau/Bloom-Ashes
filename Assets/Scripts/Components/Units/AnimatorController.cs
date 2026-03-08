@@ -16,19 +16,6 @@ public class AnimatorController : MonoBehaviour
     [Header("Debug")]
     [SerializeField] private bool debugAnimations = true;
 
-    // Énumération des directions d'animation disponibles
-    public enum AnimationDirection
-    {
-        North,      // N
-        NorthWest,  // NW
-        West,       // W
-        SouthWest,  // SW
-        South,      // S
-        NorthEast,  // NE (miroir de NW)
-        East,       // E (miroir de W)
-        SouthEast   // SE (miroir de SW)
-    }
-
     // Variables d'état d'animation
     private Animator unitAnimator;
     private SpriteRenderer spriteRenderer;
@@ -39,8 +26,8 @@ public class AnimatorController : MonoBehaviour
 
     // Cache des noms d'animations universels
     private Dictionary<AnimationDirection, string> walkAnimations;
-    private string idleAnimationName = "Idle";
-    private string idleReversedAnimationName = "Idle_Reversed"; // Spécifique Rootborn
+    private string idleAnimationName = AnimationNames.Idle;
+    private string idleReversedAnimationName = AnimationNames.IdleReversed; // Spécifique Rootborn
     private bool hasPlayedIdleReversedThisSession = false;  // Flag persistant jusqu'à arrêt complet
 
     // Initialise les références et configure les animations universelles
@@ -85,15 +72,15 @@ public class AnimatorController : MonoBehaviour
     {
         walkAnimations = new Dictionary<AnimationDirection, string>
         {
-            { AnimationDirection.North, "Walk_N" },
-            { AnimationDirection.NorthWest, "Walk_NW" },
-            { AnimationDirection.West, "Walk_W" },
-            { AnimationDirection.SouthWest, "Walk_SW" },
-            { AnimationDirection.South, "Walk_S" },
+            { AnimationDirection.North,     AnimationNames.WalkN  },
+            { AnimationDirection.NorthWest, AnimationNames.WalkNW },
+            { AnimationDirection.West,      AnimationNames.WalkW  },
+            { AnimationDirection.SouthWest, AnimationNames.WalkSW },
+            { AnimationDirection.South,     AnimationNames.WalkS  },
             // Les directions miroir utilisent les mêmes animations
-            { AnimationDirection.NorthEast, "Walk_NW" },    // Miroir de NW
-            { AnimationDirection.East, "Walk_W" },          // Miroir de W
-            { AnimationDirection.SouthEast, "Walk_SW" }     // Miroir de SW
+            { AnimationDirection.NorthEast, AnimationNames.WalkNW }, // Miroir de NW
+            { AnimationDirection.East,      AnimationNames.WalkW  }, // Miroir de W
+            { AnimationDirection.SouthEast, AnimationNames.WalkSW }  // Miroir de SW
         };
     }
 
@@ -148,36 +135,12 @@ public class AnimatorController : MonoBehaviour
         bool requiresMirror = RequiresMirror(direction);
         SetMirror(requiresMirror);
 
-        string attackAnimationName = GetAttackAnimationName(direction);
+        string attackAnimationName = GetDirectionalAnimationName(AnimationNames.PrefixAttack, direction);
         unitAnimator.Play(attackAnimationName);
 
         if (debugAnimations)
         {
             Debug.Log($"AnimatorController {gameObject.name}: Attack {attackAnimationName} (durée {ATTACK_ANIMATION_DURATION}s)");
-        }
-    }
-
-    // Retourne le nom de l'animation d'attaque selon la direction
-    // Utilise la même convention que Walk mais préfixe Attack_
-    private string GetAttackAnimationName(AnimationDirection direction)
-    {
-        switch (direction)
-        {
-            case AnimationDirection.North:
-                return "Attack_N";
-            case AnimationDirection.NorthWest:
-            case AnimationDirection.NorthEast: // Miroir de NW
-                return "Attack_NW";
-            case AnimationDirection.West:
-            case AnimationDirection.East: // Miroir de W
-                return "Attack_W";
-            case AnimationDirection.SouthWest:
-            case AnimationDirection.SouthEast: // Miroir de SW
-                return "Attack_SW";
-            case AnimationDirection.South:
-                return "Attack_S";
-            default:
-                return "Attack_S"; // Fallback
         }
     }
 
@@ -201,7 +164,7 @@ public class AnimatorController : MonoBehaviour
         SetMirror(requiresMirror);
 
         // Construit le nom Idle_Attack
-        string idleAttackAnimationName = GetIdleAttackAnimationName(direction);
+        string idleAttackAnimationName = GetDirectionalAnimationName(AnimationNames.PrefixAttackIdle, direction);
 
         // Joue l'animation en boucle
         unitAnimator.Play(idleAttackAnimationName);
@@ -212,26 +175,26 @@ public class AnimatorController : MonoBehaviour
         }
     }
 
-    // Retourne le nom de l'animation Idle_Attack selon la direction
-    private string GetIdleAttackAnimationName(AnimationDirection direction)
+    // Construit le nom d'animation directionnelle à partir d'un préfixe et d'une direction
+    // Factorise la logique commune à Attack_ et AttackIdle_ (même switch de suffixes)
+    private string GetDirectionalAnimationName(string prefix, AnimationDirection direction)
     {
         switch (direction)
         {
             case AnimationDirection.North:
-                return "AttackIdle_N";
+                return prefix + AnimationNames.SuffixN;
             case AnimationDirection.NorthWest:
-            case AnimationDirection.NorthEast:
-                return "AttackIdle_NW";
+            case AnimationDirection.NorthEast: // Miroir de NW
+                return prefix + AnimationNames.SuffixNW;
             case AnimationDirection.West:
-            case AnimationDirection.East:
-                return "AttackIdle_W";
+            case AnimationDirection.East: // Miroir de W
+                return prefix + AnimationNames.SuffixW;
             case AnimationDirection.SouthWest:
-            case AnimationDirection.SouthEast:
-                return "AttackIdle_SW";
+            case AnimationDirection.SouthEast: // Miroir de SW
+                return prefix + AnimationNames.SuffixSW;
             case AnimationDirection.South:
-                return "AttackIdle_S";
             default:
-                return "AttackIdle_S";
+                return prefix + AnimationNames.SuffixS;
         }
     }
 
@@ -445,7 +408,7 @@ public class AnimatorController : MonoBehaviour
         }
 
         // Fallback si pas de clip trouvé
-        return "Idle";
+        return AnimationNames.Idle;
     }
 
 
@@ -518,7 +481,7 @@ public class AnimatorController : MonoBehaviour
         SetMirror(false);
 
         // Joue l'animation de mort
-        unitAnimator.Play("Death");
+        unitAnimator.Play(AnimationNames.Death);
 
         if (debugAnimations)
         {
@@ -544,7 +507,8 @@ public class AnimatorController : MonoBehaviour
         string currentAnimationName = GetCurrentAnimationName();
 
         // Si on est en train de jouer une animation Attack
-        if (currentAnimationName.StartsWith("Attack_"))
+        if (currentAnimationName.StartsWith(AnimationNames.PrefixAttack) 
+            && !currentAnimationName.StartsWith(AnimationNames.PrefixAttackIdle))
         {
             if (debugAnimations)
             {
@@ -563,7 +527,9 @@ public class AnimatorController : MonoBehaviour
             {
                 Debug.Log($"AnimatorController {gameObject.name}: Animation Hit_Idle (Rootborn en Idle)");
             }
-            unitAnimator.Play("Hit_Idle"); // Force le redémarrage à 0
+            unitAnimator.Play(AnimationNames.HitIdle, 0, 0f);
+            // Rootborn : restaure la dernière frame de l'idle (forme pyramidale) pour ne pas rejouer l'animation entière
+            StartCoroutine(RestoreAnimationAfterHit(currentAnimationName, 0.333f, 0.999f));
             return;
         }
 
@@ -575,12 +541,12 @@ public class AnimatorController : MonoBehaviour
         if (deltaY > 0)
         {
             // Coup vient du haut (N, NE, NW)
-            hitAnimation = "Hit_NW";
+            hitAnimation = AnimationNames.HitNW;
         }
         else
         {
             // Coup vient du bas ou du côté (E, SE, S, SW, W)
-            hitAnimation = "Hit_SW";
+            hitAnimation = AnimationNames.HitSW;
         }
 
         if (debugAnimations)
@@ -594,13 +560,13 @@ public class AnimatorController : MonoBehaviour
 
     // Coroutine pour restaurer l'animation précédente après le Hit
     // Rejoue l'animation exactement à la frame où elle en était
-    private IEnumerator RestoreAnimationAfterHit(string animationName, float delay)
+    private IEnumerator RestoreAnimationAfterHit(string animationName, float delay, float normalizedTime = 0f)
     {
         // Attend la fin de l'animation Hit
         yield return new WaitForSeconds(delay);
 
-        // Rejoue l'animation à partir du temps sauvegardé
-        unitAnimator.Play(animationName);
+        // Rejoue l'animation à la position indiquée (0f = début, 0.999f = dernière frame)
+        unitAnimator.Play(animationName, -1, normalizedTime);
 
         if (debugAnimations)
         {
@@ -616,7 +582,7 @@ public class AnimatorController : MonoBehaviour
         Debug.Log($"Est Rootborn: {IsRootborn()}");
         Debug.Log($"IdleReversed en cours: {idleReversedCoroutine != null}");
         Debug.Log($"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}");
-        Debug.Log($"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName("Idle") : "Animator null")}");
+        Debug.Log($"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName(AnimationNames.Idle) : "Animator null")}");
         Debug.Log($"Miroir actif: {(spriteRenderer != null ? spriteRenderer.flipX : false)}");
     }
 }

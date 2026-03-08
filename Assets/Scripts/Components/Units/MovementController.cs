@@ -325,7 +325,7 @@ public class MovementController : MonoBehaviour
     // Change l'état et démarre la coroutine de retry périodique
     private void HandlePathBlocked()
     {
-        currentState = MovementState.Blocked;
+        currentState = MovementState.Idle;
         isMoving = false;
         isInterpolating = false;
 
@@ -343,7 +343,16 @@ public class MovementController : MonoBehaviour
             animatorController.PlayIdleAnimation();
         }
 
-        // Note: Le retry est géré en externe ou peut être ajouté ici si besoin
+        // Vérifie si un ennemi est à portée après blocage — déclenche l'attaque immédiatement
+        // Même logique que OnMovementCompleted(), car l'unité est maintenant stationnaire
+        if (attackController != null)
+        {
+            GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
+            if (nearestEnemy != null)
+            {
+                attackController.StartAttack(nearestEnemy);
+            }
+        }
     }
 
     // Appelé quand le mouvement se termine avec succès
