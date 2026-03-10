@@ -218,6 +218,9 @@ public static class PathFinding
         // Inverse pour obtenir l'ordre départ -> arrivée
         path.Reverse();
 
+        // Supprime la case de départ — l'unité y est déjà, inutile de l'inclure
+        if (path.Count > 0) path.RemoveAt(0);
+
         Debug.Log($"Chemin reconstitué : {path.Count} étapes");
         return path;
     }
