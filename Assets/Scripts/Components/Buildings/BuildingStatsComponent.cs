@@ -85,8 +85,8 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
             return;
         }
 
-        // Applique la réduction par la défense
-        int effectiveDamage = Mathf.Max(0, damage - baseStats.defense);
+        // Applique la réduction par la défense (minimum 1 — toute attaque inflige au moins 1 dégât)
+        int effectiveDamage = Mathf.Max(1, damage - baseStats.defense);
         currentHP -= effectiveDamage;
         currentHP = Mathf.Max(0, currentHP);
 

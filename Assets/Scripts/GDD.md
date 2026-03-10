@@ -23,7 +23,7 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Ability Auto-Cast**: All active abilities can be toggled to auto-cast. When enabled, the unit uses the ability automatically when conditions are met (target in range, enough Watersap).
 - **Sacrifice**: Any unit can be sacrificed (active ability) to grant 20 Watersap. Strategic use: sacrifice a dying unit before death to recover resources.
 - Units size 1x1. Building 1x1 or more.
-- Pas de virgule pour les stats. (Except Path Ground)
+- Pas de virgule pour les stats. (Except Path Ground et Move Speed)
 
 ## Map
 
@@ -54,7 +54,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 3         |
 | Attack Speed  | 2         |
 | Attack Range  | 1 (melee) |
-| Move Speed    | 2         |
+| Move Speed    | 1         |
 | Defense       | 0         |
 | Unit Type     | Ground    |
 
@@ -110,7 +110,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 1      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -136,7 +136,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -163,7 +163,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 5      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 0.8    |
 | Defense       | 5      |
 | Unit Type     | Ground |
 
@@ -187,7 +187,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 2      |
 | Unit Type     | Flying |
 
@@ -225,7 +225,7 @@ No active ability.
 | Attack Damage | 5      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -249,7 +249,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 2      |
+| Move Speed    | 1.2    |
 | Defense       | 1      |
 | Unit Type     | Flying |
 
@@ -276,7 +276,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 2      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -302,7 +302,7 @@ No active ability.
 | Attack Damage | 1      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -339,7 +339,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 0.8    |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -365,7 +365,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -391,7 +391,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 3      |
+| Move Speed    | 1.2    |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -417,7 +417,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 0.8    |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -454,7 +454,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 3      |
+| Move Speed    | 1.2    |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -480,7 +480,7 @@ No active ability.
 | Attack Damage | 5      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 3      |
+| Move Speed    | 1.2    |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -504,7 +504,7 @@ No active ability.
 | Attack Damage | 8      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 3      |
+| Move Speed    | 1.2    |
 | Defense       | 0      |
 | Unit Type     | Flying |
 
@@ -531,7 +531,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -568,7 +568,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 3      |
 | Unit Type     | Ground |
 
@@ -594,7 +594,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -620,7 +620,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 2      |
+| Move Speed    | 1      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -646,7 +646,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 0.8    |
 | Defense       | 4      |
 | Unit Type     | Ground |
 

@@ -23,11 +23,11 @@ public static class CombatSystem
     }
 
     // Calcule les dégâts effectifs après application de la défense
-    // Formule : baseDamage - defense (minimum 0)
+    // Formule : baseDamage - defense (minimum 1 — toute attaque inflige au moins 1 dégât)
     // Centralise la formule de dégâts — UnitStatsLogic.CalculateEffectiveDamage délègue ici
     public static int CalculateDamage(int baseDamage, int defense)
     {
-        return Math.Max(0, baseDamage - defense);
+        return Math.Max(1, baseDamage - defense);
     }
 
     // Trouve la meilleure position d'attaque dans la portée de targetPos

@@ -44,6 +44,7 @@ public class MovementController : MonoBehaviour
     private Vector2Int visualTargetCell;          // Case cible du Lerp en cours
     private bool isInterpolating = false;         // Interpolation en cours
     private Vector2Int previousLogicalPosition;   // Case quittée au dernier step (pour retour en cas d'interruption)
+    private bool returnToOriginRequested = false; // Inversion de Lerp demandée vers previousLogicalPosition
 
     // ========== ÉTAT ==========
     private bool isMoving = false;
@@ -126,6 +127,15 @@ public class MovementController : MonoBehaviour
 
         // Unité prête, exécute immédiatement
         pendingDestination = null;
+
+        // ========== INVERSION DE LERP ==========
+        // Si un Lerp est en cours vers nextCell et qu'on demande previousLogicalPosition → inverser immédiatement
+        if (isInterpolating && targetPosition == previousLogicalPosition)
+        {
+            logicalPath.Clear();
+            returnToOriginRequested = true;
+            return true;
+        }
 
         // ========== CLÉ: Calcul depuis POSITION LOGIQUE (stable) ==========
         List<Vector2Int> path = PathFinding.FindPath(logicalPosition, targetPosition, unitGameObject);
@@ -260,6 +270,40 @@ public class MovementController : MonoBehaviour
         // Animation de déplacement par interpolation linéaire
         while (elapsedTime < journeyTime)
         {
+            // ========== INVERSION DE LERP ==========
+            // Demande de retour vers fromCell détectée → retour fluide depuis position actuelle
+            if (returnToOriginRequested)
+            {
+                returnToOriginRequested = false;
+
+                Vector3 currentPosition = transform.position;
+                float distanceToReturn = Vector3.Distance(currentPosition, startPosition);
+                float returnTime = distanceToReturn / movementSpeed;
+                float returnElapsed = 0f;
+
+                if (animatorController != null)
+                    animatorController.PlayWalkAnimation(GridManager.Instance.WorldToGrid(currentPosition), fromCell);
+
+                while (returnElapsed < returnTime)
+                {
+                    if (!isMoving) yield break;
+                    transform.position = Vector3.Lerp(currentPosition, startPosition, returnElapsed / returnTime);
+                    returnElapsed += Time.deltaTime;
+                    yield return null;
+                }
+
+                transform.position = startPosition;
+                logicalPosition = fromCell;
+                EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
+                EntityRegistry.Instance?.ClearLeaving(gameObject);
+
+                if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
+                    animatorController.PlayIdleAnimation();
+
+                HandlePathBlocked();
+                yield break;
+            }
+
             // Vérifie qu'on n'a pas été arrêté pendant l'animation
             if (!isMoving)
             {
