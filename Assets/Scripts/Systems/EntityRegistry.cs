@@ -16,6 +16,10 @@ public class EntityRegistry : MonoBehaviour
     // Dictionary pour accès O(1) à l'enregistrement/désenregistrement
     private Dictionary<GameObject, IDamageable> entities = new Dictionary<GameObject, IDamageable>();
 
+    // Registre des positions logiques : position grille source de vérité, indépendante du Lerp visuel
+    // Mis à jour par MovementController à chaque étape logique
+    private Dictionary<GameObject, Vector2Int> logicalPositions = new Dictionary<GameObject, Vector2Int>();
+
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
 
@@ -68,13 +72,33 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
 
-        if (entities.Remove(go))
+        entities.Remove(go);
+        logicalPositions.Remove(go);
+
+        if (debugRegistry)
         {
-            if (debugRegistry)
-            {
-                Debug.Log($"📋 EntityRegistry: ❌ {go.name} désenregistré ({entities.Count} entités restantes)");
-            }
+            Debug.Log($"📋 EntityRegistry: ❌ {go.name} désenregistré ({entities.Count} entités restantes)");
         }
+    }
+
+    // Met à jour la position logique d'une unité dans le registre
+    // Appelé par MovementController à chaque étape logique (avant le Lerp visuel)
+    public void UpdateLogicalPosition(GameObject go, Vector2Int position)
+    {
+        if (go == null) return;
+        logicalPositions[go] = position;
+    }
+
+    // Retourne l'unité occupant une position logique donnée (null si aucune)
+    // Fiable pendant le Lerp contrairement à Physics2D.OverlapPoint
+    public GameObject GetUnitAtLogicalPosition(Vector2Int position)
+    {
+        foreach (var kvp in logicalPositions)
+        {
+            if (kvp.Key == null) continue;
+            if (kvp.Value == position) return kvp.Key;
+        }
+        return null;
     }
 
     // Retourne tous les GameObjects dans un rayon (distance Chebyshev) autour d'un centre de grille

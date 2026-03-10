@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "NEW_FEATURES_IMPLEMENTATION.md",
+                "file": "GDD.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "NEW_FEATURES_IMPLEMENTATION"
+              "title": "GDD"
             }
           }
         ]
@@ -185,6 +185,7 @@
   },
   "active": "c99a3dc5ad6ee8ae",
   "lastOpenFiles": [
+    "NEW_FEATURES_IMPLEMENTATION.md",
     "Shared/Enums.meta",
     "Shared/Constants.meta",
     "Shared/Enums/AnimationDirection.cs.meta",
@@ -196,9 +197,7 @@
     "GDD.md",
     "NEW_FEATURES_IMPLEMENTATION.md.meta",
     "NEW FEATURES IMPLEMENTATION.md",
-    "NEW_FEATURES_IMPLEMENTATION.md",
     "NEW FEATURES IMPLEMENTATION.md.meta",
-    "Systems/Grid/GridSystem.cs.meta",
     "REFACTORING_PROMPTS.md",
     "claude.md"
   ]

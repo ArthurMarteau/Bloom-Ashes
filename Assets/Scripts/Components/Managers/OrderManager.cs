@@ -74,6 +74,8 @@ public class OrderManager : MonoBehaviour
 
         // Vérifie s'il y a une entité ciblable sous le curseur (unité ou bâtiment) via overlap 2D
         Collider2D targetCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), targetableLayer);
+        Vector2Int debugCell = GridManager.Instance.WorldToGrid(worldPosition);
+        Debug.Log($"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}");
 
         if (targetCollider != null)
         {
@@ -215,11 +217,15 @@ public class OrderManager : MonoBehaviour
                 chaseController.StopChase();
             }
 
-            // Annule l'attaque en cours si existe
+            // Annule l'attaque en cours et signale l'ordre manuel
             AttackController attackController = unit.GetComponent<AttackController>();
-            if (attackController != null && attackController.IsAttacking())
+            if (attackController != null)
             {
-                attackController.StopAttack();
+                if (attackController.IsAttacking())
+                {
+                    attackController.StopAttack();
+                }
+                attackController.SetManualOrder(true);
             }
 
             // Envoie l'ordre de mouvement directement au MovementController

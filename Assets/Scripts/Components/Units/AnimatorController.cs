@@ -531,9 +531,7 @@ public class AnimatorController : MonoBehaviour
             if (debugAnimations)
                 Debug.Log($"AnimatorController {gameObject.name}: Hit_Idle (Rootborn en Idle)");
 
-            unitAnimator.SetBool("IsHitIdle", true);
-            unitAnimator.SetBool("IsHitNW", false);
-            unitAnimator.SetTrigger("Hit");
+            unitAnimator.Play(AnimationNames.HitIdle);
             return;
         }
 

@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: MycelianPriest_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
-  maxHP: 80
-  attackDamage: 10
+  maxHP: 25
+  attackDamage: 1
   attackRange: 2
   defense: 1
   attackSpeed: 2

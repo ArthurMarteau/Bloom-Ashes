@@ -20,6 +20,7 @@ public class AttackController : MonoBehaviour
     private float lastAttackTime;      // Temps de la dernière attaque (pour cooldown)
     private float lastCheckTime;  
     private bool isPerformingAttack = false;
+    private bool hasManualOrder = false; // Bloque l'auto-attaque pendant un ordre manuel en cours
 
     // Références
     private MovementController movementController;
@@ -160,6 +161,12 @@ public class AttackController : MonoBehaviour
     // Retourne false si l'unité est déjà sous un autre ordre
     private bool CanAutoAttack()
     {
+        // Bloqué si un ordre manuel de mouvement est en cours
+        if (hasManualOrder)
+        {
+            return false;
+        }
+
         // Vérifie MovementController
         if (movementController != null)
         {
@@ -172,6 +179,18 @@ public class AttackController : MonoBehaviour
         }
 
         return true;
+    }
+
+    // Active le flag d'ordre manuel — bloque l'auto-attaque jusqu'à l'arrivée
+    // Appelé par OrderManager lors d'un ordre de mouvement explicite
+    public void SetManualOrder(bool value)
+    {
+        hasManualOrder = value;
+
+        if (debugAttack)
+        {
+            Debug.Log($"AttackController {gameObject.name}: Ordre manuel → {value}");
+        }
     }
 
     // Trouve l'ennemi le plus proche à portée d'attaque

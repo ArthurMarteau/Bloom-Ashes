@@ -40,6 +40,17 @@ public class ProjectileVisual : MonoBehaviour
         transform.position = startPosition;
     }
 
+    // Oriente le sprite vers la direction de déplacement courante
+    // Utilise Atan2 car le sprite de base pointe vers l'Est (0°)
+    private void UpdateRotation()
+    {
+        Vector3 direction = endPosition - startPosition;
+        if (direction.sqrMagnitude < 0.0001f) return;
+
+        float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+        transform.rotation = Quaternion.Euler(0f, 0f, angle);
+    }
+
     private void Update()
     {
         // Homing : met à jour la destination si la cible est encore présente
@@ -47,6 +58,8 @@ public class ProjectileVisual : MonoBehaviour
         {
             endPosition = targetTransform.position;
         }
+
+        UpdateRotation();
 
         elapsedTime += Time.deltaTime;
 

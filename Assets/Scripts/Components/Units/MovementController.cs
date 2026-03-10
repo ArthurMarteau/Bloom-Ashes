@@ -107,7 +107,7 @@ public class MovementController : MonoBehaviour
         // Valide que la destination est accessible pour cette unité
         if (!GridManager.Instance.IsWalkableFor(targetPosition, unitGameObject))
         {
-            Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} inaccessible");
+            Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} inaccessible (IsWalkableFor = false)");
             return false;
         }
 
@@ -120,7 +120,13 @@ public class MovementController : MonoBehaviour
             {
                 Debug.Log($"MovementController {gameObject.name}: Ordre mis en attente pendant IdleReversed");
             }
-            return true; // Ordre accepté mais différé
+            return true;
+        }
+
+        // LOG DIAGNOSTIC
+        if (debugMovement)
+        {
+            Debug.Log($"🔍 MoveTo {gameObject.name}: logicalPos={logicalPosition}, target={targetPosition}, state={currentState}, isInterpolating={isInterpolating}");
         }
 
         // Unité prête, exécute immédiatement
@@ -212,6 +218,13 @@ public class MovementController : MonoBehaviour
 
             // Interpole le visuel (peut être interrompu par collision)
             yield return StartCoroutine(InterpolateToCell(previousLogicalPosition, nextCell));
+
+            // Rafraîchit l'animation vers la vraie prochaine direction en cas de remplacement de queue mid-mouvement
+            // Évite que l'unité continue à afficher l'animation de l'ancienne direction après un nouvel ordre
+            if (logicalPath.Count > 0 && animatorController != null)
+            {
+                animatorController.PlayWalkAnimation(logicalPosition, logicalPath.Peek());
+            }
 
             // Vérifie si le Lerp s'est terminé correctement
             if (!IsAtCellCenter(nextCell))
@@ -347,6 +360,7 @@ public class MovementController : MonoBehaviour
         // Même logique que OnMovementCompleted(), car l'unité est maintenant stationnaire
         if (attackController != null)
         {
+            attackController.SetManualOrder(false);
             GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
             if (nearestEnemy != null)
             {
@@ -390,6 +404,12 @@ public class MovementController : MonoBehaviour
         // Reset état pour prochain mouvement
         currentState = MovementState.Idle;
         isFirstMoveOfSession = true;
+
+        // Lève le blocage auto-attaque — l'unité est arrivée, elle peut de nouveau auto-attaquer
+        if (attackController != null)
+        {
+            attackController.SetManualOrder(false);
+        }
 
         // Reset le flag IdleReversed dans AnimatorController pour prochain mouvement
         if (IsRootborn() && animatorController != null && !isAttacking)

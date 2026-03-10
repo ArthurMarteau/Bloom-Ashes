@@ -12,10 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: Rootborn_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
-  maxHP: 100
-  attackDamage: 10
+  maxHP: 20
+  attackDamage: 3
   attackRange: 1
-  defense: 3
+  defense: 0
   attackSpeed: 2
   moveSpeed: 1
   isRootborn: 1
