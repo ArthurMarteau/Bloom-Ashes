@@ -122,11 +122,22 @@ public class GridManager : MonoBehaviour
 
         // Règle absolue : aucune unité ne peut occuper la même case qu'une autre
         // EXCEPTION : ignore l'unité qui demande le mouvement (évite auto-blocage)
-        // IMPORTANT : Utilise GetUnitAtLogical au lieu de GetUnitAt pour détection fiable pendant Lerp
-        GameObject unitAtPosition = GetUnitAt(gridPosition);
+        // IMPORTANT : Utilise GetUnitAtLogicalPosition (EntityRegistry) pour détection fiable pendant Lerp
+        GameObject unitAtPosition = EntityRegistry.Instance != null
+            ? EntityRegistry.Instance.GetUnitAtLogicalPosition(gridPosition)
+            : GetUnitAt(gridPosition);
         if (unitAtPosition != null && unitAtPosition != unit)
         {
-            return false; // Case occupée par une AUTRE unité
+            // Si l'unité sur cette case est en train de la quitter, la case est contestable
+            if (EntityRegistry.Instance != null && EntityRegistry.Instance.IsBeingLeft(gridPosition))
+                return true;
+
+            // Si l'unité est en mouvement (elle lerpe vers cette case), la case est contestable
+            MovementController mc = unitAtPosition.GetComponent<MovementController>();
+            if (mc != null && mc.GetCurrentState() == MovementController.MovementState.Moving)
+                return true;
+
+            return false;
         }
 
         // Règle obstacles : bloquent selon les capacités de vol de l'unité

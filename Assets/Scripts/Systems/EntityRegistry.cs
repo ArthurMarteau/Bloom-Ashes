@@ -20,6 +20,10 @@ public class EntityRegistry : MonoBehaviour
     // Mis à jour par MovementController à chaque étape logique
     private Dictionary<GameObject, Vector2Int> logicalPositions = new Dictionary<GameObject, Vector2Int>();
 
+    // Cases en cours d'abandon : unité logiquement partie mais Lerp visuel pas encore terminé
+    // Permet à une autre unité de s'y engager sans attendre la fin du Lerp
+    private Dictionary<GameObject, Vector2Int> leavingPositions = new Dictionary<GameObject, Vector2Int>();
+
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
 
@@ -74,6 +78,7 @@ public class EntityRegistry : MonoBehaviour
 
         entities.Remove(go);
         logicalPositions.Remove(go);
+        leavingPositions.Remove(go);
 
         if (debugRegistry)
         {
@@ -87,6 +92,30 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
         logicalPositions[go] = position;
+    }
+
+    // Enregistre qu'une unité est en train de quitter une case (Lerp pas encore terminé)
+    public void SetLeaving(GameObject go, Vector2Int position)
+    {
+        if (go == null) return;
+        leavingPositions[go] = position;
+    }
+
+    // Retire l'entrée de départ quand le Lerp est terminé
+    public void ClearLeaving(GameObject go)
+    {
+        if (go == null) return;
+        leavingPositions.Remove(go);
+    }
+
+    // Retourne true si une unité est en train de quitter cette case (case contestable)
+    public bool IsBeingLeft(Vector2Int position)
+    {
+        foreach (var kvp in leavingPositions)
+        {
+            if (kvp.Key != null && kvp.Value == position) return true;
+        }
+        return false;
     }
 
     // Retourne l'unité occupant une position logique donnée (null si aucune)

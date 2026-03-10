@@ -302,6 +302,12 @@ public class AnimationGenerator
         AddExitTimeTransition(stateIdle, stateIdleMove, exitTime: 1f);
         AddExitTimeTransition(stateIdleMove, stateIdle, exitTime: 1f);
 
+        // Hit_NW → Idle (exit time)
+        AddExitTimeTransition(stateHitNW, stateIdle, exitTime: 1f);
+
+        // Hit_SW → Idle (exit time)
+        AddExitTimeTransition(stateHitSW, stateIdle, exitTime: 1f);
+
         // Any State → Hit_NW (Hit + IsHitNW = true)
         AnimatorStateTransition transHitNW = stateMachine.AddAnyStateTransition(stateHitNW);
         transHitNW.hasExitTime = false;

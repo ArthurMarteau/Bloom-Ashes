@@ -397,6 +397,18 @@ PrefabInstance:
       propertyPath: teamID
       value: 2
       objectReference: {fileID: 0}
+    - target: {fileID: 6279050950632817264, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugChase
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8405726198882392520, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugAnimations
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8551299890792481874, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugAttack
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8551299890792481874, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
       propertyPath: autoAttackEnabled
       value: 0
@@ -404,6 +416,10 @@ PrefabInstance:
     - target: {fileID: 8916175094726974804, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
       propertyPath: m_Name
       value: MycelianPriest (1)
+      objectReference: {fileID: 0}
+    - target: {fileID: 8946003045647189545, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugStats
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -418,6 +434,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1289502938}
     m_Modifications:
+    - target: {fileID: -5370382545427022799, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugStats
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_Name
       value: Rootborn (1)
@@ -460,6 +480,14 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 224587866070118923, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5930733243826866042, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugChase
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7426287070818110966, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugAttack
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -1156,7 +1184,7 @@ MonoBehaviour:
   OnRightClickDown:
     m_PersistentCalls:
       m_Calls: []
-  debugInput: 0
+  debugInput: 1
 --- !u!4 &637186612 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 2429475294279794341, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
@@ -1792,6 +1820,10 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1289502938}
     m_Modifications:
+    - target: {fileID: -5370382545427022799, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugStats
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_Name
       value: Rootborn
@@ -1838,6 +1870,18 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 224587866070118923, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 5930733243826866042, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugChase
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7426287070818110966, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: debugAttack
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7426287070818110966, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+      propertyPath: autoAttackEnabled
       value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
@@ -1893,9 +1937,33 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
+    - target: {fileID: 3382066912057268317, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: m_Size.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 3382066912057268317, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: m_Size.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 6279050950632817264, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugChase
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 8405726198882392520, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugAnimations
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 8551299890792481874, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugAttack
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8916175094726974804, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
       propertyPath: m_Name
       value: MycelianPriest
+      objectReference: {fileID: 0}
+    - target: {fileID: 8946003045647189545, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+      propertyPath: debugStats
+      value: 0
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -3305,10 +3373,30 @@ PrefabInstance:
       propertyPath: m_Name
       value: MycelianScout
       objectReference: {fileID: 0}
+    - target: {fileID: 1046734557726452047, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
+      propertyPath: debugAnimations
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 1404863442006239728, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
+      propertyPath: m_Size.x
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 1404863442006239728, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
+      propertyPath: m_Size.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 2182944145673804094, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
+      propertyPath: debugChase
+      value: 1
+      objectReference: {fileID: 0}
     - target: {fileID: 3769051052179119590, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
       propertyPath: baseStats
       value: 
       objectReference: {fileID: 11400000, guid: e66b568e20b1f9b4d9cdb9a6df475593, type: 2}
+    - target: {fileID: 3769051052179119590, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
+      propertyPath: debugStats
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 7194345623951871163, guid: 655ba9d05176e2d42ade7e51c4c09470, type: 3}
       propertyPath: projectilePrefab
       value: 

@@ -19,8 +19,7 @@ public class OrderManager : MonoBehaviour
     private InputManager inputManager;
 
     // Cache anti-spam : ignore les ordres identiques consécutifs (1 slot)
-    private GameObject lastTargetUnit;                                               // Dernière unité/bâtiment ciblé (attaque ou chase)
-    private Vector2Int lastTargetCell = new Vector2Int(int.MinValue, int.MinValue); // Dernière case ciblée (mouvement)
+    private GameObject lastTargetUnit; // Dernière unité/bâtiment ciblé (attaque ou chase)
 
     // Initialise le singleton et les références
     private void Awake()
@@ -100,9 +99,8 @@ public class OrderManager : MonoBehaviour
             return;
         }
 
-        // Mémorise la nouvelle cible et invalide le cache mouvement
+        // Mémorise la nouvelle cible
         lastTargetUnit = targetUnit;
-        lastTargetCell = new Vector2Int(int.MinValue, int.MinValue);
 
         var selectedUnits = selectionManager.GetSelectedUnits();
         int attackOrders = 0;
@@ -194,14 +192,7 @@ public class OrderManager : MonoBehaviour
             return;
         }
 
-        // Anti-spam : ignore si même case que le dernier ordre de mouvement
-        if (targetGridPosition == lastTargetCell)
-        {
-            return;
-        }
-
-        // Mémorise la nouvelle case et invalide le cache cible
-        lastTargetCell = targetGridPosition;
+        // Invalide le cache cible unité
         lastTargetUnit = null;
 
         // Envoie l'ordre de mouvement à toutes les unités sélectionnées

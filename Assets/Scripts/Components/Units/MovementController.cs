@@ -43,6 +43,7 @@ public class MovementController : MonoBehaviour
     // ========== VISUEL (Présentation uniquement) ==========
     private Vector2Int visualTargetCell;          // Case cible du Lerp en cours
     private bool isInterpolating = false;         // Interpolation en cours
+    private Vector2Int previousLogicalPosition;   // Case quittée au dernier step (pour retour en cas d'interruption)
 
     // ========== ÉTAT ==========
     private bool isMoving = false;
@@ -69,6 +70,7 @@ public class MovementController : MonoBehaviour
         if (GridManager.Instance != null)
         {
             logicalPosition = GridManager.Instance.WorldToGrid(transform.position);
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
         }
         else
         {
@@ -101,13 +103,6 @@ public class MovementController : MonoBehaviour
         if (!GridManager.Instance.IsInBounds(targetPosition))
         {
             Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} hors limites");
-            return false;
-        }
-
-        // Valide que la destination est accessible pour cette unité
-        if (!GridManager.Instance.IsWalkableFor(targetPosition, unitGameObject))
-        {
-            Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} inaccessible (IsWalkableFor = false)");
             return false;
         }
 
@@ -201,8 +196,10 @@ public class MovementController : MonoBehaviour
             }
 
             // ========== UPDATE LOGIQUE IMMÉDIATE ==========
-            Vector2Int previousLogicalPosition = logicalPosition;
+            previousLogicalPosition = logicalPosition;
+            EntityRegistry.Instance?.SetLeaving(gameObject, previousLogicalPosition);
             logicalPosition = nextCell;
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
             visualTargetCell = nextCell;
 
             if (debugMovement)
@@ -218,6 +215,7 @@ public class MovementController : MonoBehaviour
 
             // Interpole le visuel (peut être interrompu par collision)
             yield return StartCoroutine(InterpolateToCell(previousLogicalPosition, nextCell));
+            EntityRegistry.Instance?.ClearLeaving(gameObject);
 
             // Rafraîchit l'animation vers la vraie prochaine direction en cas de remplacement de queue mid-mouvement
             // Évite que l'unité continue à afficher l'animation de l'ancienne direction après un nouvel ordre
@@ -439,6 +437,14 @@ public class MovementController : MonoBehaviour
 
         // Vide la queue
         logicalPath.Clear();
+
+        // Si un Lerp est en cours, revenir à la case précédente (annule le step en cours)
+        if (isInterpolating)
+        {
+            logicalPosition = previousLogicalPosition;
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
+            EntityRegistry.Instance?.ClearLeaving(gameObject);
+        }
 
         // Snap visuel à la position logique
         transform.position = GridManager.Instance.GridToWorld(logicalPosition);
