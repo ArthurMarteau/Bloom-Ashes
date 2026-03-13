@@ -25,8 +25,10 @@
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
 
+            // _MainTex_ST hors CBUFFER : compatible SRP Batcher 2D + supporte flipX/flipY des sprites
+            float4 _MainTex_ST;
+
             CBUFFER_START(UnityPerMaterial)
-                float4 _MainTex_ST;
                 float4 _TeamColor;
                 float _HueThreshold;
                 float _SaturationMin;

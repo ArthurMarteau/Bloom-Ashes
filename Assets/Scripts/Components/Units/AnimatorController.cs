@@ -514,20 +514,20 @@ public class AnimatorController : MonoBehaviour
         // Ne joue pas Hit si l'unité est morte (elle doit rester en Death)
         if (unitStatsComponent != null && unitStatsComponent.IsDead()) return;
 
-        // Hit reset le cycle idle → retour Idle_SW sans miroir au prochain idle
-        isIdleMirrored = false;
-        SetMirror(false);
-
         // Ignore si un état tagué "Attack" est actif — AttackIdle_ (non tagué) reste interruptible
         if (unitAnimator.GetCurrentAnimatorStateInfo(0).IsTag("Attack")) return;
 
         // Cas spécial Rootborn en Idle : joue Hit_Idle sans calcul de direction
+        // On reset le miroir uniquement ici car Hit_Idle est directionless (direction S)
         if (IsRootborn()
             && movementController != null
             && movementController.GetCurrentState() == MovementController.MovementState.Idle
             && attackController != null
             && !attackController.IsAttacking())
         {
+            isIdleMirrored = false;
+            SetMirror(false);
+
             if (debugAnimations)
                 Debug.Log($"AnimatorController {gameObject.name}: Hit_Idle (Rootborn en Idle)");
 
@@ -548,8 +548,12 @@ public class AnimatorController : MonoBehaviour
         if (debugAnimations)
             Debug.Log($"AnimatorController {gameObject.name}: Hit_{(isHitNW ? "NW" : "SW")} (attaquant {attackerPosition} -> victime {victimPosition}, miroir: {mirror})");
 
+        // Reset le cycle idle uniquement ici, APRÈS avoir calculé le miroir Hit
+        // Évite d'écraser le flipX de l'AttackIdle en cours avant la transition
+        isIdleMirrored = false;
         SetMirror(mirror);
-        unitAnimator.SetBool("IsHitIdle", false);
+        // IsHitIdle uniquement sur le Rootborn — les autres unités n'ont pas ce paramètre
+        if (IsRootborn()) unitAnimator.SetBool("IsHitIdle", false);
         unitAnimator.SetBool("IsHitNW", isHitNW);
         unitAnimator.SetTrigger("Hit");
     }

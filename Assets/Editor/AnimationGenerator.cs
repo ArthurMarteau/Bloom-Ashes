@@ -11,11 +11,12 @@ using System.Linq;
 public class AnimationGenerator
 {
     // Nombre de frames par type d'animation
-    private const int FRAMES_IDLE_MOVE   = 3; // frames 1-3 du spritesheet Idle
-    private const int FRAMES_ATTACK      = 3; // frames 1-3 du spritesheet Attack
-    private const int FRAMES_WALK        = 5; // frames 0-4
-    private const int FRAMES_HIT         = 4; // frames 0-3
-    private const int FRAMES_DEATH       = 5; // frames 0-4
+    private const int FRAMES_IDLE_MOVE = 13; // frames 1-13 du spritesheet Idle
+    private const int FRAMES_ATTACK    = 5;  // frames 1-5 du spritesheet Attack
+    private const int FRAMES_CAST      = 5;  // frames 1-5 du spritesheet Cast
+    private const int FRAMES_WALK      = 13; // frames 0-12
+    private const int FRAMES_HIT       = 5;  // frames 0-4
+    private const int FRAMES_DEATH     = 13; // frames 0-12
 
     // Directions supportées pour les animations directionnelles
     private static readonly string[] DIRECTIONS = { "N", "NW", "W", "SW", "S" };
@@ -83,52 +84,93 @@ public class AnimationGenerator
     // Génère tous les clips pour une unité
     private static void GenerateAllClips(string spritesPath, string animationsPath, string unitName)
     {
-        CreateIdleAndIdleMoveClips(spritesPath, animationsPath, unitName);
+        bool isRootborn = unitName == "Rootborn";
+
+        CreateIdleAndIdleMoveClips(spritesPath, animationsPath, unitName, isRootborn);
 
         foreach (string dir in DIRECTIONS)
             CreateAttackClips(spritesPath, animationsPath, unitName, dir);
+
+        foreach (string dir in DIRECTIONS)
+            CreateCastClips(spritesPath, animationsPath, unitName, dir);
 
         foreach (string dir in DIRECTIONS)
             CreateWalkClip(spritesPath, animationsPath, unitName, dir);
 
         CreateHitClip(spritesPath, animationsPath, unitName, "NW");
         CreateHitClip(spritesPath, animationsPath, unitName, "SW");
+
+        // Clips Hit_Idle uniquement pour le Rootborn (direction S uniquement)
+        if (isRootborn)
+        {
+            CreateHitIdleClip(spritesPath, animationsPath, unitName);
+        }
+
         CreateDeathClip(spritesPath, animationsPath, unitName);
     }
 
-    // Crée les clips Idle (frame 0) et IdleMove (frames 1-3) depuis _Idle_SW_
-    private static void CreateIdleAndIdleMoveClips(string spritesPath, string animationsPath, string unitName)
+    // Crée les clips Idle et IdleMove depuis _Idle_SW_
+    // Rootborn : Idle prend toutes les frames (loop), pas d'IdleMove
+    // Autres unités : Idle = frame 0 dupliquée à 4s, IdleMove = frames 1-13
+    private static void CreateIdleAndIdleMoveClips(string spritesPath, string animationsPath, string unitName, bool isRootborn)
     {
-        string sheetAssetPath = $"{spritesPath}/{unitName}_Idle_SW.png";
+        // Rootborn utilise _Idle_S, les autres unités utilisent _Idle_SW
+        string idleSheetSuffix = isRootborn ? "S" : "SW";
+        string sheetAssetPath = $"{spritesPath}/{unitName}_Idle_{idleSheetSuffix}.png";
         Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
-        if (sprites == null || sprites.Length < 4) return;
+        if (sprites == null || sprites.Length < 1) return;
 
-        CreateClip(animationsPath, "Idle", new[] { sprites[0] }, DEFAULT_FPS, loop: false);
-        CreateClip(animationsPath, "IdleMove", sprites.Skip(1).Take(FRAMES_IDLE_MOVE).ToArray(), DEFAULT_FPS, loop: false);
+        if (isRootborn)
+        {
+            // Toutes les frames en loop, sans duplication
+            Sprite[] idleFrames = sprites.Take(FRAMES_IDLE_MOVE).ToArray();
+            CreateClip(animationsPath, "Idle",          idleFrames,                    DEFAULT_FPS, loop: false, forceAllFrames: true);
+            CreateClip(animationsPath, "Idle_Reversed", idleFrames.Reverse().ToArray(), DEFAULT_FPS, loop: false, forceAllFrames: true);
+        }
+        else
+        {
+            if (sprites.Length < 2) return;
+            CreateClip(animationsPath, "Idle", new[] { sprites[0] }, DEFAULT_FPS, loop: false);
+            CreateClip(animationsPath, "IdleMove", sprites.Skip(1).Take(FRAMES_IDLE_MOVE).ToArray(), DEFAULT_FPS, loop: false);
+        }
     }
 
-    // Crée les clips AttackIdle_DIR (frame 0) et Attack_DIR (frames 1-3)
+    // Crée les clips AttackIdle_DIR (frame 0) et Attack_DIR (frames 1-9)
     private static void CreateAttackClips(string spritesPath, string animationsPath, string unitName, string direction)
     {
         string sheetAssetPath = $"{spritesPath}/{unitName}_Attack_{direction}.png";
         Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
-        if (sprites == null || sprites.Length < 4) return;
+        if (sprites == null || sprites.Length < 2) return;
 
         CreateClip(animationsPath, $"AttackIdle_{direction}", new[] { sprites[0] }, DEFAULT_FPS, loop: false);
         CreateClip(animationsPath, $"Attack_{direction}", sprites.Skip(1).Take(FRAMES_ATTACK).ToArray(), DEFAULT_FPS, loop: false);
     }
 
-    // Crée le clip Walk_DIR (frames 0-4) en loop
+    // Crée le clip Cast_DIR — ignoré silencieusement si le spritesheet est absent (unité sans Cast)
+    private static void CreateCastClips(string spritesPath, string animationsPath, string unitName, string direction)
+    {
+        string sheetAssetPath = $"{spritesPath}/{unitName}_Cast_{direction}.png";
+        if (AssetDatabase.LoadAssetAtPath<Texture2D>(sheetAssetPath) == null)
+            return; // Pas de Cast pour cette unité, on passe silencieusement
+
+        Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
+        if (sprites == null || sprites.Length < 1) return;
+
+        // Pas de CastIdle : on réutilise AttackIdle_DIR dans l'Animator
+        CreateClip(animationsPath, $"Cast_{direction}", sprites.Take(FRAMES_CAST).ToArray(), DEFAULT_FPS, loop: false);
+    }
+
+    // Crée le clip Walk_DIR (13 frames) en loop
     private static void CreateWalkClip(string spritesPath, string animationsPath, string unitName, string direction)
     {
         string sheetAssetPath = $"{spritesPath}/{unitName}_Walk_{direction}.png";
         Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
         if (sprites == null) return;
 
-        CreateClip(animationsPath, $"Walk_{direction}", sprites.Take(FRAMES_WALK).ToArray(), DEFAULT_FPS, loop: true);
+        CreateClip(animationsPath, $"Walk_{direction}", sprites.Take(FRAMES_WALK - 1).ToArray(), DEFAULT_FPS, loop: true);
     }
 
-    // Crée le clip Hit_DIR (frames 0-3), pas de loop
+    // Crée le clip Hit_DIR (5 frames), pas de loop
     private static void CreateHitClip(string spritesPath, string animationsPath, string unitName, string direction)
     {
         string sheetAssetPath = $"{spritesPath}/{unitName}_Hit_{direction}.png";
@@ -138,7 +180,17 @@ public class AnimationGenerator
         CreateClip(animationsPath, $"Hit_{direction}", sprites.Take(FRAMES_HIT).ToArray(), DEFAULT_FPS, loop: false);
     }
 
-    // Crée le clip Death (frames 0-4) depuis _Death_S_, pas de loop
+    // Crée le clip Hit_Idle (Rootborn uniquement) depuis le spritesheet Hit_Idle_S
+    private static void CreateHitIdleClip(string spritesPath, string animationsPath, string unitName)
+    {
+        string sheetAssetPath = $"{spritesPath}/{unitName}_Hit_Idle_S.png";
+        Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
+        if (sprites == null) return;
+
+        CreateClip(animationsPath, "Hit_Idle", sprites.Take(FRAMES_HIT).ToArray(), DEFAULT_FPS, loop: false);
+    }
+
+    // Crée le clip Death (13 frames) depuis _Death_S_, pas de loop
     private static void CreateDeathClip(string spritesPath, string animationsPath, string unitName)
     {
         string sheetAssetPath = $"{spritesPath}/{unitName}_Death_S.png";
@@ -149,7 +201,6 @@ public class AnimationGenerator
     }
 
     // Charge et trie les sprites d'un spritesheet par index numérique
-    // Retourne null si le fichier est introuvable ou vide
     private static Sprite[] LoadSpritesFromSheet(string sheetAssetPath)
     {
         if (AssetDatabase.LoadAssetAtPath<Texture2D>(sheetAssetPath) == null)
@@ -178,23 +229,19 @@ public class AnimationGenerator
     }
 
     // Crée ou met à jour un AnimationClip à partir d'un tableau de sprites
-    // Les frames sont placées à 0.00, 0.01, 0.02... (temps fixe par frame)
-    // Cas spécial "Idle" : frame 0 à t=0.00 et dupliquée à t=4.00
-    private static AnimationClip CreateClip(string animationsPath, string clipName, Sprite[] sprites, float fps, bool loop)
+    // forceAllFrames : si true, ignore le cas spécial Idle (pas de duplication à 4s)
+    private static AnimationClip CreateClip(string animationsPath, string clipName, Sprite[] sprites, float fps, bool loop, bool forceAllFrames = false)
     {
-        if (sprites == null || sprites.Length == 0)
-        {
-            Debug.LogWarning($"⚠️ AnimationGenerator: Pas de sprites pour le clip {clipName}");
-            return null;
-        }
-
         string clipPath = $"{animationsPath}/{clipName}.anim";
         AnimationClip clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
+
         if (clip == null)
         {
             clip = new AnimationClip();
             AssetDatabase.CreateAsset(clip, clipPath);
         }
+
+        clip.frameRate = fps;
 
         AnimationClipSettings settings = AnimationUtility.GetAnimationClipSettings(clip);
         settings.loopTime = loop;
@@ -209,7 +256,7 @@ public class AnimationGenerator
 
         ObjectReferenceKeyframe[] keyframes;
 
-        if (clipName == "Idle")
+        if (clipName == "Idle" && !forceAllFrames)
         {
             // Cas spécial Idle : frame 0 à t=0.00 et dupliquée à t=4.00
             keyframes = new ObjectReferenceKeyframe[2];
@@ -218,7 +265,6 @@ public class AnimationGenerator
         }
         else
         {
-            // Frames à 12fps, enchaînées sans gap
             keyframes = new ObjectReferenceKeyframe[sprites.Length];
             for (int i = 0; i < sprites.Length; i++)
             {
@@ -238,7 +284,6 @@ public class AnimationGenerator
     }
 
     // Génère ou met à jour l'Animator Controller pour l'unité
-    // Si l'Animator existe déjà → met à jour les clips uniquement
     private static void GenerateAnimatorController(string animationsPath, string unitName)
     {
         string controllerPath = $"{animationsPath}/{unitName}Animator.controller";
@@ -256,10 +301,15 @@ public class AnimationGenerator
         controller = UnityEditor.Animations.AnimatorController.CreateAnimatorControllerAtPath(controllerPath);
         Debug.Log($"🎮 AnimationGenerator: Animator Controller créé : {unitName}Animator");
 
+        bool isRootborn = unitName == "Rootborn";
+
         // Paramètres
         controller.AddParameter("Hit", AnimatorControllerParameterType.Trigger);
         controller.AddParameter("IsHitNW", AnimatorControllerParameterType.Bool);
-        controller.AddParameter("IdleMove", AnimatorControllerParameterType.Trigger);
+        if (!isRootborn)
+            controller.AddParameter("IdleMove", AnimatorControllerParameterType.Trigger);
+        if (isRootborn)
+            controller.AddParameter("IsHitIdle", AnimatorControllerParameterType.Bool);
 
         AnimatorStateMachine stateMachine = controller.layers[0].stateMachine;
 
@@ -268,15 +318,26 @@ public class AnimationGenerator
         stateIdle.motion = LoadClip(animationsPath, "Idle");
         stateMachine.defaultState = stateIdle;
 
-        AnimatorState stateIdleMove = stateMachine.AddState("IdleMove");
-        stateIdleMove.motion = LoadClip(animationsPath, "IdleMove");
-        // stateIdleMove.AddStateMachineBehaviour<IdleMoveExitBehaviour>(); // à réactiver une fois IdleMoveExitBehaviour compilé
+        AnimatorState stateIdleMove = null;
+        if (!isRootborn)
+        {
+            stateIdleMove = stateMachine.AddState("IdleMove");
+            stateIdleMove.motion = LoadClip(animationsPath, "IdleMove");
+        }
 
         AnimatorState stateHitNW = stateMachine.AddState("Hit_NW");
         stateHitNW.motion = LoadClip(animationsPath, "Hit_NW");
 
         AnimatorState stateHitSW = stateMachine.AddState("Hit_SW");
         stateHitSW.motion = LoadClip(animationsPath, "Hit_SW");
+
+        // État Hit_Idle uniquement pour le Rootborn
+        AnimatorState stateHitIdleS = null;
+        if (isRootborn)
+        {
+            stateHitIdleS = stateMachine.AddState("Hit_Idle");
+            stateHitIdleS.motion = LoadClip(animationsPath, "Hit_Idle");
+        }
 
         AnimatorState stateDeath = stateMachine.AddState("Death");
         stateDeath.motion = LoadClip(animationsPath, "Death");
@@ -296,17 +357,43 @@ public class AnimationGenerator
 
             // Transition Attack → AttackIdle (exit time)
             AddExitTimeTransition(stateAttack, stateAttackIdle, exitTime: 1f);
+
+            // Cast uniquement si le clip existe
+            AnimationClip castClip = LoadClipSilent(animationsPath, $"Cast_{dir}");
+            if (castClip != null)
+            {
+                AnimatorState stateCast = stateMachine.AddState($"Cast_{dir}");
+                stateCast.motion = castClip;
+                stateCast.tag    = "Cast";
+                AddExitTimeTransition(stateCast, stateAttackIdle, exitTime: 1f);
+            }
         }
 
-        // Transitions Idle ↔ IdleMove
-        AddExitTimeTransition(stateIdle, stateIdleMove, exitTime: 1f);
-        AddExitTimeTransition(stateIdleMove, stateIdle, exitTime: 1f);
+        // Transitions Idle ↔ IdleMove (non-Rootborn uniquement)
+        if (!isRootborn && stateIdleMove != null)
+        {
+            AddExitTimeTransition(stateIdle, stateIdleMove, exitTime: 1f);
+            AddExitTimeTransition(stateIdleMove, stateIdle, exitTime: 1f);
+        }
 
-        // Hit_NW → Idle (exit time)
+        // Hit → Idle (exit time)
         AddExitTimeTransition(stateHitNW, stateIdle, exitTime: 1f);
-
-        // Hit_SW → Idle (exit time)
         AddExitTimeTransition(stateHitSW, stateIdle, exitTime: 1f);
+
+        // Transitions Hit_Idle (Rootborn uniquement)
+        if (isRootborn && stateHitIdleS != null)
+        {
+            // Hit_Idle → Idle : Exit Time Yes, exitTime=0, offset=1
+            AddExitTimeTransitionWithOffset(stateHitIdleS, stateIdle, exitTime: 0f, offset: 1f);
+
+            // Idle → Hit_Idle : Hit + IsHitIdle=true
+            AnimatorStateTransition transIdleToHitIdleS = stateIdle.AddTransition(stateHitIdleS);
+            transIdleToHitIdleS.hasExitTime = true;
+            transIdleToHitIdleS.exitTime    = 0f;
+            transIdleToHitIdleS.duration    = 0f;
+            transIdleToHitIdleS.AddCondition(AnimatorConditionMode.If, 0, "Hit");
+            transIdleToHitIdleS.AddCondition(AnimatorConditionMode.If, 0, "IsHitIdle");
+        }
 
         // Any State → Hit_NW (Hit + IsHitNW = true)
         AnimatorStateTransition transHitNW = stateMachine.AddAnyStateTransition(stateHitNW);
@@ -360,7 +447,18 @@ public class AnimationGenerator
         transition.hasFixedDuration = true;
     }
 
-    // Charge un AnimationClip depuis le dossier Animations/
+    // Crée une transition Exit Time avec Transition Offset (pour Hit_Idle → Idle)
+    private static void AddExitTimeTransitionWithOffset(AnimatorState from, AnimatorState to, float exitTime, float offset)
+    {
+        AnimatorStateTransition transition = from.AddTransition(to);
+        transition.hasExitTime      = true;
+        transition.exitTime         = exitTime;
+        transition.duration         = 0f;
+        transition.hasFixedDuration = true;
+        transition.offset           = offset;
+    }
+
+    // Charge un AnimationClip depuis le dossier Animations/ (avec warning si absent)
     private static AnimationClip LoadClip(string animationsPath, string clipName)
     {
         string clipPath = $"{animationsPath}/{clipName}.anim";
@@ -370,6 +468,13 @@ public class AnimationGenerator
             Debug.LogWarning($"⚠️ AnimationGenerator: Clip introuvable : {clipPath}");
 
         return clip;
+    }
+
+    // Charge un AnimationClip silencieusement (pas de warning si absent — ex: Cast optionnel)
+    private static AnimationClip LoadClipSilent(string animationsPath, string clipName)
+    {
+        string clipPath = $"{animationsPath}/{clipName}.anim";
+        return AssetDatabase.LoadAssetAtPath<AnimationClip>(clipPath);
     }
 
     // Retourne le chemin Assets/ du dossier sélectionné dans le panneau Project

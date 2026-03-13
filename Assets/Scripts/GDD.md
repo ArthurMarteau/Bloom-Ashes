@@ -23,13 +23,45 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Ability Auto-Cast**: All active abilities can be toggled to auto-cast. When enabled, the unit uses the ability automatically when conditions are met (target in range, enough Watersap).
 - **Sacrifice**: Any unit can be sacrificed (active ability) to grant 20 Watersap. Strategic use: sacrifice a dying unit before death to recover resources.
 - Units size 1x1. Building 1x1 or more.
-- Pas de virgule pour les stats. (Except Path Ground et Move Speed)
+- Pas de virgule pour les stats. (Except Path Ground)
 
 ## Map
 
 - **Target size**: 80x80 tiles
 - **Biomes**: Meadows, Gardens, Dark Forest, Caves, Scorched Lands, Volcano, Desert, Jungle, Beach, Ocean Palace
 - One game object per tile
+
+## Foundations & Buildings
+
+### Foundations
+Foundations are strategic points scattered across the map, used to construct faction buildings.
+
+- **Count**: 3 foundations per player (scales with player count: 6 players = 18 foundations)
+- **Starting foundation**: Always placed near the player's Nexus
+- **Remaining foundations**: Scattered across the map — neutral and contestable
+- Foundations and Watersap sources are the primary **strategic objectives** on the map
+
+### Building Construction
+A foundation consists of **4 tiles**. To build:
+1. Place 1 idle Rootborn on each of the 4 foundation tiles
+2. Once all 4 are in position, a **faction selection UI** appears
+3. Choose a faction → the 4 Rootborn sacrifice themselves and the building is constructed
+
+### Unit Production
+Once a building exists:
+1. Move idle Rootborn to any walkable tile adjacent to the building
+2. A **unit selection UI** appears on the Rootborn
+3. Choose a unit type → Rootborn becomes a seed, then hatches into the chosen unit after build time
+
+### Tier & Research System
+- **T1 unit** is available immediately when the building is constructed
+- **T2, T3, T4 units** must be researched via the building UI (increasing Watersap cost)
+- Research is per-building and persistent for the rest of the game
+
+### Strategic Implications
+- A player can construct **different faction buildings** across their foundations
+- Controlling more foundations = access to more factions = more unit diversity
+- **Inter-faction synergies** open up when a player controls multiple buildings of different factions (to be detailed)
 
 ## Technical Implementation (Game Design)
 
@@ -54,7 +86,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 3         |
 | Attack Speed  | 2         |
 | Attack Range  | 1 (melee) |
-| Move Speed    | 1         |
+| Move Speed    | 2         |
 | Defense       | 0         |
 | Unit Type     | Ground    |
 
@@ -78,11 +110,7 @@ The base unit shared by all factions, created at the Nexus.
 | Defense | Invulnerable |
 | Size    | 1x1          |
 
-**Function**: 
-- Spawns Rootborn units. Reverse battle unit in Rootborn for 20 Watersap. 
-- Unique state : Iswalkable by every units ans IsUnvulnerable.
-- Unique ground : +2 DEF and +2 ATT. 1 DMG/sec on ennemies.
-
+**Function**: Spawns Rootborn units. Reverse battle unit in Rootborn for 20 Watersap.
 
 ---
 
@@ -98,7 +126,7 @@ The base unit shared by all factions, created at the Nexus.
 
 #### Units
 
-**Luminescent Mycena** — Melee / Support
+**Lionsmane Priest** — Melee / Support (T1)
 
 **Description**:
 
@@ -110,7 +138,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 1      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -124,20 +152,20 @@ The base unit shared by all factions, created at the Nexus.
 | Regenerating Spores | Active | 5    | 20       | 1x1         | 5hp  | Once        | Heals an ally for 5 HP. |
 
 
-**Puffball Scout** — Ranged DPS / Control / Scout
+**Deathcap Assassin** — CAC DPS / Control / Scout (T2)
 
 **Description**:
 
-*A lightweight shroom unit that excels at reconnaissance and area denial. It lays paralyzing traps to control the battlefield from a distance. Can hide in bushes.*
+*A swift and deadly mushroom that strikes from the shadows. It lays paralyzing traps to control the battlefield and can vanish into bushes, waiting for the perfect moment to strike.*
 
 | Stat          | Value  |
 | ------------- | ------ |
 | HP            | 20     |
-| Attack Damage | 3      |
+| Attack Damage | 5      |
 | Attack Speed  | 2      |
-| Attack Range  | 3      |
-| Move Speed    | 1      |
-| Defense       | 1      |
+| Attack Range  | 1      |
+| Move Speed    | 1.2    |
+| Defense       | 3      |
 | Unit Type     | Ground |
 
 | Upgrade  | Cost | Build Time |
@@ -151,7 +179,7 @@ The base unit shared by all factions, created at the Nexus.
 | Hide          | Passive | 0    | 0        | 1x1         | 0      | 2s before effect | Can hide in bushes                                                     |
 
 
-**Bolete Golem** — Tank
+**Bolete Golem** — Tank (T3)
 
 **Description**:
 
@@ -163,7 +191,7 @@ The base unit shared by all factions, created at the Nexus.
 | Attack Damage | 5      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 0.8    |
+| Move Speed    | 1      |
 | Defense       | 5      |
 | Unit Type     | Ground |
 
@@ -175,19 +203,19 @@ The base unit shared by all factions, created at the Nexus.
 No active ability.
 
 
-**Flying Death Cap** — Ranged DPS / Poison / Flying
+**Flying Enoki** — Ranged DPS / Poison / Flying (T4)
 
 **Description**:
 
-*A toxic airborne mushroom that spews venomous clouds from above. Its spore mist is devastating against paralyzed targets, making it a deadly combo partner for the Puffball Scout.*
+*A toxic airborne mushroom that spews venomous clouds from above. Its spore mist is devastating against paralyzed targets, making it a deadly combo partner for the Deathcap Assassin.*
 
 | Stat          | Value  |
 | ------------- | ------ |
 | HP            | 30     |
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
-| Attack Range  | 1      |
-| Move Speed    | 1      |
+| Attack Range  | 2      |
+| Move Speed    | 2      |
 | Defense       | 2      |
 | Unit Type     | Flying |
 
@@ -225,7 +253,7 @@ No active ability.
 | Attack Damage | 5      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -249,7 +277,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 1.2    |
+| Move Speed    | 2      |
 | Defense       | 1      |
 | Unit Type     | Flying |
 
@@ -276,7 +304,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 2      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -302,7 +330,7 @@ No active ability.
 | Attack Damage | 1      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -339,7 +367,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 0.8    |
+| Move Speed    | 1      |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -365,7 +393,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -391,7 +419,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 1.2    |
+| Move Speed    | 3      |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -417,7 +445,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 0.8    |
+| Move Speed    | 1      |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -454,7 +482,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 1.2    |
+| Move Speed    | 3      |
 | Defense       | 1      |
 | Unit Type     | Ground |
 
@@ -480,7 +508,7 @@ No active ability.
 | Attack Damage | 5      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 1.2    |
+| Move Speed    | 3      |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -504,7 +532,7 @@ No active ability.
 | Attack Damage | 8      |
 | Attack Speed  | 1      |
 | Attack Range  | 1      |
-| Move Speed    | 1.2    |
+| Move Speed    | 3      |
 | Defense       | 0      |
 | Unit Type     | Flying |
 
@@ -531,7 +559,7 @@ No active ability.
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -568,7 +596,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 3      |
 | Unit Type     | Ground |
 
@@ -594,7 +622,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 3      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 0      |
 | Unit Type     | Ground |
 
@@ -620,7 +648,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 1      |
+| Move Speed    | 2      |
 | Defense       | 2      |
 | Unit Type     | Ground |
 
@@ -646,7 +674,7 @@ No active ability.
 | Attack Damage | 3      |
 | Attack Speed  | 2      |
 | Attack Range  | 1      |
-| Move Speed    | 0.8    |
+| Move Speed    | 1      |
 | Defense       | 4      |
 | Unit Type     | Ground |
 
@@ -701,23 +729,22 @@ Aggressive creatures not affiliated with any faction. One per biome.
 
 ### Terrain Types
 
-| Terrain         | Path Cost  | Move Speed Mod | Attribut Mod | Notes                                         |
-| --------------- | ---------- | -------------- | ------------ | --------------------------------------------- |
-| Grass           | 1.0        | 0              | 0            | Default terrain                               |
-| Dirt            | 1.0        | 0              | 0            | Default terrain                               |
-| Path            | 0.5        | +1             | 0            | A* prefers paths for faster routes            |
-| Rocky           | 2.0        | -1 (min 1)     | +2 DEF       | Slows but protects                            |
-| Swamp           | 1.5        | -1 (min 1)     | 0            | Slow, potential poison for non-Abyss          |
-| Brambles        | 1.5        | -1 (min 1)     | +1 DEF       | Deals 1 dmg/cell to non-Charmers              |
-| Sand            | 1.5        | -1 (min 1)     | 0            | Desert terrain                                |
-| Scorched        | 1.0        | 0              | 0            | Deals 1 dmg/sec to non-Scorched               |
-| Lava            | 1.0        | 0              | 0            | Kills instantly to non-Scorched               |
-| Water           | Impassable | —              | —            | Only aquatic/flying units                     |
-| Mountain        | Impassable | —              | —            | Only flying units                             |
-| Ravine          | Impassable | —              | —            | Only flying units. Kills instantly.           |
-| Bush            | 1.0        | 0              | +1 DEF       | Provides camouflage for Puffball Scout        |
-| Watersap Source | 1.0        | 0              | +1 DEF       | Doubles Watersap collection for the Rootborn. |
-| Nexus           | 1.0        | 0              | +2 ATT       | Deals 1 dmg/sec to non-Allies                 |
+| Terrain         | Path Cost  | Move Speed Mod | Defense Mod | Notes                                         |
+| --------------- | ---------- | -------------- | ----------- | --------------------------------------------- |
+| Grass           | 1.0        | 0              | 0           | Default terrain                               |
+| Dirt            | 1.0        | 0              | 0           | Default terrain                               |
+| Path            | 0.5        | +1             | 0           | A* prefers paths for faster routes            |
+| Rocky           | 2.0        | -1 (min 1)     | +2          | Slows but protects                            |
+| Swamp           | 1.5        | -1 (min 1)     | 0           | Slow, potential poison for non-Abyss          |
+| Brambles        | 1.5        | -1 (min 1)     | +1          | Deals 1 dmg/cell to non-Charmers             |
+| Sand            | 1.5        | -1 (min 1)     | 0           | Desert terrain                                |
+| Scorched        | 1.0        | 0              | 0           | Deals 1 dmg/turn to non-Scorched             |
+| Lava            | 1.0        | 0              | 0           | Kills instantly to non-Scorched               |
+| Water           | Impassable | —              | —           | Only aquatic/flying units                     |
+| Mountain        | Impassable | —              | —           | Only flying units                             |
+| Ravine          | Impassable | —              | —           | Only flying units. Kills instantly.           |
+| Bush            | 1.0        | 0              | +1          | Provides camouflage for Puffball Scout        |
+| Watersap Source | 1.0        | 0              | +1          | Doubles Watersap collection for the Rootborn. |
 
 ### Faction-Terrain Interactions
 

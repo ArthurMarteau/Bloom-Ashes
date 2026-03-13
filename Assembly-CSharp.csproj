@@ -48,11 +48,11 @@
   <ItemGroup>
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
-    <Compile Include="Assets\Scripts\Components\Units\HealthBar.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
     <Compile Include="Assets\Scripts\Components\Units\IdleMoveExitBehaviour.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
+    <Compile Include="Assets\Scripts\Components\Visual\HighlightTarget.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
@@ -63,6 +63,7 @@
     <Compile Include="Assets\Scripts\Systems\Combat\CombatSystem.cs" />
     <Compile Include="Assets\Scripts\Data\Buildings\BuildingStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\RangeOffsets.cs" />
+    <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
@@ -78,7 +79,9 @@
     <Compile Include="Assets\Scripts\Systems\Grid\GridSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\IDamageable.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\SelectionManager.cs" />
-    <None Include="Assets\Shader\TeamColorShader.shader" />
+    <Compile Include="Assets\Scripts\Rendering\OutlineRendererFeature.cs" />
+    <None Include="Assets\Shaders\TeamColorShader.shader" />
+    <None Include="Assets\Shaders\SpriteOutline.shader" />
     <None Include="Packages\com.merry-yellow.code-assist\package.json" />
     <Reference Include="UnityEngine">
       <HintPath>D:\Logiciel\UnityHub\6000.2.14f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

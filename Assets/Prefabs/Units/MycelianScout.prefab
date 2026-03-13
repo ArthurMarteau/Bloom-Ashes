@@ -18,6 +18,7 @@ GameObject:
   - component: {fileID: 2182944145673804094}
   - component: {fileID: 7194345623951871163}
   - component: {fileID: 1046734557726452047}
+  - component: {fileID: -4469926542863344671}
   m_Layer: 9
   m_Name: MycelianScout
   m_TagString: GroundUnit
@@ -260,3 +261,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AnimatorController
   debugAnimations: 1
+--- !u!114 &-4469926542863344671
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 900179496330318939}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5a224533c4181d40ab61522109f7444, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::HighlightTarget
