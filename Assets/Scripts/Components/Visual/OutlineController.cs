@@ -47,13 +47,13 @@ public class OutlineController : MonoBehaviour
         currentTarget?.ShowOutline(GetHealthColor(currentTarget));
     }
 
-    // Calcule la couleur selon le ratio HP (blanc si pas de stats)
+    // Calcule la couleur selon le ratio HP — fonctionne pour unités et bâtiments via IDamageable
     private Color GetHealthColor(HighlightTarget target)
     {
-        UnitStatsComponent stats = target.GetComponent<UnitStatsComponent>();
-        if (stats == null) return Color.white;
+        IDamageable damageable = target.GetComponent<IDamageable>();
+        if (damageable == null) return Color.white;
 
-        float ratio = stats.GetHealthPercentage();
+        float ratio = damageable.GetCurrentHP() / (float)damageable.GetMaxHP();
         if (ratio > 0.75f) return ColorHealthFull;
         if (ratio > 0.50f) return ColorHealthMid;
         if (ratio > 0.25f) return ColorHealthLow;

@@ -27,12 +27,7 @@ public class PrefabGenerator
 
         if (!confirmed) return;
 
-        // Vérifie que le tag et le layer existent
-        if (!TagExists("GroundUnit"))
-        {
-            EditorUtility.DisplayDialog("Erreur", "Le tag \"GroundUnit\" n'existe pas. Ajoutez-le dans Edit > Project Settings > Tags and Layers.", "OK");
-            return;
-        }
+        // Vérifie que le layer existe
         if (!LayerExists("Units"))
         {
             EditorUtility.DisplayDialog("Erreur", "Le layer \"Units\" n'existe pas. Ajoutez-le dans Edit > Project Settings > Tags and Layers.", "OK");
@@ -80,8 +75,7 @@ public class PrefabGenerator
         // Crée le GameObject
         GameObject go = new GameObject(unitName);
 
-        // Tag et Layer
-        go.tag = "GroundUnit";
+        // Layer
         go.layer = LayerMask.NameToLayer("Units");
 
         // SpriteRenderer

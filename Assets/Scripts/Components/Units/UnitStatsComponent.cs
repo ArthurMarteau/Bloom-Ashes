@@ -321,6 +321,12 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         return baseStats.isRootborn;
     }
 
+    // Retourne le ScriptableObject de stats (utilisé par UnitTypeHelper)
+    public UnitStatsData GetBaseStats()
+    {
+        return baseStats;
+    }
+
     // === MÉTHODES DE DEBUG ===
 
     // Affiche les stats actuelles dans la console

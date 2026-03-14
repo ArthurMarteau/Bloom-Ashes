@@ -49,6 +49,7 @@
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
+    <Compile Include="Assets\Scripts\Shared\Enums\UnitMovementType.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
     <Compile Include="Assets\Scripts\Components\Units\IdleMoveExitBehaviour.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />

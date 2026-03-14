@@ -224,6 +224,10 @@ public class AttackController : MonoBehaviour
             // Ignore soi-même (cas défensif)
             if (enemy == unitGameObject) continue;
 
+            // Ignore les cibles invulnérables
+            IDamageable damageable = enemy.GetComponent<IDamageable>();
+            if (damageable != null && damageable.IsInvulnerable()) continue;
+
             // Trouve le plus proche par distance Chebyshev
             Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(enemy.transform.position);
             int distance = Mathf.Max(Mathf.Abs(myPosition.x - enemyPosition.x),
@@ -740,7 +744,7 @@ public class AttackController : MonoBehaviour
         else if (attackRange <= 1)
         {
             // Attaque mêlée : inflige les dégâts directement via IDamageable
-            if (targetDamageable != null && !targetDamageable.IsDead() && IsTargetInRange())
+            if (targetDamageable != null && !targetDamageable.IsDead() && !targetDamageable.IsInvulnerable() && IsTargetInRange())
             {
                 int damage = unitStatsComponent.GetAttackDamage();
                 targetDamageable.TakeDamage(damage, unitGameObject);

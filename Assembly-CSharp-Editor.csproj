@@ -48,8 +48,10 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\GridAutoSnapping.cs" />
     <Compile Include="Assets\Editor\AnimationGenerator.cs" />
+    <Compile Include="Assets\Editor\SpriteSlicer.cs" />
     <Compile Include="Assets\Editor\SpriteRenamer.cs" />
     <Compile Include="Assets\Editor\SpritePivotAdjuster.cs" />
+    <Compile Include="Assets\Editor\BuildingPrefabGenerator.cs" />
     <Compile Include="Assets\Editor\PrefabGenerator.cs" />
     <Reference Include="UnityEngine">
       <HintPath>D:\Logiciel\UnityHub\6000.2.14f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>

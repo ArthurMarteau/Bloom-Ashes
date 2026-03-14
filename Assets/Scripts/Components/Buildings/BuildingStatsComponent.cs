@@ -1,17 +1,16 @@
 using UnityEngine;
 using UnityEngine.Events;
 
-// Composant Unity gérant l'état de santé et l'appartenance d'équipe d'un bâtiment
+// Composant Unity gérant l'état de santé d'un bâtiment
 // Implémente IDamageable pour être ciblable par AttackController
-// Implémente ITeamMember pour être reconnu comme ennemi/allié
-// Valide les interfaces créées en Phase 4.1 et 4.2
-public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
+// L'équipe est gérée par TeamComponent (cohérence avec les unités)
+public class BuildingStatsComponent : MonoBehaviour, IDamageable
 {
     [Header("Stats Data")]
     [SerializeField] private BuildingStatsData baseStats; // ScriptableObject avec stats de base
 
-    [Header("Team")]
-    [SerializeField] private int teamID = 0; // 0 = Neutre, 1-6 = Joueurs
+    // Cache de TeamComponent pour les logs
+    private TeamComponent teamComponent;
 
     [Header("Events")]
     // Initialisation directe pour éviter NullRef lors des AddListener
@@ -37,10 +36,15 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
         }
 
         currentHP = baseStats.maxHP;
+        teamComponent = GetComponent<TeamComponent>();
+
+        if (teamComponent == null)
+            Debug.LogWarning($"⚠️ BuildingStatsComponent {gameObject.name}: TeamComponent manquant — équipe non définie");
 
         if (debugStats)
         {
             string invulnerableStr = baseStats.isInvulnerable ? " | INVULNÉRABLE" : "";
+            int teamID = teamComponent != null ? teamComponent.GetTeamID() : 0;
             Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): HP={currentHP}, DEF={baseStats.defense}{invulnerableStr}, Équipe={teamID}");
         }
 
@@ -152,43 +156,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
         return isDestroyed;
     }
 
-    // === ITeamMember ===
 
-    // Retourne l'ID de l'équipe propriétaire du bâtiment
-    public int GetTeamID()
-    {
-        return teamID;
-    }
-
-    // Vérifie si une entité est ennemie de ce bâtiment
-    public bool IsEnemy(ITeamMember other)
-    {
-        if (other == null)
-            return false;
-
-        // Neutres (teamID = 0) ne sont ennemis avec personne
-        if (teamID == 0 || other.GetTeamID() == 0)
-            return false;
-
-        return teamID != other.GetTeamID();
-    }
-
-    // Vérifie si une entité est alliée de ce bâtiment
-    public bool IsAlly(ITeamMember other)
-    {
-        if (other == null)
-            return false;
-
-        // Un bâtiment est toujours allié avec lui-même
-        if (other == (ITeamMember)this)
-            return true;
-
-        // Neutres ne sont alliés avec personne (sauf eux-mêmes)
-        if (teamID == 0 || other.GetTeamID() == 0)
-            return false;
-
-        return teamID == other.GetTeamID();
-    }
 
     // === Destruction ===
 
@@ -237,15 +205,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
         return baseStats.isInvulnerable;
     }
 
-    // Modifie l'équipe du bâtiment (pour capture future)
-    public void SetTeamID(int newTeamID)
-    {
-        teamID = Mathf.Clamp(newTeamID, 0, 6);
-        if (debugStats)
-        {
-            Debug.Log($"🏳️ BuildingStatsComponent {gameObject.name}: Équipe changée → {teamID}");
-        }
-    }
+
 
     // === Debug ===
 
@@ -264,7 +224,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, ITeamMember
         Debug.Log($"HP: {currentHP}/{baseStats.maxHP} ({GetHealthPercentage() * 100:F1}%)");
         Debug.Log($"Défense: {baseStats.defense}");
         Debug.Log($"Invulnérable: {baseStats.isInvulnerable}");
-        Debug.Log($"Équipe: {teamID}");
+        Debug.Log($"Équipe: {(teamComponent != null ? teamComponent.GetTeamID() : 0)}");
         Debug.Log($"Détruit: {isDestroyed}");
     }
 

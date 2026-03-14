@@ -32,6 +32,9 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("Cocher pour les unités Rootborn (animation IdleReversed)")]
     public bool isRootborn = false;
 
+    [Tooltip("Type de déplacement : Ground, Flying ou Swimming")]
+    public UnitMovementType movementType = UnitMovementType.Ground;
+
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création
     private void OnValidate()

@@ -32,7 +32,7 @@ public class SpritePivotAdjuster
 
         bool confirmed = EditorUtility.DisplayDialog(
             "Ajuster les pivots",
-            $"Ajuster les pivots Attack (frames 4-7) pour \"{unitName}\" ?",
+            $"Ajuster les pivots Attack (frames 1-4) pour \"{unitName}\" ?",
             "Ajuster", "Annuler"
         );
 
@@ -65,12 +65,12 @@ public class SpritePivotAdjuster
 
             for (int i = 0; i < spriteRects.Length; i++)
             {
-                // Cible uniquement les frames _4 à _7
+                // Cible uniquement les frames _1 à _4
                 string spriteName = spriteRects[i].name;
                 string[] parts = spriteName.Split('_');
                 string suffix = parts.Length > 0 ? parts[parts.Length - 1] : "";
 
-                if (suffix == "4" || suffix == "5" || suffix == "6" || suffix == "7")
+                if (suffix == "1" || suffix == "2" || suffix == "3" || suffix == "4")
                 {
                     spriteRects[i].pivot = pivot;
                     spriteRects[i].alignment = SpriteAlignment.Custom;

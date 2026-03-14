@@ -97,6 +97,10 @@ public class AnimationGenerator
         foreach (string dir in DIRECTIONS)
             CreateWalkClip(spritesPath, animationsPath, unitName, dir);
 
+        // Clip Idle_Transform uniquement pour le Rootborn (source _S, nom sans suffixe)
+        if (isRootborn)
+            CreateIdleTransformClip(spritesPath, animationsPath, unitName);
+
         CreateHitClip(spritesPath, animationsPath, unitName, "NW");
         CreateHitClip(spritesPath, animationsPath, unitName, "SW");
 
@@ -188,6 +192,16 @@ public class AnimationGenerator
         if (sprites == null) return;
 
         CreateClip(animationsPath, "Hit_Idle", sprites.Take(FRAMES_HIT).ToArray(), DEFAULT_FPS, loop: false);
+    }
+
+    // Crée le clip Idle_Transform (Rootborn uniquement) depuis _Idle_Transform_S — toutes les frames, sans liaison Animator
+    private static void CreateIdleTransformClip(string spritesPath, string animationsPath, string unitName)
+    {
+        string sheetAssetPath = $"{spritesPath}/{unitName}_Idle_Transform_S.png";
+        Sprite[] sprites = LoadSpritesFromSheet(sheetAssetPath);
+        if (sprites == null || sprites.Length < 1) return;
+
+        CreateClip(animationsPath, "Idle_Transform", sprites, DEFAULT_FPS, loop: false, forceAllFrames: true);
     }
 
     // Crée le clip Death (13 frames) depuis _Death_S_, pas de loop
