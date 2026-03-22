@@ -205,6 +205,57 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         return baseStats.isInvulnerable;
     }
 
+    // Retourne la tile d'ancrage (bas-gauche) du bâtiment en coordonnées de grille
+    // Pour un bâtiment 1x1, c'est simplement sa position sur la grille
+    // Pour un bâtiment 2x2, c'est le coin bas-gauche des 4 tiles occupées
+    public Vector2Int GetAnchorGridPosition()
+    {
+        if (GridManager.Instance == null) return Vector2Int.zero;
+        return GridManager.Instance.WorldToGrid(transform.position);
+    }
+
+    // Retourne toutes les tiles occupées par ce bâtiment à partir de la tile d'ancrage
+    // Utilisé par CombatSystem pour calculer les positions d'attaque valides autour du bâtiment
+    // Ex: bâtiment 2x2 ancré en (3,3) → retourne (3,3), (4,3), (3,4), (4,4)
+    public System.Collections.Generic.List<Vector2Int> GetOccupiedTiles()
+    {
+        var tiles = new System.Collections.Generic.List<Vector2Int>();
+
+        if (baseStats == null || GridManager.Instance == null) return tiles;
+
+        Vector2Int anchor = GetAnchorGridPosition();
+
+        for (int x = 0; x < baseStats.sizeX; x++)
+        {
+            for (int y = 0; y < baseStats.sizeY; y++)
+            {
+                tiles.Add(new Vector2Int(anchor.x + x, anchor.y + y));
+            }
+        }
+
+        return tiles;
+    }
+
+    // Retourne la valeur de défense du bâtiment
+    public int GetDefense()
+    {
+        if (baseStats == null) return 0;
+        return baseStats.defense;
+    }
+
+    // Retourne le ScriptableObject de stats de base (pour l'UI)
+    public BuildingStatsData GetBaseStats()
+    {
+        return baseStats;
+    }
+
+    // Retourne la taille du bâtiment en tiles (X, Y)
+    public Vector2Int GetSize()
+    {
+        if (baseStats == null) return Vector2Int.one;
+        return new Vector2Int(baseStats.sizeX, baseStats.sizeY);
+    }
+
 
 
     // === Debug ===

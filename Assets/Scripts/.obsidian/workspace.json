@@ -1,24 +1,24 @@
 {
   "main": {
-    "id": "1d1cb804c3027934",
+    "id": "73ede28a79fb80a2",
     "type": "split",
     "children": [
       {
-        "id": "b20e9f4cce5e0e9c",
+        "id": "d57420b299199f09",
         "type": "tabs",
         "children": [
           {
-            "id": "c99a3dc5ad6ee8ae",
+            "id": "7811e402c7090024",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "PROMPT_INPUT_MIGRATION.md",
+                "file": "NEW_FEATURES_IMPLEMENTATION.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "PROMPT_INPUT_MIGRATION"
+              "title": "NEW_FEATURES_IMPLEMENTATION"
             }
           }
         ]
@@ -27,15 +27,15 @@
     "direction": "vertical"
   },
   "left": {
-    "id": "e81ae32b782a4e1c",
+    "id": "2cc10ead4472cd17",
     "type": "split",
     "children": [
       {
-        "id": "d97ad5d57e123a9a",
+        "id": "d128c9fe6029fcb5",
         "type": "tabs",
         "children": [
           {
-            "id": "7fa049c8d783eae9",
+            "id": "e445e144b56f6f67",
             "type": "leaf",
             "state": {
               "type": "file-explorer",
@@ -48,7 +48,7 @@
             }
           },
           {
-            "id": "7a452c30d3322e6b",
+            "id": "4be146d1a525c50a",
             "type": "leaf",
             "state": {
               "type": "search",
@@ -65,7 +65,7 @@
             }
           },
           {
-            "id": "4180264185c78299",
+            "id": "450d6f0af0bd5928",
             "type": "leaf",
             "state": {
               "type": "bookmarks",
@@ -81,20 +81,20 @@
     "width": 300
   },
   "right": {
-    "id": "c3138edf12d548db",
+    "id": "58cd9a85db069c2c",
     "type": "split",
     "children": [
       {
-        "id": "6105f78ca4126559",
+        "id": "f90e7a78674b7c4a",
         "type": "tabs",
         "children": [
           {
-            "id": "4c6fca05b921c5f9",
+            "id": "201a0dfcbcb99ee0",
             "type": "leaf",
             "state": {
               "type": "backlink",
               "state": {
-                "file": "GDD.md",
+                "file": "NEW_FEATURES_IMPLEMENTATION.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,25 +104,25 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Rétrolien pour GDD"
+              "title": "Rétrolien pour NEW_FEATURES_IMPLEMENTATION"
             }
           },
           {
-            "id": "cd2cc935f108bba9",
+            "id": "07d0353f3230b300",
             "type": "leaf",
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "GDD.md",
+                "file": "NEW_FEATURES_IMPLEMENTATION.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Liens sortants de GDD"
+              "title": "Liens sortants de NEW_FEATURES_IMPLEMENTATION"
             }
           },
           {
-            "id": "8efe64bd1d19c2a9",
+            "id": "fee34eaaf1eac81e",
             "type": "leaf",
             "state": {
               "type": "tag",
@@ -137,7 +137,7 @@
             }
           },
           {
-            "id": "c07ebb8f001f74b5",
+            "id": "30f3dca6cc7268f1",
             "type": "leaf",
             "state": {
               "type": "all-properties",
@@ -151,18 +151,18 @@
             }
           },
           {
-            "id": "f5547f3c555b261a",
+            "id": "02814b91500d7cce",
             "type": "leaf",
             "state": {
               "type": "outline",
               "state": {
-                "file": "GDD.md",
+                "file": "NEW_FEATURES_IMPLEMENTATION.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Plan de GDD"
+              "title": "Plan de NEW_FEATURES_IMPLEMENTATION"
             }
           }
         ]
@@ -183,24 +183,9 @@
       "bases:Créer une nouvelle base": false
     }
   },
-  "active": "c99a3dc5ad6ee8ae",
+  "active": "7811e402c7090024",
   "lastOpenFiles": [
-    "NEW_FEATURES_IMPLEMENTATION.md",
-    "PROMPT_INPUT_MIGRATION.md.meta",
-    "UI_PLAN.md.meta",
-    "PROMPT_INPUT_MIGRATION.md",
-    "UI_PLAN.md",
     "GDD.md",
-    "Shared/Enums.meta",
-    "Shared/Constants.meta",
-    "Shared/Enums/AnimationDirection.cs.meta",
-    "Shared/Constants/AnimationNames.cs.meta",
-    "Shared/Constants/AnimationNames.cs",
-    "Shared/Constants",
-    "Shared/Enums/AnimationDirection.cs",
-    "Shared/Enums",
-    "NEW FEATURES IMPLEMENTATION.md",
-    "REFACTORING_PROMPTS.md",
     "claude.md"
   ]
 }

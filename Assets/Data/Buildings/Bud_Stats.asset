@@ -12,7 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8f2e3b82689d27d4f8086d8fc78a2663, type: 3}
   m_Name: Bud_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
-  buildingName: "B\xE2timent"
-  maxHP: 100
-  defense: 0
+  buildingName: Bud
+  maxHP: 25
+  defense: 3
   isInvulnerable: 0
+  sizeX: 1
+  sizeY: 1

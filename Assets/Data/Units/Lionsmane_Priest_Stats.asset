@@ -18,4 +18,7 @@ MonoBehaviour:
   defense: 2
   attackSpeed: 2
   moveSpeed: 1
+  unitName: Lionsmane Priest
+  portrait: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
   isRootborn: 0
+  movementType: 0

@@ -99,7 +99,8 @@
                 {
                     // // Préserve la luminosité (V) originale → garde les nuances d'ombre/lumière
                     float3 teamHSV = RGBtoHSV(_TeamColor.rgb);
-                    float3 resultHSV = float3(teamHSV.x, teamHSV.y, hsv.z);
+                    float blendedSaturation = hsv.y * teamHSV.y;
+                    float3 resultHSV = float3(teamHSV.x, blendedSaturation, hsv.z);
                     
                     // // Reconvertit HSV en RGB
                     float3 rgb;

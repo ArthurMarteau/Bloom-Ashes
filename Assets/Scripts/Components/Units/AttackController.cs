@@ -497,98 +497,102 @@ public class AttackController : MonoBehaviour
     }
 
     // Vérifie si la cible est à portée d'attaque ET si l'unité est au centre de sa case
-    // Utilise la portée définie dans UnitStatsComponent
-    // Utilise la position de grille actuelle (transform.position converti)
+    // Gère les bâtiments multi-tiles : vérifie la portée par rapport à toutes les tiles occupées
     private bool IsTargetInRange()
     {
         if (unitStatsComponent == null || currentTarget == null)
-        {
             return false;
-        }
 
-        // Utilise uniquement les positions LOGIQUES
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
-
         int attackRange = unitStatsComponent.GetAttackRange();
 
-        // Délègue le calcul de portée à CombatSystem (source unique de vérité)
-        bool inRange = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
-
-        if (debugAttack && inRange)
+        // Vérifie si la cible est un bâtiment multi-tiles
+        BuildingStatsComponent buildingTarget = currentTarget.GetComponent<BuildingStatsComponent>();
+        if (buildingTarget != null)
         {
-            Debug.Log($"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer");
+            bool inRange = CombatSystem.IsInRangeOfOccupiedTiles(myPosition, buildingTarget.GetOccupiedTiles(), attackRange);
+            if (debugAttack && inRange)
+                Debug.Log($"AttackController {gameObject.name}: À portée du bâtiment multi-tiles");
+            return inRange;
         }
 
-        return inRange;
+        // Cible standard (unité 1x1)
+        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        bool inRangeStandard = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
+
+        if (debugAttack && inRangeStandard)
+            Debug.Log($"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer");
+
+        return inRangeStandard;
     }
 
     // Déplace l'unité à portée de la cible
-    // Utilise MovementController pour le déplacement
-    // Utilise la position de grille actuelle pour calculs
+    // Gère les bâtiments multi-tiles : cherche la meilleure position autour de toutes les tiles occupées
     private void MoveToRange()
     {
         if (movementController == null || currentTarget == null)
-        {
             return;
-        }
 
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-
         int attackRange = unitStatsComponent.GetAttackRange();
 
-        // DEBUG: Vérifie la distance actuelle jusqu'à la cible
-        if (debugAttack)
-        {
-            int currentDistance = CombatSystem.CalculateChebyshevDistance(myPosition, targetPosition);
-            Debug.Log($"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}");
-        }
+        Vector2Int bestPosition = Vector2Int.zero;
 
-        // Délègue la sélection de position à CombatSystem (POCO, sans dépendance Unity)
-        // isWalkable injecte les contraintes Unity (bounds + walkability) dans la logique pure
-        Vector2Int bestPosition = CombatSystem.FindBestAttackPosition(
-            targetPosition,
-            myPosition,
-            attackRange,
-            pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
-        );
+        // Vérifie si la cible est un bâtiment multi-tiles
+        BuildingStatsComponent buildingTarget = currentTarget.GetComponent<BuildingStatsComponent>();
+        if (buildingTarget != null)
+        {
+            // Utilise toutes les tiles occupées pour trouver la meilleure position d'attaque
+            bestPosition = CombatSystem.FindBestAttackPositionForOccupiedTiles(
+                buildingTarget.GetOccupiedTiles(),
+                myPosition,
+                attackRange,
+                pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
+            );
+
+            if (debugAttack)
+            {
+                Vector2Int anchor = buildingTarget.GetAnchorGridPosition();
+                Debug.Log($"🔍 MoveToRange (bâtiment): Position {myPosition}, Ancre {anchor}, Taille {buildingTarget.GetSize()}");
+            }
+        }
+        else
+        {
+            // Cible standard (unité 1x1)
+            Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+
+            if (debugAttack)
+            {
+                int currentDistance = CombatSystem.CalculateChebyshevDistance(myPosition, targetPosition);
+                Debug.Log($"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}");
+            }
+
+            bestPosition = CombatSystem.FindBestAttackPosition(
+                targetPosition,
+                myPosition,
+                attackRange,
+                pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
+            );
+        }
 
         if (bestPosition == Vector2Int.zero)
         {
             if (debugAttack)
-            {
                 Debug.LogWarning($"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name}");
-            }
             return;
         }
 
-        // Vérifie qu'on ne demande pas de bouger vers notre position actuelle
         if (bestPosition == myPosition)
         {
             if (debugAttack)
-            {
                 Debug.LogWarning($"⚠️ MoveToRange: bestPosition == myPosition ! Pas de mouvement nécessaire");
-            }
             return;
         }
 
-        if (bestPosition == Vector2Int.zero)
-        {
-            if (debugAttack)
-            {
-                Debug.LogWarning($"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name}");
-            }
-            return;
-        }
-
-        // Envoie l'ordre de mouvement (le MovementController gère le changement de direction)
         movementController.MoveTo(bestPosition);
 
         if (debugAttack)
-        {
-            Debug.Log($"AttackController {gameObject.name}: Déplacement vers {bestPosition} (cible: {targetPosition}, portée: {attackRange})");
-        }
+            Debug.Log($"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})");
     }
 
     // Exécute l'attaque sur la cible

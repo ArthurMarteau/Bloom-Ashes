@@ -30,6 +30,68 @@ public static class CombatSystem
         return Math.Max(1, baseDamage - defense);
     }
 
+    // Trouve la meilleure position d'attaque autour d'un ensemble de tiles occupées (bâtiments multi-tiles)
+    // Collecte toutes les cases adjacentes à n'importe quelle tile occupée, filtre les walkables
+    // Retourne la case accessible la plus proche de currentPos
+    // Retourne Vector2Int.zero si aucune position valide trouvée
+    public static Vector2Int FindBestAttackPositionForOccupiedTiles(
+        System.Collections.Generic.List<Vector2Int> occupiedTiles,
+        Vector2Int currentPos,
+        int range,
+        Func<Vector2Int, bool> isWalkable)
+    {
+        if (isWalkable == null || occupiedTiles == null || occupiedTiles.Count == 0)
+            return Vector2Int.zero;
+
+        Vector2Int bestCell = Vector2Int.zero;
+        int shortestDistance = int.MaxValue;
+
+        // Itère toutes les tiles occupées et collecte leurs cases adjacentes à portée
+        foreach (Vector2Int occupiedTile in occupiedTiles)
+        {
+            Vector2Int[] offsets = RangeOffsets.GetOffsets(range);
+
+            foreach (Vector2Int offset in offsets)
+            {
+                Vector2Int candidate = occupiedTile + offset;
+
+                // Ignore les cases occupées par le bâtiment lui-même
+                if (occupiedTiles.Contains(candidate)) continue;
+
+                // Délègue la vérification d'accessibilité à l'appelant
+                if (!isWalkable(candidate)) continue;
+
+                // Sélectionne la case la plus proche de la position actuelle
+                int distance = CalculateChebyshevDistance(currentPos, candidate);
+                if (distance < shortestDistance)
+                {
+                    shortestDistance = distance;
+                    bestCell = candidate;
+                }
+            }
+        }
+
+        return bestCell;
+    }
+
+    // Vérifie si une position est à portée d'au moins une tile d'un bâtiment multi-tiles
+    // Retourne true si au moins une tile occupée est à portée Chebyshev
+    public static bool IsInRangeOfOccupiedTiles(
+        Vector2Int attackerPos,
+        System.Collections.Generic.List<Vector2Int> occupiedTiles,
+        int range)
+    {
+        if (occupiedTiles == null) return false;
+
+        foreach (Vector2Int tile in occupiedTiles)
+        {
+            if (CalculateChebyshevDistance(attackerPos, tile) <= range)
+                return true;
+        }
+
+        return false;
+    }
+
     // Trouve la meilleure position d'attaque dans la portée de targetPos
     // Itère les offsets de RangeOffsets, filtre via isWalkable, sélectionne la plus proche de currentPos
     // isWalkable : délégué injecté par l'appelant — permet de tester sans Unity

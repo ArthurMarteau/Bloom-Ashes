@@ -43,7 +43,7 @@ Material:
     m_Floats:
     - _EnableExternalAlpha: 0
     - _HueThreshold: 0.1
-    - _SaturationMin: 0.5
+    - _SaturationMin: 0
     - _Threshold: 0.9
     - _ZWrite: 0
     m_Colors:

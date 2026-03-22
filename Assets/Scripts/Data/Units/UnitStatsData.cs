@@ -7,6 +7,14 @@ using UnityEngine;
 [CreateAssetMenu(fileName = "New Unit Stats", menuName = "Bloom & Ashes/Unit Stats Data")]
 public class UnitStatsData : ScriptableObject
 {
+    [Header("Identification")]
+    [Tooltip("Nom affiché dans l'UI (ex: Rootborn, Luminescent Mycena)")]
+    public string unitName = "Unit";
+
+    [Header("Portrait")]
+    [Tooltip("Sprite du portrait affiché dans le panneau de sélection")]
+    public Sprite portrait = null;
+
     [Header("Health")]
     [Tooltip("Points de vie maximum de l'unité")]
     public int maxHP = 100;
@@ -14,13 +22,13 @@ public class UnitStatsData : ScriptableObject
     [Header("Combat Stats")]
     [Tooltip("Dégâts infligés par attaque")]
     public int attackDamage = 10;
-    
+
     [Tooltip("Portée d'attaque (1 = mêlée, 2+ = distance)")]
     public int attackRange = 1;
-    
+
     [Tooltip("Réduction de dégâts (soustraction simple)")]
     public int defense = 0;
-    
+
     [Tooltip("Temps entre chaque attaque (secondes)")]
     public float attackSpeed = 1.0f;
 
@@ -34,6 +42,10 @@ public class UnitStatsData : ScriptableObject
 
     [Tooltip("Type de déplacement : Ground, Flying ou Swimming")]
     public UnitMovementType movementType = UnitMovementType.Ground;
+
+    [Header("Ability")]
+    [Tooltip("Cocher si l'unité possède une abilité active")]
+    public bool hasActiveAbility = false;
 
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création

@@ -10,6 +10,7 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Setting**: The Shifting Groves of Cirgus
 - **Visual style**: 3D Low Poly to 2D Line Art, old school 8-bit feel
 - **Audio**: 8-bit music per map, 8-bit sound effects
+- **Language**: English — all in-game content visible to the player is in English (unit names, ability names, tooltips, UI text, etc.)
 - **Single resource**: "Watersap" — collected by Rootborn in static position (max 300 per player)
 
 ## Core Mechanics

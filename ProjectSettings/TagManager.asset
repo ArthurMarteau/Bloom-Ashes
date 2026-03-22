@@ -54,7 +54,7 @@ TagManager:
   - name: Obstacle
     uniqueID: 1271899921
     locked: 0
-  - name: Environnment Walkable
+  - name: Environment_Walkable
     uniqueID: 3759810521
     locked: 0
   - name: Units

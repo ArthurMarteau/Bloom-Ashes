@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.EventSystems;
 
 // Gère la sélection d'objets avec clic simple et rectangle de sélection
@@ -9,8 +10,10 @@ using UnityEngine.EventSystems;
 public class SelectionManager : MonoBehaviour
 {
     [Header("Selection Settings")]
-    // Filtre pour détecter uniquement les objets sur le layer "Units" (Layer 8)
-    [SerializeField] private LayerMask unitLayer = 1 << 8;
+    // Filtre pour détecter uniquement les objets sur le layer "Units"
+    [SerializeField] private LayerMask unitLayer = 1 << 9;
+    [SerializeField] private LayerMask buildingLayer = 1 << 8;
+    [SerializeField] private LayerMask environmentWalkableLayer = 1 << 7;
     [SerializeField] private LayerMask obstacleLayer = 1 << 6;
     [SerializeField] private LayerMask groundLayer = 1 << 3;
 
@@ -41,6 +44,14 @@ public class SelectionManager : MonoBehaviour
 
     // Référence à l'InputManager (abonnement aux events, accès à IsShiftHeld)
     private InputManager inputManager;
+
+    [Header("Events — UI")]
+    // Notifie l'UI lors de tout changement de sélection (abonnés par UnitPanelUI)
+    public UnityEvent<List<GameObject>> OnUnitsSelected    = new UnityEvent<List<GameObject>>(); // Unités sélectionnées (liste vide si désélection)
+    public UnityEvent<Vector2Int>       OnGroundSelected   = new UnityEvent<Vector2Int>();        // Coordonnées grille du terrain sélectionné
+    public UnityEvent<GameObject>       OnObstacleSelected = new UnityEvent<GameObject>();        // Obstacle sélectionné
+    public UnityEvent<GameObject>       OnBuildingSelected = new UnityEvent<GameObject>();        // Bâtiment sélectionné
+    public UnityEvent                   OnSelectionCleared = new UnityEvent();                    // Toute sélection effacée
 
     // Méthode appelée au démarrage pour initialiser les références et composants
     private void Awake()
@@ -174,26 +185,42 @@ public class SelectionManager : MonoBehaviour
     // --- Logique de sélection ---
 
     // Traite la sélection par clic simple avec système de priorité
-    // Priorité : unitLayer > obstacleLayer > groundLayer (pas de replacement)
+    // Priorité : unitLayer > buildingLayer > obstacleLayer > groundLayer
     private void HandleSimpleClick(Vector3 screenPosition)
     {
         // Convertit la position écran en rayon 3D dans le monde
         Ray ray = mainCamera.ScreenPointToRay(screenPosition);
+        Vector3 clickWorldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
+        clickWorldPosition.z = 0;
 
         // 1. Vérifie d'abord les unités (priorité la plus haute)
         RaycastHit2D unitHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, unitLayer);
         if (unitHit.collider != null)
         {
-            // Unité détectée - gestion sélection multiple avec Shift
-            HandleUnitSelection(unitHit.collider.gameObject);
+            HandleUnitSelection(unitHit.collider.gameObject, clickWorldPosition);
             return;
         }
 
-        // 2. Si pas d'unité, vérifie les obstacles
+        // 2. Vérifie les bâtiments (layer Buildings)
+        RaycastHit2D buildingHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, buildingLayer);
+        if (buildingHit.collider != null)
+        {
+            HandleUnitSelection(buildingHit.collider.gameObject, clickWorldPosition);
+            return;
+        }
+
+        // 2b. Vérifie les bâtiments sur Environment_Walkable (ex: Nexus)
+        RaycastHit2D envBuildingHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, environmentWalkableLayer);
+        if (envBuildingHit.collider != null)
+        {
+            HandleUnitSelection(envBuildingHit.collider.gameObject, clickWorldPosition);
+            return;
+        }
+
+        // 3. Si pas d'unité ni bâtiment, vérifie les obstacles
         RaycastHit2D obstacleHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, obstacleLayer);
         if (obstacleHit.collider != null)
         {
-            // Obstacle détecté - sélection unique (remplace unités)
             SelectObstacle(obstacleHit.collider.gameObject);
             return;
         }
@@ -205,9 +232,31 @@ public class SelectionManager : MonoBehaviour
     }
 
     // Gère la sélection d'unité avec support Shift pour sélection multiple
-    // Lien avec SelectUnit/DeselectUnit selon l'état actuel
-    private void HandleUnitSelection(GameObject unit)
+    // Détecte si l'objet est un bâtiment (BuildingStatsComponent) → déclenche OnBuildingSelected
+    // worldPosition : position monde du clic, utilisée pour placer le carré sur la tile cl iquée
+    private void HandleUnitSelection(GameObject unit, Vector3 worldPosition = default)
     {
+        // Détecte si c'est un bâtiment → event dédié, carré sur la tile cliquée
+        BuildingStatsComponent building = unit.GetComponent<BuildingStatsComponent>();
+        if (building != null)
+        {
+            ClearAllSelectionSilent();
+            currentSelectedObject = unit;
+            hasGroundSelection = false;
+
+            // Place le carré sur la tile cliquée (pas sur le pivot du bâtiment)
+            currentObjectSelectionSquare = CreateSelectionSquare();
+            if (currentObjectSelectionSquare != null)
+            {
+                Vector2Int clickedTile = GridManager.Instance.WorldToGrid(worldPosition);
+                currentObjectSelectionSquare.AttachToGridPosition(clickedTile);
+            }
+
+            OnBuildingSelected.Invoke(unit);
+            Debug.Log($"Bâtiment sélectionné : {unit.name}");
+            return;
+        }
+
         // Efface les sélections obstacle/ground (unités prioritaires)
         ClearNonUnitSelection();
 
@@ -228,6 +277,17 @@ public class SelectionManager : MonoBehaviour
             // Mode sélection simple - remplace toute la sélection
             ClearUnitSelection();
             SelectUnit(unit);
+        }
+
+        // Notifie l'UI avec la liste courante (peut être vide si shift-désélection du dernier)
+        List<GameObject> currentUnits = GetSelectedUnits();
+        if (currentUnits.Count > 0)
+        {
+            OnUnitsSelected.Invoke(currentUnits);
+        }
+        else
+        {
+            OnSelectionCleared.Invoke();
         }
     }
 
@@ -270,8 +330,8 @@ public class SelectionManager : MonoBehaviour
         // Trouve toutes les unités dans la zone rectangle
         Collider2D[] unitsInArea = Physics2D.OverlapAreaAll(bottomLeft, topRight, unitLayer);
 
-        // Efface sélections précédentes
-        ClearAllSelection();
+        // Efface sélections précédentes sans émettre d'event (remplacé par OnUnitsSelected)
+        ClearAllSelectionSilent();
 
         // Sélectionne toutes les unités trouvées
         foreach (Collider2D unitCollider in unitsInArea)
@@ -279,6 +339,8 @@ public class SelectionManager : MonoBehaviour
             SelectUnit(unitCollider.gameObject);
         }
 
+        // Notifie l'UI avec la nouvelle liste d'unités
+        OnUnitsSelected.Invoke(GetSelectedUnits());
         Debug.Log($"Rectangle sélection : {unitsInArea.Length} unités sélectionnées");
     }
 
@@ -349,8 +411,8 @@ public class SelectionManager : MonoBehaviour
     {
         if (obstacle == null) return;
 
-        // Efface toutes les sélections précédentes
-        ClearAllSelection();
+        // Efface toutes les sélections précédentes sans émettre d'event (remplacé par OnObstacleSelected)
+        ClearAllSelectionSilent();
 
         // Crée le carré de sélection pour l'obstacle
         currentObjectSelectionSquare = CreateSelectionSquare();
@@ -361,6 +423,7 @@ public class SelectionManager : MonoBehaviour
             currentSelectedObject = obstacle;
             hasGroundSelection = false;
 
+            OnObstacleSelected.Invoke(obstacle);
             Debug.Log($"Obstacle sélectionné : {obstacle.name}");
         }
     }
@@ -369,8 +432,8 @@ public class SelectionManager : MonoBehaviour
     // Ground sélectionné seulement si aucune unité ni obstacle sur la cellule
     private void SelectGround(Vector2Int gridCoordinates)
     {
-        // Efface toutes les sélections précédentes
-        ClearAllSelection();
+        // Efface toutes les sélections précédentes sans émettre d'event (remplacé par OnGroundSelected)
+        ClearAllSelectionSilent();
 
         // Crée le carré de sélection pour le terrain
         currentObjectSelectionSquare = CreateSelectionSquare();
@@ -382,6 +445,7 @@ public class SelectionManager : MonoBehaviour
             currentGroundSelection = gridCoordinates;
             hasGroundSelection = true;
 
+            OnGroundSelected.Invoke(gridCoordinates);
             Debug.Log($"Terrain sélectionné : cellule {gridCoordinates}");
         }
     }
@@ -439,12 +503,20 @@ public class SelectionManager : MonoBehaviour
         Debug.Log("Sélection obstacle/ground effacée");
     }
 
-    // Efface complètement toute sélection (unités + obstacle/ground)
-    // Méthode publique pour reset total depuis l'extérieur
-    public void ClearAllSelection()
+    // Efface complètement toute sélection sans émettre d'event (usage interne uniquement)
+    // Appelé par SelectObstacle/SelectGround/CompleteRectangleSelection avant de définir une nouvelle sélection
+    private void ClearAllSelectionSilent()
     {
         ClearUnitSelection();
         ClearNonUnitSelection();
+    }
+
+    // Efface complètement toute sélection (unités + obstacle/ground) et notifie l'UI
+    // Méthode publique pour reset total depuis l'extérieur
+    public void ClearAllSelection()
+    {
+        ClearAllSelectionSilent();
+        OnSelectionCleared.Invoke();
         Debug.Log("Toute sélection effacée");
     }
 
