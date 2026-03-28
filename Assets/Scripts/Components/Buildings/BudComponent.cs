@@ -14,6 +14,8 @@ public class BudComponent : MonoBehaviour
     [Tooltip("Durée de l'animation Hatching avant le spawn de l'unité finale (secondes)")]
     [SerializeField] private float hatchingDuration = 1f;
 
+    [SerializeField] private SelectionManager selectionManager;
+
     // Unité en cours de production — assignée via Initialize
     private UnitStatsData unitInProduction;
 
@@ -66,6 +68,8 @@ public class BudComponent : MonoBehaviour
         Animator animator = GetComponent<Animator>();
         if (animator != null)
             animator.Play("Idle");
+
+        selectionManager = Object.FindFirstObjectByType<SelectionManager>();
 
         StartCoroutine(ProductionRoutine());
     }
@@ -120,6 +124,9 @@ public class BudComponent : MonoBehaviour
 
         Debug.Log($"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})");
 
+        if (selectionManager != null)
+            selectionManager.SelectGameObject(spawnedUnit);
+
         Destroy(gameObject);
     }
 
@@ -149,6 +156,9 @@ public class BudComponent : MonoBehaviour
             rootbornTeam.SetTeamID(teamID);
 
         Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — Rootborn restitué (équipe {teamID})");
+
+        if (selectionManager != null)
+            selectionManager.SelectGameObject(rootborn);
 
         Destroy(gameObject);
     }

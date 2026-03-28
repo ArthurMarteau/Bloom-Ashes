@@ -38,7 +38,7 @@ public class ProductionPanelUI : MonoBehaviour
     private MovementController trackedMovementController;
 
     // Trouve le SelectionManager et s'abonne à ses events
-    private void Start()
+    private void Awake()
     {
         selectionManager = Object.FindFirstObjectByType<SelectionManager>();
         if (selectionManager == null)
@@ -49,9 +49,8 @@ public class ProductionPanelUI : MonoBehaviour
 
         selectionManager.OnUnitsSelected.AddListener(HandleUnitsSelected);
         selectionManager.OnSelectionCleared.AddListener(HandleSelectionCleared);
-        selectionManager.OnGroundSelected.AddListener(OnNonRootbornSelected);
-        selectionManager.OnBuildingSelected.AddListener(OnNonRootbornSelected);
-        selectionManager.OnObstacleSelected.AddListener(OnNonRootbornSelected);
+
+        Debug.Log("🌿 ProductionPanelUI : Start() — abonné aux events");
 
         HidePanel();
     }
@@ -63,9 +62,6 @@ public class ProductionPanelUI : MonoBehaviour
         {
             selectionManager.OnUnitsSelected.RemoveListener(HandleUnitsSelected);
             selectionManager.OnSelectionCleared.RemoveListener(HandleSelectionCleared);
-            selectionManager.OnGroundSelected.RemoveListener(OnNonRootbornSelected);
-            selectionManager.OnBuildingSelected.RemoveListener(OnNonRootbornSelected);
-            selectionManager.OnObstacleSelected.RemoveListener(OnNonRootbornSelected);
         }
 
         UnsubscribeMovementEvents();
@@ -77,6 +73,8 @@ public class ProductionPanelUI : MonoBehaviour
     // Affiche le panneau uniquement si 1 Rootborn avec bâtiment adjacent est sélectionné
     private void HandleUnitsSelected(List<GameObject> units)
     {
+        Debug.Log($"🌿 ProductionPanelUI HandleUnitsSelected — {units?.Count} unités");
+
         if (units == null || units.Count != 1)
         {
             HidePanel();
@@ -101,10 +99,11 @@ public class ProductionPanelUI : MonoBehaviour
         {
             trackedMovementController = movementController;
             trackedMovementController.OnMovementStarted.AddListener(HidePanel);
-            trackedMovementController.OnArrived.AddListener(RefreshPanelNextFrame);
+            trackedMovementController.OnArrived.AddListener(RefreshPanel);
         }
 
-        RefreshPanelNextFrame();
+        Debug.Log($"🌿 ProductionPanelUI HandleUnitsSelected — unit: {unit.name} | frame: {Time.frameCount}");
+        RefreshPanel();
     }
 
     // Sélection effacée — masque le panneau et réinitialise le Rootborn courant
@@ -115,19 +114,17 @@ public class ProductionPanelUI : MonoBehaviour
         currentRootborn = null;
     }
 
-    // Adapte la signature OnGroundSelected (Vector2Int) vers HandleSelectionCleared
-    private void OnNonRootbornSelected(Vector2Int _) { HandleSelectionCleared(); }
-
-    // Adapte la signature OnBuildingSelected / OnObstacleSelected (GameObject) vers HandleSelectionCleared
-    private void OnNonRootbornSelected(GameObject _) { HandleSelectionCleared(); }
-
     // Désabonne les events du MovementController tracké et efface la référence
     private void UnsubscribeMovementEvents()
     {
         if (trackedMovementController == null) return;
-
-        trackedMovementController.OnMovementStarted.RemoveListener(HidePanel);
-        trackedMovementController.OnArrived.RemoveListener(RefreshPanelNextFrame);
+        // Utilise try/catch pour gérer les objets Unity détruits
+        try
+        {
+            trackedMovementController.OnMovementStarted.RemoveListener(HidePanel);
+            trackedMovementController.OnArrived.RemoveListener(RefreshPanel);
+        }
+        catch { }
         trackedMovementController = null;
     }
 
@@ -137,11 +134,15 @@ public class ProductionPanelUI : MonoBehaviour
     // Masque les slots excédentaires, détermine l'état de chaque unité produisible
     private void RefreshPanel()
     {
+        Debug.Log($"🌿 ProductionPanelUI RefreshPanel — currentRootborn: {currentRootborn?.name}");
+
         if (currentRootborn == null)
         {
             HidePanel();
             return;
         }
+
+        Debug.Log($"🌿 ProductionPanelUI RefreshPanel — currentRootborn: {currentRootborn?.name} | frame: {Time.frameCount}");
 
         RootbornProductionController productionController = currentRootborn.GetComponent<RootbornProductionController>();
         if (productionController == null)
@@ -189,21 +190,6 @@ public class ProductionPanelUI : MonoBehaviour
         }
 
         Debug.Log($"🌿 ProductionPanelUI : panneau actualisé — {Mathf.Min(producibleUnits.Count, slotCount)} slot(s) pour {adjacentBuilding.GetBuildingName()}");
-    }
-
-    // Lance un rafraîchissement au frame suivant pour laisser le temps au Rootborn de se repositionner
-    private void RefreshPanelNextFrame()
-    {
-        // Le ProductionPanel peut être inactif — on passe par un GO toujours actif
-        if (selectionManager != null)
-            selectionManager.StartCoroutine(RefreshPanelDelayed());
-    }
-
-    // Attend un frame puis appelle RefreshPanel
-    private IEnumerator RefreshPanelDelayed()
-    {
-        yield return null;
-        RefreshPanel();
     }
 
     // Détermine l'état d'un slot selon le tier requis et le Watersap disponible
@@ -254,7 +240,7 @@ public class ProductionPanelUI : MonoBehaviour
         if (showAnimationCoroutine != null)
             StopCoroutine(showAnimationCoroutine);
 
-        showAnimationCoroutine = StartCoroutine(AnimateShow());
+        showAnimationCoroutine = selectionManager.StartCoroutine(AnimateShow());
     }
 
     // Masque ce GameObject et remet le scale X à 0 instantanément

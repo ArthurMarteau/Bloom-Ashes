@@ -812,3 +812,16 @@ Units can equip one item dropped by destroying a point of interest (building, st
 Players accumulate Watersap to unlock stronger units. Constant trade-off between creating Rootborn, building combat units, casting spells, or unlocking new unit types.
 
 Nice-to-have: unit upgrades, research tree in nexus, score system, cosmetic skins.
+
+---
+
+## TODO Netcode
+
+### Filtre équipe dans SelectionManager
+Actuellement le SelectionManager sélectionne toutes les unités sans filtrer par équipe.
+En multijoueur, il faudra :
+- Empêcher de sélectionner les unités/bâtiments ennemis (ou les afficher en lecture seule)
+- Filtrer `SelectGameObject()` pour ne sélectionner que les entités du joueur local
+- S'appuyer sur `PlayerManager.Instance.IsLocalPlayer(teamID)` déjà utilisé dans OrderManager
+
+À implémenter quand le système netcode sera en place.

@@ -29,6 +29,7 @@ public class UnitPanelUI : MonoBehaviour
     [Header("HP")]
     [SerializeField] private Image hpBarFill;              // Image Filled Radial 360 — arc HP
     [SerializeField] private TextMeshProUGUI hpText;       // Texte "19/20" sur l'arc HP
+    [SerializeField] private Image budProgressBarFill;     // Barre de progression du Bud (0→1)
 
     [Header("Infos unité")]
     [SerializeField] private TextMeshProUGUI unitNameText; // Nom unité (courbé côté gauche)
@@ -57,11 +58,21 @@ public class UnitPanelUI : MonoBehaviour
     // Référence à l'unité actuellement trackée pour les mises à jour HP temps réel
     private UnitStatsComponent trackedUnit;
 
+    // Référence au BudComponent tracké pour la mise à jour de la barre de progression
+    private BudComponent trackedBud;
+
     // Référence au bâtiment actuellement tracké pour les mises à jour HP temps réel
     private BuildingStatsComponent trackedBuilding;
 
     // Référence au SelectionManager (trouvée une seule fois dans Start)
     private SelectionManager selectionManager;
+
+    // Met à jour la barre de progression du Bud chaque frame
+    private void Update()
+    {
+        if (trackedBud != null && budProgressBarFill != null)
+            budProgressBarFill.fillAmount = trackedBud.Progress;
+    }
 
     // Trouve le SelectionManager et s'abonne à ses events UI
     private void Start()
@@ -121,6 +132,9 @@ public class UnitPanelUI : MonoBehaviour
 
         if (units.Count == 1)
         {
+            BudComponent budComponent = units[0].GetComponent<BudComponent>();
+            if (budComponent != null) { ShowPanel(); RefreshBud(units[0]); return; }
+
             RefreshSingleUnit(units[0]);
         }
         else
@@ -142,6 +156,14 @@ public class UnitPanelUI : MonoBehaviour
     // Reçoit le bâtiment sélectionné
     private void HandleBuildingSelected(GameObject buildingObject)
     {
+        BudComponent budComponent = buildingObject.GetComponent<BudComponent>();
+        if (budComponent != null)
+        {
+            ShowPanel();
+            RefreshBud(buildingObject);
+            return;
+        }
+
         if (buildingObject == null)
         {
             HandleSelectionCleared();
@@ -164,6 +186,7 @@ public class UnitPanelUI : MonoBehaviour
     // Aucune sélection — masque le panneau entier
     private void HandleSelectionCleared()
     {
+        trackedBud = null;
         HidePanel();
         UntrackUnit();
         UntrackBuilding();
@@ -175,6 +198,9 @@ public class UnitPanelUI : MonoBehaviour
     // Mode unité simple : portrait, nom, HP, stats ATK/DEF/SPD
     private void RefreshSingleUnit(GameObject unitObject)
     {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
         UnitStatsComponent stats = unitObject.GetComponent<UnitStatsComponent>();
         if (stats == null)
         {
@@ -250,6 +276,9 @@ public class UnitPanelUI : MonoBehaviour
     // Mode groupe (2+ unités) : placeholder ×N, nom, tout le reste masqué
     private void RefreshGroup(int count)
     {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
         // Untrack l'unité précédente (pas de HP temps réel en mode groupe)
         UntrackUnit();
 
@@ -274,6 +303,9 @@ public class UnitPanelUI : MonoBehaviour
     // Mode terrain : portrait couleur terrain, nom, modificateurs SPD/DEF si non nuls
     private void RefreshGround(Vector2Int gridPosition)
     {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
         UntrackUnit();
 
         // Récupère le type de terrain depuis GridManager
@@ -345,6 +377,9 @@ public class UnitPanelUI : MonoBehaviour
     // Mode bâtiment : portrait, nom, HP, DEF — ATK/SPD masqués
     private void RefreshBuilding(GameObject buildingObject)
     {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
         UntrackUnit();
         UntrackBuilding();
 
@@ -402,6 +437,9 @@ public class UnitPanelUI : MonoBehaviour
     // Mode obstacle : placeholder brun/gris, nom du GameObject, le reste masqué
     private void RefreshObstacle(GameObject obstacle)
     {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
         UntrackUnit();
 
         // Portrait : placeholder brun/gris
@@ -420,6 +458,72 @@ public class UnitPanelUI : MonoBehaviour
         SetActive(statValueDEF?.gameObject, false);
         SetActive(statValueSPD?.gameObject, false);
         SetActive(accessibilityText?.gameObject, false);
+    }
+
+    // Mode Bud : portrait de l'unité en cours, nom, HP bâtiment, DEF, barre de progression
+    private void RefreshBud(GameObject budObject)
+    {
+        SetActive(budProgressBarFill?.gameObject, false);
+        trackedBud = null;
+
+        BudComponent budComponent = budObject.GetComponent<BudComponent>();
+        BuildingStatsComponent buildingStats = budObject.GetComponent<BuildingStatsComponent>();
+
+        if (budComponent == null) return;
+
+        // Portrait
+        if (portraitImage != null)
+        {
+            if (budComponent.UnitInProduction?.portrait != null)
+            {
+                portraitImage.sprite = budComponent.UnitInProduction.portrait;
+                portraitImage.color  = Color.white;
+            }
+            else
+            {
+                portraitImage.sprite = null;
+                portraitImage.color  = new Color(0.5f, 0.5f, 0.5f);
+            }
+        }
+
+        // Nom
+        string displayName = !string.IsNullOrEmpty(budComponent.UnitInProduction?.unitName)
+            ? budComponent.UnitInProduction.unitName
+            : "Bud";
+        SetText(unitNameText, displayName);
+
+        // HP via tracking bâtiment
+        if (buildingStats != null)
+        {
+            TrackBuilding(buildingStats);
+            SetActive(hpBarFill?.gameObject, true);
+            SetActive(hpText?.gameObject, true);
+            RefreshBuildingHPDisplay(buildingStats);
+
+            // DEF
+            SetActive(statValueDEF?.gameObject, true);
+            SetText(statValueDEF, buildingStats.GetDefense().ToString());
+            SetTextColor(statValueDEF, Color.white);
+        }
+        else
+        {
+            SetActive(hpBarFill?.gameObject, false);
+            SetActive(hpText?.gameObject, false);
+            SetActive(statValueDEF?.gameObject, false);
+        }
+
+        // Masque les éléments non pertinents
+        SetActive(statValueATK?.gameObject, false);
+        SetActive(statValueSPD?.gameObject, false);
+        SetActive(abilitySlot?.gameObject, false);
+        SetActive(sacrificeSlot?.gameObject, false);
+        SetActive(accessibilityText?.gameObject, false);
+
+        // Barre de progression
+        SetActive(budProgressBarFill?.gameObject, true);
+        if (budProgressBarFill != null)
+            budProgressBarFill.fillAmount = budComponent.Progress;
+        trackedBud = budComponent;
     }
 
     // === TRACKING HP TEMPS RÉEL ===

@@ -13,6 +13,7 @@ GameObject:
   - component: {fileID: 22705587401032300}
   - component: {fileID: 5336636202457641582}
   - component: {fileID: 8357381731539483030}
+  - component: {fileID: -4501301095426598915}
   m_Layer: 8
   m_Name: Shroomhaven
   m_TagString: Untagged
@@ -167,3 +168,17 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::TeamComponent
   teamID: 2
   debugTeam: 0
+--- !u!114 &-4501301095426598915
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 5758338455721873252}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f8b03989bd795b248918957c6753b744, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingDeathAnimationComponent
+  deathAnimDuration: 1
+  deathAnimName: Death

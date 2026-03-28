@@ -186,7 +186,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
 
         // Détruit le GameObject après un délai (prépare les animations futures)
-        Destroy(gameObject, 3f);
+        Destroy(gameObject, 10f);
     }
 
     // === Getters publics supplémentaires ===

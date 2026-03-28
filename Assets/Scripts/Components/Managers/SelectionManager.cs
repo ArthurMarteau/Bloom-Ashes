@@ -45,6 +45,10 @@ public class SelectionManager : MonoBehaviour
     // Référence à l'InputManager (abonnement aux events, accès à IsShiftHeld)
     private InputManager inputManager;
 
+    // Composants trackés pour détecter la destruction de l'entité sélectionnée
+    private UnitStatsComponent trackedUnitStats;
+    private BuildingStatsComponent trackedBuildingStats;
+
     [Header("Events — UI")]
     // Notifie l'UI lors de tout changement de sélection (abonnés par UnitPanelUI)
     public UnityEvent<List<GameObject>> OnUnitsSelected    = new UnityEvent<List<GameObject>>(); // Unités sélectionnées (liste vide si désélection)
@@ -241,6 +245,13 @@ public class SelectionManager : MonoBehaviour
             }
 
             OnBuildingSelected.Invoke(unit);
+            UnsubscribeEntityDestroyedEvents();
+            BuildingStatsComponent buildingStats = unit.GetComponent<BuildingStatsComponent>();
+            if (buildingStats != null)
+            {
+                trackedBuildingStats = buildingStats;
+                trackedBuildingStats.OnBuildingDestroyed.AddListener(OnSelectedEntityDestroyed);
+            }
             Debug.Log($"Bâtiment sélectionné : {unit.name}");
             return;
         }
@@ -369,6 +380,14 @@ public class SelectionManager : MonoBehaviour
             // Ajoute au dictionnaire de sélection
             selectedUnits.Add(unit, selectionSquare);
 
+            UnsubscribeEntityDestroyedEvents();
+            UnitStatsComponent unitStats = unit.GetComponent<UnitStatsComponent>();
+            if (unitStats != null)
+            {
+                trackedUnitStats = unitStats;
+                trackedUnitStats.OnDeath.AddListener(OnSelectedEntityDestroyed);
+            }
+
             Debug.Log($"Unité sélectionnée : {unit.name} (Total: {selectedUnits.Count})");
         }
     }
@@ -466,6 +485,7 @@ public class SelectionManager : MonoBehaviour
     // Utilisé lors de sélection obstacle/ground pour les remplacer
     private void ClearUnitSelection()
     {
+        UnsubscribeEntityDestroyedEvents();
         foreach (var kvp in selectedUnits)
         {
             if (kvp.Value != null)
@@ -490,6 +510,27 @@ public class SelectionManager : MonoBehaviour
         currentSelectedObject = null;
         hasGroundSelection = false;
         Debug.Log("Sélection obstacle/ground effacée");
+    }
+
+    // Appelé quand l'entité sélectionnée est détruite — efface la sélection et notifie l'UI
+    private void OnSelectedEntityDestroyed()
+    {
+        ClearAllSelection();
+    }
+
+    // Désabonne les events de mort/destruction de l'entité trackée
+    private void UnsubscribeEntityDestroyedEvents()
+    {
+        if (trackedUnitStats != null)
+        {
+            trackedUnitStats.OnDeath.RemoveListener(OnSelectedEntityDestroyed);
+            trackedUnitStats = null;
+        }
+        if (trackedBuildingStats != null)
+        {
+            trackedBuildingStats.OnBuildingDestroyed.RemoveListener(OnSelectedEntityDestroyed);
+            trackedBuildingStats = null;
+        }
     }
 
     // Efface complètement toute sélection sans émettre d'event (usage interne uniquement)
@@ -526,6 +567,7 @@ public class SelectionManager : MonoBehaviour
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
     private void OnDestroy()
     {
+        UnsubscribeEntityDestroyedEvents();
         if (inputManager != null)
         {
             inputManager.OnLeftClickDown.RemoveListener(OnLeftClickDownHandler);
@@ -582,5 +624,29 @@ public class SelectionManager : MonoBehaviour
     public int GetSelectedUnitCount()
     {
         return selectedUnits.Count;
+    }
+
+    // Sélectionne un GameObject externe (ex: Bud après transformation Rootborn)
+    // Efface la sélection courante et sélectionne l'unité donnée
+    public void SelectGameObject(GameObject unit)
+    {
+        if (unit == null) return;
+        ClearAllSelectionSilent();
+
+        BuildingStatsComponent building = unit.GetComponent<BuildingStatsComponent>();
+        if (building != null)
+        {
+            currentSelectedObject = unit;
+            hasGroundSelection = false;
+            currentObjectSelectionSquare = CreateSelectionSquare();
+            if (currentObjectSelectionSquare != null)
+                currentObjectSelectionSquare.AttachToGameObject(unit);
+            OnBuildingSelected.Invoke(unit);
+        }
+        else
+        {
+            SelectUnit(unit);
+            OnUnitsSelected.Invoke(GetSelectedUnits());
+        }
     }
 }

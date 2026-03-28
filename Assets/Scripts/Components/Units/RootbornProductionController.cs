@@ -179,6 +179,9 @@ public class RootbornProductionController : MonoBehaviour
 
         budComponent.Initialize(unitData, rootbornCurrentHP, teamID);
 
+        SelectionManager selectionManager = Object.FindFirstObjectByType<SelectionManager>();
+        selectionManager?.SelectGameObject(budObject);
+
         // Étape 8 : destruction du Rootborn
         Destroy(gameObject);
     }

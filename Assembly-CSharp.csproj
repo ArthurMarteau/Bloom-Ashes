@@ -59,6 +59,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\WatersapManager.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
+    <Compile Include="Assets\Scripts\Components\Buildings\BuildingDeathAnimationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
