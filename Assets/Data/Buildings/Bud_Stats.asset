@@ -13,8 +13,12 @@ MonoBehaviour:
   m_Name: Bud_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
   buildingName: Bud
-  maxHP: 25
+  portrait: {fileID: 0}
+  maxHP: 20
   defense: 3
   isInvulnerable: 0
   sizeX: 1
   sizeY: 1
+  isNexus: 0
+  producibleUnits: []
+  maxTier: 1

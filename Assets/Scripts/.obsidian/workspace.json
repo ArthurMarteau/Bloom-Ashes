@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "NEW_FEATURES_IMPLEMENTATION.md",
+                "file": "GDD.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "NEW_FEATURES_IMPLEMENTATION"
+              "title": "GDD"
             }
           }
         ]
@@ -185,6 +185,13 @@
   },
   "active": "7811e402c7090024",
   "lastOpenFiles": [
+    "Tests/TestClick.cs.meta",
+    "Tests/TestClick.cs",
+    "Components/UI/ProductionPanelUI.cs.meta",
+    "Components/UI/ProductionPanelUI.cs",
+    "Components/UI/ProductionSlotUI.cs.meta",
+    "Components/UI/ProductionSlotUI.cs",
+    "NEW_FEATURES_IMPLEMENTATION.md",
     "GDD.md",
     "claude.md"
   ]

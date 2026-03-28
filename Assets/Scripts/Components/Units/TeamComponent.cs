@@ -8,16 +8,16 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     [Header("Team Settings")]
     [SerializeField] private int teamID = 1; // 0 = Neutre, 1-6 = Joueurs
 
-    [Header("Team Colors")]
-    private Color[] teamColors = new Color[]
+    // Couleurs de fallback utilisées si PlayerManager est absent ou si le PlayerData est null
+    private static readonly Color[] fallbackColors = new Color[]
     {
-        Color.white,                 // 0 = Neutre
-        new Color(0.2f, 0.4f, 1f),                  // 1 = Joueur 1
-        Color.red,                   // 2 = Joueur 2
-        Color.green,                 // 3 = Joueur 3
-        Color.yellow,                // 4 = Joueur 4
-        new Color(1f, 0.5f, 0f),     // 5 = Joueur 5 (orange)
-        Color.magenta                // 6 = Joueur 6
+        Color.white,                    // 0 = Neutre
+        new Color(0.2f, 0.4f, 1f),      // 1
+        Color.red,                      // 2
+        Color.green,                    // 3
+        Color.yellow,                   // 4
+        new Color(1f, 0.5f, 0f),        // 5 (orange)
+        Color.magenta                   // 6
     };
 
     [Header("Debug")]
@@ -59,10 +59,19 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     }
 
     // Retourne la couleur associée à l'équipe courante
+    // Priorité : PlayerData.teamColor → fallback par index → Color.white (neutre)
     public Color GetTeamColor()
     {
-        if (teamID >= 0 && teamID < teamColors.Length)
-            return teamColors[teamID];
+        if (teamID == 0)
+            return Color.white;
+
+        PlayerData data = PlayerManager.Instance?.GetPlayerData(teamID);
+        if (data != null)
+            return data.teamColor;
+
+        // Fallback si PlayerManager absent ou joueur non trouvé
+        if (teamID >= 0 && teamID < fallbackColors.Length)
+            return fallbackColors[teamID];
 
         return Color.white;
     }

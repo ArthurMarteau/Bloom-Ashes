@@ -249,6 +249,14 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         return baseStats;
     }
 
+    // Remplace les HP courants par une valeur externe (utilisé par BudComponent pour hériter des HP du Rootborn)
+    // Clampée entre 0 et maxHP pour éviter les incohérences
+    public void SetCurrentHP(int hp)
+    {
+        if (baseStats == null) return;
+        currentHP = Mathf.Clamp(hp, 0, baseStats.maxHP);
+    }
+
     // Retourne la taille du bâtiment en tiles (X, Y)
     public Vector2Int GetSize()
     {

@@ -19,3 +19,7 @@ MonoBehaviour:
   isInvulnerable: 0
   sizeX: 2
   sizeY: 2
+  isNexus: 0
+  producibleUnits:
+  - {fileID: 11400000, guid: 67952215cc941ac4e875ec4347e2451b, type: 2}
+  maxTier: 1

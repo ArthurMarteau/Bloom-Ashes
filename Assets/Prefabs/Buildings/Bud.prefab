@@ -10,11 +10,13 @@ GameObject:
   m_Component:
   - component: {fileID: 9186563368615583477}
   - component: {fileID: 1402859179254952206}
+  - component: {fileID: 7650574144153540018}
   - component: {fileID: 3215522305817994165}
   - component: {fileID: -1076606394883200631}
   - component: {fileID: -6979360575784206212}
+  - component: {fileID: -4627684200783162193}
   - component: {fileID: -3111876274476813253}
-  m_Layer: 8
+  m_Layer: 9
   m_Name: Bud
   m_TagString: Untagged
   m_Icon: {fileID: 0}
@@ -80,20 +82,42 @@ SpriteRenderer:
   m_AutoUVMaxAngle: 89
   m_LightmapParameters: {fileID: 0}
   m_GlobalIlluminationMeshLod: 0
-  m_SortingLayerID: 1271899921
-  m_SortingLayer: 2
+  m_SortingLayerID: 2016719739
+  m_SortingLayer: 4
   m_SortingOrder: 0
-  m_Sprite: {fileID: 1715377321, guid: ee63ccf0d8081a94b885cf89847dc617, type: 3}
+  m_Sprite: {fileID: -1728529021, guid: 3367fe00d12458341a50df7c98f70c96, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0
-  m_Size: {x: 1.4632144, y: 1.4628571}
+  m_Size: {x: 1.4628571, y: 1.4635713}
   m_AdaptiveModeThreshold: 0.5
   m_SpriteTileMode: 0
   m_WasSpriteAssigned: 1
   m_MaskInteraction: 0
   m_SpriteSortPoint: 0
+--- !u!95 &7650574144153540018
+Animator:
+  serializedVersion: 7
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1139703711428364788}
+  m_Enabled: 1
+  m_Avatar: {fileID: 0}
+  m_Controller: {fileID: 0}
+  m_CullingMode: 0
+  m_UpdateMode: 0
+  m_ApplyRootMotion: 0
+  m_LinearVelocityBlending: 0
+  m_StabilizeFeet: 0
+  m_AnimatePhysics: 0
+  m_WarningMessage: 
+  m_HasTransformHierarchy: 1
+  m_AllowConstantClipSamplingOptimization: 1
+  m_KeepAnimatorStateOnDisable: 0
+  m_WriteDefaultValuesOnDisable: 0
 --- !u!61 &3215522305817994165
 BoxCollider2D:
   m_ObjectHideFlags: 0
@@ -132,8 +156,8 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.4632144, y: 1.4628571}
-    newSize: {x: 1.4632144, y: 1.4628571}
+    oldSize: {x: 1.4628571, y: 1.4635713}
+    newSize: {x: 1.4628571, y: 1.4635713}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
     adaptiveTiling: 0
@@ -177,6 +201,20 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   debugStats: 1
+--- !u!114 &-4627684200783162193
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1139703711428364788}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db2ebb2796511264c94935195ffffc02, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::BudComponent
+  rootbornPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+  hatchingDuration: 1
 --- !u!114 &-3111876274476813253
 MonoBehaviour:
   m_ObjectHideFlags: 0

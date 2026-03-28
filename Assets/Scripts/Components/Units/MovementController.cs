@@ -50,6 +50,15 @@ public class MovementController : MonoBehaviour
     private bool isMoving = false;
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
 
+    // Déclenché quand l'unité commence à se déplacer (premier step du chemin)
+    public UnityEngine.Events.UnityEvent OnMovementStarted = new();
+
+    // Déclenché quand l'unité atteint sa destination finale avec succès
+    public UnityEngine.Events.UnityEvent OnArrived = new();
+
+    // Vrai si l'unité est actuellement en mouvement
+    public bool IsMoving => isMoving;
+
     // Références cached pour performance
     private GameObject unitGameObject;
     private AnimatorController animatorController;
@@ -163,6 +172,7 @@ public class MovementController : MonoBehaviour
         if (!isInterpolating)
         {
             isMoving = true;
+            OnMovementStarted.Invoke();
             currentState = MovementState.Moving;
             interpolationCoroutine = StartCoroutine(InterpolationLoop());
         }
@@ -417,6 +427,7 @@ public class MovementController : MonoBehaviour
     {
         isMoving = false;
         currentState = MovementState.Arrived;
+        OnArrived.Invoke();
 
         if (debugMovement)
         {

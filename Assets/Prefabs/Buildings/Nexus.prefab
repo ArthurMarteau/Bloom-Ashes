@@ -15,6 +15,7 @@ GameObject:
   - component: {fileID: 6996165976061617771}
   - component: {fileID: 6760882111119899628}
   - component: {fileID: 4768053593104613803}
+  - component: {fileID: -3778254896132853241}
   m_Layer: 7
   m_Name: Nexus
   m_TagString: Untagged
@@ -214,3 +215,18 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HighlightTarget
   outlineMaterial: {fileID: 0}
   outlineSize: 2
+--- !u!114 &-3778254896132853241
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4508941942871767497}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e42fe591bd77d14f8f5acd2391cfd78, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::NexusController
+  spawnSFX: {fileID: 0}
+  spawnVFX: {fileID: 0}
+  debugNexus: 1

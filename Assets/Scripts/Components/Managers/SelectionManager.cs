@@ -115,12 +115,6 @@ public class SelectionManager : MonoBehaviour
     // Clic gauche enfoncé — réinitialise l'état du drag
     private void OnLeftClickDownHandler(Vector3 worldPosition)
     {
-        // Ignore si curseur sur UI
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-        {
-            return;
-        }
-
         isDragging = false;
 
         Debug.Log($"🎯 START Selection — monde {worldPosition}");
@@ -129,12 +123,6 @@ public class SelectionManager : MonoBehaviour
     // Début du drag — enregistre la position initiale et active le rectangle
     private void OnDragStartHandler(Vector3 screenPosition)
     {
-        // Ignore si curseur sur UI
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-        {
-            return;
-        }
-
         dragStartPosition = screenPosition;
         lastDragScreenPosition = screenPosition;
         isDragging = true;
@@ -160,11 +148,11 @@ public class SelectionManager : MonoBehaviour
     // Clic simple relâché (pas de drag) — sélectionne l'objet sous le curseur
     private void OnLeftClickUpHandler(Vector3 screenPosition)
     {
-        // Ignore si curseur sur UI
-        if (EventSystem.current != null && EventSystem.current.IsPointerOverGameObject())
-        {
-            return;
-        }
+        PointerEventData eventData = new PointerEventData(EventSystem.current);
+        eventData.position = new Vector2(screenPosition.x, screenPosition.y);
+        List<RaycastResult> results = new List<RaycastResult>();
+        EventSystem.current.RaycastAll(eventData, results);
+        if (results.Count > 0) return;
 
         HandleSimpleClick(screenPosition);
     }
@@ -367,6 +355,7 @@ public class SelectionManager : MonoBehaviour
 
     // Ajoute une unité à la sélection multiple et crée son carré visuel
     // Maintient le dictionnaire unité→carré pour la gestion de sélection
+    // Toute unité est sélectionnable — la restriction d'équipe appartient à OrderManager
     private void SelectUnit(GameObject unit)
     {
         if (unit == null || IsUnitSelected(unit)) return;

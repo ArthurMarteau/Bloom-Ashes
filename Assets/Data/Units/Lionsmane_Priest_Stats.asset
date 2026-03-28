@@ -12,13 +12,19 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: Lionsmane_Priest_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
+  unitName: Lionsmane Priest
+  portrait: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
   maxHP: 25
   attackDamage: 2
   attackRange: 1
   defense: 2
   attackSpeed: 2
   moveSpeed: 1
-  unitName: Lionsmane Priest
-  portrait: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
   isRootborn: 0
   movementType: 0
+  hasActiveAbility: 1
+  unitPrefab: {fileID: 6748851485159956997, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
+  watersapCost: 20
+  buildTime: 20
+  tierRequired: 1
+  productionIcon: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}

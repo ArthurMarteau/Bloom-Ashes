@@ -103,11 +103,22 @@ public class OrderManager : MonoBehaviour
         lastTargetUnit = targetUnit;
 
         var selectedUnits = selectionManager.GetSelectedUnits();
+
+        // Filtre équipe : en mode multijoueur, ne traite que les unités du joueur local
+        if (GameManager.Instance != null && !GameManager.Instance.DevModeAllTeams && PlayerManager.Instance != null)
+            selectedUnits = selectedUnits.FindAll(u => {
+                ITeamMember tm = u.GetComponent<ITeamMember>();
+                return tm != null && PlayerManager.Instance.IsLocalPlayer(tm.GetTeamID());
+            });
+
         int attackOrders = 0;
         int chaseOrders = 0;
 
         foreach (GameObject unit in selectedUnits)
         {
+            MovementController movementController = unit.GetComponent<MovementController>();
+            if (movementController != null && !movementController.enabled) continue;
+
             // Ne peut pas se cibler soi-même
             if (unit == targetUnit)
             {
@@ -197,10 +208,21 @@ public class OrderManager : MonoBehaviour
 
         // Envoie l'ordre de mouvement à toutes les unités sélectionnées
         var selectedUnits = selectionManager.GetSelectedUnits();
+
+        // Filtre équipe : en mode multijoueur, ne traite que les unités du joueur local
+        if (GameManager.Instance != null && !GameManager.Instance.DevModeAllTeams && PlayerManager.Instance != null)
+            selectedUnits = selectedUnits.FindAll(u => {
+                ITeamMember tm = u.GetComponent<ITeamMember>();
+                return tm != null && PlayerManager.Instance.IsLocalPlayer(tm.GetTeamID());
+            });
+
         int successfulOrders = 0;
 
         foreach (GameObject unit in selectedUnits)
         {
+            MovementController movementController = unit.GetComponent<MovementController>();
+            if (movementController == null || !movementController.enabled) continue;
+
             // Annule la chase en cours si existe
             ChaseController chaseController = unit.GetComponent<ChaseController>();
             if (chaseController != null && chaseController.IsChasing())
@@ -220,18 +242,10 @@ public class OrderManager : MonoBehaviour
             }
 
             // Envoie l'ordre de mouvement directement au MovementController
-            MovementController movementController = unit.GetComponent<MovementController>();
-            if (movementController != null)
+            bool orderSuccessful = movementController.MoveTo(targetGridPosition);
+            if (orderSuccessful)
             {
-                bool orderSuccessful = movementController.MoveTo(targetGridPosition);
-                if (orderSuccessful)
-                {
-                    successfulOrders++;
-                }
-            }
-            else
-            {
-                Debug.LogWarning($"OrderManager: {unit.name} n'a pas de MovementController");
+                successfulOrders++;
             }
         }
 
