@@ -65,7 +65,7 @@ public class BudComponent : MonoBehaviour
         // Animation d'attente pendant le buildTime
         Animator animator = GetComponent<Animator>();
         if (animator != null)
-            animator.Play("Idle_Bud");
+            animator.Play("Idle");
 
         StartCoroutine(ProductionRoutine());
     }
