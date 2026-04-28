@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using UnityEngine.Events;
 
 // Unité intermédiaire statique entre le Rootborn et l'unité de combat finale
 // Spawné par RootbornProductionController.ExecuteTransform, remplacé par l'unité finale à la fin du buildTime
@@ -14,8 +15,6 @@ public class BudComponent : MonoBehaviour
     [Tooltip("Durée de l'animation Hatching avant le spawn de l'unité finale (secondes)")]
     [SerializeField] private float hatchingDuration = 1f;
 
-    [SerializeField] private SelectionManager selectionManager;
-
     // Unité en cours de production — assignée via Initialize
     private UnitStatsData unitInProduction;
 
@@ -27,6 +26,10 @@ public class BudComponent : MonoBehaviour
 
     // Vrai si Cancel() a été appelé — empêche la coroutine de continuer
     private bool isCancelled;
+
+    [Header("Events")]
+    [Tooltip("Déclenché au début de la phase Hatching (juste avant le SpawnFinalUnit)")]
+    public UnityEvent<BudComponent> OnHatchingStarted;
 
     // Retourne la progression de la production (0.0 → 1.0), clampée, pour les barres de progression UI
     public float Progress
@@ -42,6 +45,9 @@ public class BudComponent : MonoBehaviour
 
     // Retourne le ScriptableObject de l'unité en production, pour l'affichage du portrait UI
     public UnitStatsData UnitInProduction => unitInProduction;
+
+    // Durée de l'animation Hatching — exposée pour synchronisation des VFX
+    public float HatchingDuration => hatchingDuration;
 
     // Initialise le Bud avec l'unité à produire, les HP hérités du Rootborn et l'équipe du propriétaire
     // currentHP : HP courants du Rootborn au moment de la transformation — propagés au BuildingStatsComponent si présent
@@ -69,8 +75,6 @@ public class BudComponent : MonoBehaviour
         if (animator != null)
             animator.Play("Idle");
 
-        selectionManager = Object.FindFirstObjectByType<SelectionManager>();
-
         StartCoroutine(ProductionRoutine());
     }
 
@@ -92,6 +96,10 @@ public class BudComponent : MonoBehaviour
         Animator animator = GetComponent<Animator>();
         if (animator != null)
             animator.Play("Hatching");
+
+        // Notifie les systèmes externes (VFX, audio, etc.) que le Hatching commence
+        // Passe la référence de ce Bud pour que les listeners puissent accéder à hatchingDuration via une méthode publique
+        OnHatchingStarted?.Invoke(this);
 
         yield return new WaitForSeconds(hatchingDuration);
 
@@ -124,42 +132,60 @@ public class BudComponent : MonoBehaviour
 
         Debug.Log($"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})");
 
-        if (selectionManager != null)
-            selectionManager.SelectGameObject(spawnedUnit);
+        // Notifie le système de remplacement AVANT destruction
+        if (EntitySpawnManager.Instance != null)
+        {
+            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, spawnedUnit);
+        }
 
         Destroy(gameObject);
     }
 
-    // Annule la production et restitue un Rootborn à la position du Bud
-    // Cas d'usage : ordre de mouvement reçu pendant la production, mort du bâtiment adjacent, etc.
+    // Annule la production : stoppe la coroutine en cours, restitue un Rootborn et détruit le Bud
     public void Cancel()
     {
         isCancelled = true;
         StopAllCoroutines();
 
-        // Libération de la tile avant l'Instantiate du Rootborn
+        // Étape 1 : Récupère les HP actuels du Bud
+        int budCurrentHP = 0;
+        BuildingStatsComponent budStats = GetComponent<BuildingStatsComponent>();
+        if (budStats != null)
+            budCurrentHP = budStats.GetCurrentHP();
+
+        // Étape 2 : Libération de la tile
         Collider2D budCollider = GetComponent<Collider2D>();
         if (budCollider != null)
             budCollider.enabled = false;
 
+        // Étape 3 : Validation prefab Rootborn
         if (rootbornPrefab == null)
         {
-            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : Cancel — rootbornPrefab non assigné, Rootborn non restitué");
+            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : Cancel — rootbornPrefab non assigné");
             Destroy(gameObject);
             return;
         }
 
+        // Étape 4 : Spawn Rootborn
         GameObject rootborn = Instantiate(rootbornPrefab, transform.position, Quaternion.identity);
 
+        // Étape 5 : Propagation équipe
         TeamComponent rootbornTeam = rootborn.GetComponent<TeamComponent>();
         if (rootbornTeam != null)
             rootbornTeam.SetTeamID(teamID);
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — Rootborn restitué (équipe {teamID})");
+        // Étape 6 : Propagation HP du Bud au Rootborn
+        UnitStatsComponent rootbornStats = rootborn.GetComponent<UnitStatsComponent>();
+        if (rootbornStats != null && budCurrentHP > 0)
+            rootbornStats.SetCurrentHP(budCurrentHP);
 
-        if (selectionManager != null)
-            selectionManager.SelectGameObject(rootborn);
+        Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — Rootborn restitué ({budCurrentHP} HP)");
 
+        // Étape 7 : Notifie le système de remplacement
+        if (EntitySpawnManager.Instance != null)
+            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, rootborn);
+
+        // Étape 8 : Destruction Bud
         Destroy(gameObject);
     }
 

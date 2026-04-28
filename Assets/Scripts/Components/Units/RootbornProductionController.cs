@@ -68,16 +68,13 @@ public class RootbornProductionController : MonoBehaviour
         if (building == null)
             return new List<UnitStatsData>();
 
-        return building.GetBaseStats().producibleUnits;
+        return building.GetUnlockedUnits();
     }
 
-    // Retourne le statut de disponibilité d'une unité selon le tier du bâtiment et le Watersap disponible
+    // Retourne le statut de disponibilité d'une unité selon le Watersap disponible
+    // Le filtre de tier est géré visuellement par ProductionPanelUI
     public UnitProductionStatus GetUnitStatus(UnitStatsData unitData, int teamID, int buildingCurrentTier)
     {
-        // Vérifie d'abord le tier — un tier insuffisant bloque même si le Watersap est disponible
-        if (unitData.tierRequired > buildingCurrentTier)
-            return UnitProductionStatus.TierLocked;
-
         // Vérifie le Watersap disponible
         if (WatersapManager.Instance.GetWatersap(teamID) < unitData.watersapCost)
             return UnitProductionStatus.NotEnoughWatersap;
@@ -179,8 +176,11 @@ public class RootbornProductionController : MonoBehaviour
 
         budComponent.Initialize(unitData, rootbornCurrentHP, teamID);
 
-        SelectionManager selectionManager = Object.FindFirstObjectByType<SelectionManager>();
-        selectionManager?.SelectGameObject(budObject);
+        // Notifie le système de remplacement AVANT destruction
+        if (EntitySpawnManager.Instance != null)
+        {
+            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, budObject);
+        }
 
         // Étape 8 : destruction du Rootborn
         Destroy(gameObject);

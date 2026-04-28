@@ -22,4 +22,5 @@ MonoBehaviour:
   isNexus: 0
   producibleUnits:
   - {fileID: 11400000, guid: 67952215cc941ac4e875ec4347e2451b, type: 2}
+  - {fileID: 11400000, guid: 48e2283247d0a5d46865952762e64be0, type: 2}
   maxTier: 1

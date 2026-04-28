@@ -103,6 +103,12 @@ public class NexusController : MonoBehaviour
         if (debugNexus)
             Debug.Log($"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)");
 
+        // Notifie le système de spawn pour sélection automatique
+        if (EntitySpawnManager.Instance != null)
+        {
+            EntitySpawnManager.Instance.NotifyEntitySpawned(gameObject, spawnedUnit);
+        }
+
         return true;
     }
 

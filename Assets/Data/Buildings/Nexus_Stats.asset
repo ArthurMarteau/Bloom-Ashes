@@ -23,3 +23,4 @@ MonoBehaviour:
   producibleUnits:
   - {fileID: 11400000, guid: 4e864d1c8ba716c4980b12c563a810aa, type: 2}
   maxTier: 1
+  abilityData: {fileID: 11400000, guid: f64b960648fba2f4b8a83ffd55a3746f, type: 2}

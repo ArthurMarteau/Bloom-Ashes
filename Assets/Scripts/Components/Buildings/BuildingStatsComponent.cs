@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -17,6 +18,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     public UnityEvent OnDamaged = new UnityEvent();           // Déclenché quand le bâtiment prend des dégâts
     public UnityEvent OnHealed = new UnityEvent();            // Déclenché quand le bâtiment est soigné
     public UnityEvent OnBuildingDestroyed = new UnityEvent(); // Déclenché quand le bâtiment est détruit
+    public UnityEvent OnTierUpgraded = new UnityEvent();      // Déclenché quand le bâtiment monte de tier
 
     [Header("Debug")]
     [SerializeField] private bool debugStats = true;
@@ -24,6 +26,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     // État runtime
     private int currentHP;
     private bool isDestroyed = false;
+    private int currentTier = 1;
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -241,6 +244,59 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     {
         if (baseStats == null) return 0;
         return baseStats.defense;
+    }
+
+    // Retourne le tier actuel du bâtiment (1 à 4)
+    public int GetCurrentTier() => currentTier;
+
+    // Retourne le tier maximum — toujours 4 pour toutes les factions
+    public int GetMaxTier() => 4;
+
+    // Tente de monter le bâtiment d'un tier — dépense le Watersap si possible
+    // Retourne true si la montée de tier a réussi, false sinon
+    public bool UpgradeTier(int teamID, int cost)
+    {
+        if (currentTier >= 4)
+        {
+            Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} : tier max atteint ({currentTier}/4)");
+            return false;
+        }
+
+        if (WatersapManager.Instance == null || !WatersapManager.Instance.CanSpend(teamID, cost))
+            return false;
+
+        WatersapManager.Instance.SpendWatersap(teamID, cost);
+        currentTier++;
+        OnTierUpgraded.Invoke();
+
+        Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} : tier {currentTier - 1} → {currentTier} (équipe {teamID})");
+        return true;
+    }
+
+    // Retourne toutes les unités de producibleUnits sans filtre par tier
+    // Utilisé par le panel Rootborn — le filtre (grisé/verrouillé) est géré côté UI
+    public List<UnitStatsData> GetUnlockedUnits()
+    {
+        if (baseStats == null || baseStats.producibleUnits == null)
+            return new List<UnitStatsData>();
+
+        return new List<UnitStatsData>(baseStats.producibleUnits);
+    }
+
+    // Retourne uniquement les unités dont tierRequired <= currentTier
+    // Utilisé par le panel bâtiment — seules les unités disponibles sont affichées
+    public List<UnitStatsData> GetAvailableUnits()
+    {
+        if (baseStats == null || baseStats.producibleUnits == null)
+            return new List<UnitStatsData>();
+
+        List<UnitStatsData> available = new List<UnitStatsData>();
+        foreach (UnitStatsData unit in baseStats.producibleUnits)
+        {
+            if (unit != null && unit.tierRequired <= currentTier)
+                available.Add(unit);
+        }
+        return available;
     }
 
     // Retourne le ScriptableObject de stats de base (pour l'UI)

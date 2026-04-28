@@ -6,6 +6,7 @@
         _TeamColor ("Team Color", Color) = (1,1,1,1)
         _HueThreshold ("Hue Threshold", Range(0.01, 0.5)) = 0.1
         _SaturationMin ("Saturation Minimum", Range(0, 1)) = 0.5
+        _FlashAmount ("Flash Amount", Range(0, 1)) = 0
     }
 
     SubShader
@@ -32,6 +33,7 @@
                 float4 _TeamColor;
                 float _HueThreshold;
                 float _SaturationMin;
+                float _FlashAmount;
             CBUFFER_END
 
             struct Attributes
@@ -118,10 +120,16 @@
                     else if (i == 4) rgb = float3(t, p, resultHSV.z);
                     else rgb = float3(resultHSV.z, p, q);
 
-                    return float4(rgb, pixel.a);
+                    float4 teamResult = float4(rgb, pixel.a);
+                    // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
+                    teamResult.rgb = lerp(teamResult.rgb, float3(1, 1, 1), _FlashAmount);
+                    return teamResult;
                 }
 
-                return pixel * IN.color;
+                float4 finalColor = pixel * IN.color;
+                // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
+                finalColor.rgb = lerp(finalColor.rgb, float3(1, 1, 1), _FlashAmount);
+                return finalColor;
             }
             ENDHLSL
         }

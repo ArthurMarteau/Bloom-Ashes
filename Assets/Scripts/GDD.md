@@ -11,7 +11,7 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Visual style**: 3D Low Poly to 2D Line Art, old school 8-bit feel
 - **Audio**: 8-bit music per map, 8-bit sound effects
 - **Language**: English — all in-game content visible to the player is in English (unit names, ability names, tooltips, UI text, etc.)
-- **Single resource**: "Watersap" — collected by Rootborn in static position (max 300 per player)
+- **Single resource**: "Watersap" — collected and stored individually by each Rootborn, then transferred to the player's pool (max 300 per player)
 
 ## Core Mechanics
 
@@ -96,10 +96,15 @@ The base unit shared by all factions, created at the Nexus.
 | Train   | 40   | 10         |
 
 **Abilities**:
-- **Static Collection**: While stationary, collects 1 Watersap every 5 seconds
-- **Source Collection**: 3 Rootborn on a Watersap source collect faster/more
-- **Build**: 4 Rootborn on a foundation site sacrifice themselves to build a faction building
-- **Transform**: Adjacent to a building, transforms into a chosen combat unit (becomes a seed, then hatches)
+
+| Ability             | Type             | Cost | Cooldown | Description                                                                                  |
+| ------------------- | ---------------- | ---- | -------- | -------------------------------------------------------------------------------------------- |
+| Watersap Collection | Passive + Active | 0    | 0        | Collects and stores Watersap individually, then transfers it to the player's pool.           |
+| Source Collection   | Passive          | 0    | —        | Doubles the collection rate when standing on a Watersap source.                              |
+| Build               | Active           | 0    | —        | 4 Rootborn on a foundation site sacrifice themselves to build a faction building.            |
+| Transform           | Active           | —    | —        | Adjacent to a building, transforms into a chosen combat unit (becomes a seed, then hatches). |
+
+See the **Abilities** section below for detailed mechanics.
 
 ---
 
@@ -768,6 +773,52 @@ Aggressive creatures not affiliated with any faction. One per biome.
 - A* uses terrain path cost as tile weight
 - Flying units ignore terrain cost (always 1.0)
 - Nice-to-have: A* prefers Path tiles for faster travel even if route is longer in tile count
+
+---
+
+## Abilities
+
+This section provides detailed mechanics for abilities that go beyond the unit table descriptions.
+
+### Watersap Collection (Rootborn)
+
+**Type**: Passive (auto) + Active (manual trigger)
+
+**Passive collection**:
+- Each idle Rootborn collects **1 Watersap every 5 seconds** automatically.
+- Watersap is **stored inside the Rootborn**, up to a maximum of **10**.
+- The collection timer **resets to 0 whenever the Rootborn receives an order** (move, transform, build, etc.). This prevents timer-stacking exploits.
+
+**Auto-transfer**:
+- When the internal stock reaches **10**, the Rootborn automatically transfers all 10 Watersap to the player's pool.
+- A luminous wave VFX plays inside the Rootborn from roots to head.
+
+**Manual trigger (Active ability)**:
+- Cost: **0 Watersap**
+- Cooldown: **0**
+- Effect: instantly transfers the entire stored stock to the player's pool (same VFX as auto-transfer).
+- Does **not** reset the collection timer (the next 5s tick continues normally).
+
+**Manual trigger availability**:
+- Stock = 0 → ❌ disabled (nothing to transfer)
+- Stock between 1 and 9 → ✅ available
+- Stock = 10 → ❌ disabled (auto-transfer is about to fire — prevents double trigger)
+
+**Loss conditions**:
+- If the Rootborn dies, the stored Watersap is **lost** (not transferred, not dropped).
+
+**Visual feedback**:
+- On any transfer (auto or manual): a luminous wave propagates inside the Rootborn from the roots up the trunk and branches to the head, symbolizing the Watersap leaving the body toward the player's pool.
+
+### Source Collection (Rootborn)
+
+**Type**: Passive
+
+**Mechanics**:
+- A Rootborn standing on a Watersap source tile collects at **double rate** (2 Watersap every 5 seconds instead of 1).
+- All other rules of Watersap Collection still apply (storage cap, timer reset on order, etc.).
+
+**Implementation status**: Designed, not yet implemented.
 
 ---
 

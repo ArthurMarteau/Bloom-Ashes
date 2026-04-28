@@ -42,6 +42,7 @@ Material:
     m_Ints: []
     m_Floats:
     - _EnableExternalAlpha: 0
+    - _FlashAmount: 0
     - _HueThreshold: 0.1
     - _SaturationMin: 0
     - _Threshold: 0.9

@@ -12,8 +12,8 @@ public class AnimationGenerator
 {
     // Nombre de frames par type d'animation
     private const int FRAMES_IDLE_MOVE = 13; // frames 1-13 du spritesheet Idle
-    private const int FRAMES_ATTACK    = 5;  // frames 1-5 du spritesheet Attack
-    private const int FRAMES_CAST      = 5;  // frames 1-5 du spritesheet Cast
+    private const int FRAMES_ATTACK    = 6;  // frames 1-5 du spritesheet Attack
+    private const int FRAMES_CAST      = 6;  // frames 1-5 du spritesheet Cast
     private const int FRAMES_WALK      = 13; // frames 0-12
     private const int FRAMES_HIT       = 5;  // frames 0-4
     private const int FRAMES_DEATH     = 13; // frames 0-12

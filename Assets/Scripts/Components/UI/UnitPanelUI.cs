@@ -5,21 +5,42 @@ using TMPro;
 
 // Panneau d'information bas gauche — affiche les infos de la sélection courante
 // Branché sur les UnityEvents de SelectionManager (pas de polling dans Update)
-// Gère 4 modes : unité simple, groupe, terrain, obstacle — masqué si aucune sélection
+// Gère 7 modes : unité simple, groupe, bâtiment, nexus, bud, terrain, obstacle — masqué si aucune sélection
 //
 // SETUP PREFAB — Hiérarchie attendue (à créer dans l'éditeur) :
 //   Canvas (Screen Space Overlay)
 //   └── PanelRoot (ancré BottomLeft, pivot 0,0, pos 16,16)
 //       ├── Portrait (Image ronde, Mask circulaire)
-//       ├── HPBar (Image Filled Radial 360 — arc HP)
-//       ├── HPText (TextMeshProUGUI — "20 / 25", 11px)
+//       ├── HPContainer (GameObject parent)
+//       │   ├── HPBarFill (Image Filled Radial 360 — arc HP)
+//       │   └── HPText (TextMeshProUGUI — "20 / 25", 11px)
 //       ├── UnitName (TextMeshProUGUI — bold, 14px, blanc)
-//       ├── StatValueATK (TextMeshProUGUI — valeur ATK avec modificateurs)
-//       ├── StatValueDEF (TextMeshProUGUI — valeur DEF avec modificateurs)
-//       ├── StatValueSPD (TextMeshProUGUI — valeur SPD)
+//       ├── StatSlotATK (GameObject parent avec Image background)
+//       │   └── StatTextATK (TextMeshProUGUI — valeur ATK)
+//       ├── StatSlotDEF (GameObject parent avec Image background)
+//       │   └── StatTextDEF (TextMeshProUGUI — valeur DEF)
+//       ├── StatSlotSPD (GameObject parent avec Image background)
+//       │   └── StatTextSPD (TextMeshProUGUI — valeur SPD)
+//       ├── AbilitySlot (Image — slot ability, enfant = icône)
+//       ├── SacrificeSlot (Image — slot sacrifice, enfant = icône)
+//       ├── CancelSlot (Image — slot cancel Bud, enfant = icône)
+//       ├── BudProgressBarFill (Image Filled — barre de progression production)
 //       └── AccessibilityText (TextMeshProUGUI — italique gris, terrain uniquement)
 public class UnitPanelUI : MonoBehaviour
 {
+    // Types d'entités sélectionnables — détermine la configuration de visibilité
+    private enum EntityType
+    {
+        None,        // Aucune sélection
+        Unit,        // Unité standard (UnitStatsComponent)
+        UnitGroup,   // Groupe de 2+ unités
+        Building,    // Bâtiment standard (BuildingStatsComponent)
+        Nexus,       // Bâtiment spécial avec ability de production (NexusController)
+        Bud,         // Bâtiment temporaire de production (BudComponent)
+        Obstacle,    // Obstacle (layer obstacle)
+        Ground       // Terrain (tile vide)
+    }
+
     [Header("Racine du panneau")]
     [SerializeField] private GameObject panelRoot; // SetActive(false) quand rien n'est sélectionné
 
@@ -27,23 +48,35 @@ public class UnitPanelUI : MonoBehaviour
     [SerializeField] private Image portraitImage; // Image enfant dans le Mask — reçoit le sprite du portrait
 
     [Header("HP")]
-    [SerializeField] private Image hpBarFill;              // Image Filled Radial 360 — arc HP
-    [SerializeField] private TextMeshProUGUI hpText;       // Texte "19/20" sur l'arc HP
-    [SerializeField] private Image budProgressBarFill;     // Barre de progression du Bud (0→1)
+    [SerializeField] private GameObject hpContainer;          // GameObject parent contenant HPBarFill + HPText
+    [SerializeField] private Image hpBarFill;                 // Image Filled Radial 360 — arc HP (enfant de hpContainer)
+    [SerializeField] private TextMeshProUGUI hpText;          // Texte "19/20" sur l'arc HP (enfant de hpContainer)
+    [SerializeField] private Image budProgressBarFill;        // Barre de progression du Bud (0→1)
 
     [Header("Infos unité")]
     [SerializeField] private TextMeshProUGUI unitNameText; // Nom unité (courbé côté gauche)
-    [SerializeField] private TextMeshProUGUI statValueATK; // Valeur ATK avec modificateurs
-    [SerializeField] private TextMeshProUGUI statValueDEF; // Valeur DEF avec modificateurs
-    [SerializeField] private TextMeshProUGUI statValueSPD; // Valeur SPD (converti en 1/2/3)
+
+    [Header("Slots Stats (GameObjects parents)")]
+    [SerializeField] private GameObject statSlotATK; // GameObject parent avec Image background
+    [SerializeField] private GameObject statSlotDEF;
+    [SerializeField] private GameObject statSlotSPD;
+
+    [Header("Stats Textes (TextMeshProUGUI directs)")]
+    [SerializeField] private TextMeshProUGUI statTextATK; // TextMeshPro enfant du slot
+    [SerializeField] private TextMeshProUGUI statTextDEF;
+    [SerializeField] private TextMeshProUGUI statTextSPD;
 
     [Header("Accessibilité terrain")]
     [SerializeField] private TextMeshProUGUI accessibilityText; // Texte italique gris — terrain uniquement
 
-    [Header("Slots Ability")]
-    [SerializeField] private Image abilitySlot;   // Background du slot ability (enfant = icône)
-    [SerializeField] private Image sacrificeSlot; // Background du slot sacrifice (enfant = icône)
+    [Header("Boutons d'action")]
+    [SerializeField] private GameObject abilityButton;         // Ability_Button — affiché si ability disponible
+    [SerializeField] private GameObject sacrificeCancelButton; // Sacrifice/Cancel_Button — affiché si unité ou bud
+    [SerializeField] private GameObject sacrificeIcon;         // Sacrifice_Icon — enfant de sacrificeCancelButton
+    [SerializeField] private GameObject cancelIcon;            // Cancel_Icon — enfant de sacrificeCancelButton
 
+    // Entité actuellement sélectionnée — utilisée par les callbacks boutons
+    private GameObject currentSelectedEntity;
 
     // Couleurs HP selon le pourcentage de vie
     private static readonly Color ColorHPFull   = new Color(0.20f, 0.80f, 0.20f); // vert     > 75%
@@ -92,6 +125,12 @@ public class UnitPanelUI : MonoBehaviour
         selectionManager.OnBuildingSelected.AddListener(HandleBuildingSelected);
         selectionManager.OnSelectionCleared.AddListener(HandleSelectionCleared);
 
+        // Initialise les callbacks des boutons d'action
+        Button abilityBtn = abilityButton?.GetComponent<Button>();
+        if (abilityBtn != null) abilityBtn.onClick.AddListener(OnAbilityButtonClicked);
+        Button btn = sacrificeCancelButton?.GetComponent<Button>();
+        if (btn != null) btn.onClick.AddListener(OnSacrificeOrCancelButtonClicked);
+
         // Masqué par défaut au démarrage
         if (panelRoot != null)
         {
@@ -113,6 +152,11 @@ public class UnitPanelUI : MonoBehaviour
             selectionManager.OnSelectionCleared.RemoveListener(HandleSelectionCleared);
         }
 
+        Button abilityBtn = abilityButton?.GetComponent<Button>();
+        if (abilityBtn != null) abilityBtn.onClick.RemoveListener(OnAbilityButtonClicked);
+        Button btn = sacrificeCancelButton?.GetComponent<Button>();
+        if (btn != null) btn.onClick.RemoveListener(OnSacrificeOrCancelButtonClicked);
+
         UntrackUnit();
         UntrackBuilding();
     }
@@ -133,7 +177,7 @@ public class UnitPanelUI : MonoBehaviour
         if (units.Count == 1)
         {
             BudComponent budComponent = units[0].GetComponent<BudComponent>();
-            if (budComponent != null) { ShowPanel(); RefreshBud(units[0]); return; }
+            if (budComponent != null) { RefreshBud(units[0]); return; }
 
             RefreshSingleUnit(units[0]);
         }
@@ -156,17 +200,17 @@ public class UnitPanelUI : MonoBehaviour
     // Reçoit le bâtiment sélectionné
     private void HandleBuildingSelected(GameObject buildingObject)
     {
+        if (buildingObject == null)
+        {
+            HandleSelectionCleared();
+            return;
+        }
+
         BudComponent budComponent = buildingObject.GetComponent<BudComponent>();
         if (budComponent != null)
         {
             ShowPanel();
             RefreshBud(buildingObject);
-            return;
-        }
-
-        if (buildingObject == null)
-        {
-            HandleSelectionCleared();
             return;
         }
 
@@ -186,11 +230,84 @@ public class UnitPanelUI : MonoBehaviour
     // Aucune sélection — masque le panneau entier
     private void HandleSelectionCleared()
     {
+        currentSelectedEntity = null;
         trackedBud = null;
-        HidePanel();
         UntrackUnit();
         UntrackBuilding();
+        ConfigureVisibility(EntityType.None);
+        HidePanel();
         Debug.Log("🖥️ UnitPanelUI: Sélection effacée — panneau masqué");
+    }
+
+    // === CONFIGURATION DE VISIBILITÉ CENTRALISÉE ===
+
+    /// <summary>
+    /// Configure la visibilité de TOUS les éléments UI selon le type d'entité.
+    /// Tout est désactivé par défaut, puis activé sélectivement.
+    /// Les éléments conditionnels (abilityButton, statTextDEF/SPD pour Ground, HP pour Bud)
+    /// sont gérés dans les méthodes Refresh*() après cet appel.
+    /// </summary>
+    private void ConfigureVisibility(EntityType type)
+    {
+        // 1. Désactiver TOUT par défaut (les enfants sont gérés par leurs parents hpContainer/statSlot)
+        SetActive(hpContainer,                    false);
+        SetActive(statSlotATK,                    false);
+        SetActive(statSlotDEF,                    false);
+        SetActive(statSlotSPD,                    false);
+        SetActive(abilityButton,  false);
+        SetActive(sacrificeCancelButton,   false);
+        SetActive(budProgressBarFill?.gameObject, false);
+        SetActive(accessibilityText?.gameObject,  false);
+
+        // 2. Activer sélectivement selon le type d'entité
+        switch (type)
+        {
+            case EntityType.Unit:
+                SetActive(hpContainer,               true);
+                SetActive(statSlotATK,               true);
+                SetActive(statSlotDEF,               true);
+                SetActive(statSlotSPD,               true);
+                SetActive(sacrificeCancelButton, true);
+                // abilityButton : conditionnel sur statsData.hasActiveAbility (géré dans RefreshSingleUnit)
+                break;
+
+            case EntityType.UnitGroup:
+                // Seulement portrait et nom — tout le reste masqué
+                break;
+
+            case EntityType.Building:
+                SetActive(hpContainer, true);
+                SetActive(statSlotDEF, true);
+                break;
+
+            case EntityType.Nexus:
+                SetActive(hpContainer,             true);
+                SetActive(statSlotDEF,             true);
+                SetActive(abilityButton, true);
+                break;
+
+            case EntityType.Bud:
+                SetActive(hpContainer,                    true);
+                SetActive(statSlotDEF,                    true);
+                SetActive(budProgressBarFill?.gameObject, true);
+                SetActive(sacrificeCancelButton, true);
+                // hpContainer et statSlotDEF : conditionnels sur BuildingStatsComponent (géré dans RefreshBud)
+                break;
+
+            case EntityType.Obstacle:
+                // Seulement portrait et nom — tout le reste masqué
+                break;
+
+            case EntityType.Ground:
+                SetActive(accessibilityText?.gameObject, true);
+                // statTextDEF : conditionnel sur defMod != 0 (géré dans RefreshGround)
+                // statTextSPD : conditionnel sur spdMod != 1.0 (géré dans RefreshGround)
+                break;
+
+            case EntityType.None:
+            default:
+                break;
+        }
     }
 
     // === MODES D'AFFICHAGE ===
@@ -198,8 +315,8 @@ public class UnitPanelUI : MonoBehaviour
     // Mode unité simple : portrait, nom, HP, stats ATK/DEF/SPD
     private void RefreshSingleUnit(GameObject unitObject)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
+        UntrackBuilding();
 
         UnitStatsComponent stats = unitObject.GetComponent<UnitStatsComponent>();
         if (stats == null)
@@ -207,6 +324,12 @@ public class UnitPanelUI : MonoBehaviour
             Debug.LogWarning($"🖥️ UnitPanelUI: Pas de UnitStatsComponent sur {unitObject.name}");
             return;
         }
+
+        ConfigureVisibility(EntityType.Unit);
+        currentSelectedEntity = unitObject;
+
+        SetActive(sacrificeIcon, true);
+        SetActive(cancelIcon,    false);
 
         // Début du tracking pour mises à jour HP temps réel
         TrackUnit(stats);
@@ -234,53 +357,31 @@ public class UnitPanelUI : MonoBehaviour
         string displayName = (statsData != null && !string.IsNullOrEmpty(statsData.unitName)) ? statsData.unitName : unitObject.name;
         SetText(unitNameText, displayName);
 
-        // HP — affiche valeurs initiales
+        // HP
         RefreshHPDisplay(stats);
 
-        // Affiche HP bar
-        SetActive(hpBarFill?.gameObject, true);
-        SetActive(hpText?.gameObject, true);
-
         // Stats — affichées et colorées en neutre pour les unités
-        SetActive(statValueATK?.gameObject, true);
-        SetActive(statValueDEF?.gameObject, true);
-        SetActive(statValueSPD?.gameObject, true);
+        SetText(statTextATK, stats.GetAttackDamage().ToString());
+        SetText(statTextDEF, stats.GetDefense().ToString());
+        SetText(statTextSPD, ConvertSpeedToDisplay(stats.GetMoveSpeed()).ToString());
 
-        SetText(statValueATK, stats.GetAttackDamage().ToString());
-        SetText(statValueDEF, stats.GetDefense().ToString());
-        SetText(statValueSPD, ConvertSpeedToDisplay(stats.GetMoveSpeed()).ToString());
+        SetTextColor(statTextATK, Color.white);
+        SetTextColor(statTextDEF, Color.white);
+        SetTextColor(statTextSPD, Color.white);
 
-        SetTextColor(statValueATK, Color.white);
-        SetTextColor(statValueDEF, Color.white);
-        SetTextColor(statValueSPD, Color.white);
-
-        // Masque le texte d'accessibilité terrain
-        SetActive(accessibilityText?.gameObject, false);
-
-        // Slots ability et sacrifice
-        RefreshAbilitySlots(statsData);
-    }
-
-    // Affiche ou masque les slots ability et sacrifice selon les données du SO
-    // Les sprites sont fixés dans le prefab Unity — seule la visibilité change
-    private void RefreshAbilitySlots(UnitStatsData statsData)
-    {
-        // Slot ability active — affiché uniquement si hasActiveAbility = true
-        bool showAbility = statsData != null && statsData.hasActiveAbility;
-        SetActive(abilitySlot?.gameObject, showAbility);
-
-        // Slot sacrifice — toujours affiché pour les unités
-        SetActive(sacrificeSlot?.gameObject, true);
+        // Slot ability : conditionnel sur la présence d'une AbilityData
+        bool showAbility = statsData != null && statsData.abilityData != null;
+        SetActive(abilityButton, showAbility);
     }
 
     // Mode groupe (2+ unités) : placeholder ×N, nom, tout le reste masqué
     private void RefreshGroup(int count)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
-
-        // Untrack l'unité précédente (pas de HP temps réel en mode groupe)
         UntrackUnit();
+        UntrackBuilding();
+
+        ConfigureVisibility(EntityType.UnitGroup);
 
         // Portrait : placeholder coloré avec indicateur de groupe
         if (portraitImage != null)
@@ -290,23 +391,16 @@ public class UnitPanelUI : MonoBehaviour
         }
 
         SetText(unitNameText, $"{count} unités sélectionnées");
-
-        // Masque HP, stats et accessibilité
-        SetActive(hpBarFill?.gameObject, false);
-        SetActive(hpText?.gameObject, false);
-        SetActive(statValueATK?.gameObject, false);
-        SetActive(statValueDEF?.gameObject, false);
-        SetActive(statValueSPD?.gameObject, false);
-        SetActive(accessibilityText?.gameObject, false);
     }
 
     // Mode terrain : portrait couleur terrain, nom, modificateurs SPD/DEF si non nuls
     private void RefreshGround(Vector2Int gridPosition)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
-
         UntrackUnit();
+        UntrackBuilding();
+
+        ConfigureVisibility(EntityType.Ground);
 
         // Récupère le type de terrain depuis GridManager
         GroundType groundType = GridManager.Instance.GetGroundTypeAt(gridPosition);
@@ -321,44 +415,39 @@ public class UnitPanelUI : MonoBehaviour
         // Nom du terrain
         SetText(unitNameText, groundType.GetDisplayName());
 
-        // Masque HP et ATK (pas pertinents pour le terrain)
-        SetActive(hpBarFill?.gameObject, false);
-        SetActive(hpText?.gameObject, false);
-        SetActive(statValueATK?.gameObject, false);
-
-        // SPD — affiche si modificateur != 1.0
+        // SPD — affiché uniquement si modificateur != 1.0
         float spdMod = groundType.GetMoveSpeedModifier();
         bool showSPD = !Mathf.Approximately(spdMod, 1f);
-        SetActive(statValueSPD?.gameObject, showSPD);
-        if (showSPD && statValueSPD != null)
+        SetActive(statSlotSPD, showSPD);
+        if (showSPD && statTextSPD != null)
         {
             if (spdMod > 1f)
             {
-                statValueSPD.text  = $"SPD +{Mathf.RoundToInt((spdMod - 1f) * 100f)}%";
-                statValueSPD.color = ColorStatBuff;
+                statTextSPD.text  = $"SPD +{Mathf.RoundToInt((spdMod - 1f) * 100f)}%";
+                statTextSPD.color = ColorStatBuff;
             }
             else
             {
-                statValueSPD.text  = $"SPD -{Mathf.RoundToInt((1f - spdMod) * 100f)}%";
-                statValueSPD.color = ColorStatDebuff;
+                statTextSPD.text  = $"SPD -{Mathf.RoundToInt((1f - spdMod) * 100f)}%";
+                statTextSPD.color = ColorStatDebuff;
             }
         }
 
-        // DEF — affiche si modificateur != 0
+        // DEF — affiché uniquement si modificateur != 0
         int defMod = groundType.GetDefenseModifier();
         bool showDEF = defMod != 0;
-        SetActive(statValueDEF?.gameObject, showDEF);
-        if (showDEF && statValueDEF != null)
+        SetActive(statSlotDEF, showDEF);
+        if (showDEF && statTextDEF != null)
         {
             if (defMod > 0)
             {
-                statValueDEF.text  = $"DEF +{defMod}";
-                statValueDEF.color = ColorStatBuff;
+                statTextDEF.text  = $"DEF +{defMod}";
+                statTextDEF.color = ColorStatBuff;
             }
             else
             {
-                statValueDEF.text  = $"DEF {defMod}";
-                statValueDEF.color = ColorStatDebuff;
+                statTextDEF.text  = $"DEF {defMod}";
+                statTextDEF.color = ColorStatDebuff;
             }
         }
 
@@ -374,12 +463,10 @@ public class UnitPanelUI : MonoBehaviour
         }
     }
 
-    // Mode bâtiment : portrait, nom, HP, DEF — ATK/SPD masqués
+    // Mode bâtiment : portrait, nom, HP, DEF — détecte Nexus via NexusController
     private void RefreshBuilding(GameObject buildingObject)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
-
         UntrackUnit();
         UntrackBuilding();
 
@@ -389,6 +476,11 @@ public class UnitPanelUI : MonoBehaviour
             Debug.LogWarning($"🏗️ UnitPanelUI: Pas de BuildingStatsComponent sur {buildingObject.name}");
             return;
         }
+
+        // Détecte si le bâtiment est un Nexus (abilityButton visible)
+        bool isNexus = buildingObject.GetComponent<NexusController>() != null;
+        ConfigureVisibility(isNexus ? EntityType.Nexus : EntityType.Building);
+        currentSelectedEntity = buildingObject;
 
         // Portrait depuis le SO
         BuildingStatsData statsData = stats.GetBaseStats();
@@ -415,32 +507,21 @@ public class UnitPanelUI : MonoBehaviour
 
         // Tracking HP temps réel
         TrackBuilding(stats);
-
-        // HP
-        SetActive(hpBarFill?.gameObject, true);
-        SetActive(hpText?.gameObject, true);
         RefreshBuildingHPDisplay(stats);
 
-        // DEF uniquement
-        SetActive(statValueDEF?.gameObject, true);
-        SetText(statValueDEF, stats.GetDefense().ToString());
-        SetTextColor(statValueDEF, Color.white);
-
-        // Masque ATK, SPD, accessibilité et slots ability
-        SetActive(statValueATK?.gameObject, false);
-        SetActive(statValueSPD?.gameObject, false);
-        SetActive(accessibilityText?.gameObject, false);
-        SetActive(abilitySlot?.gameObject, false);
-        SetActive(sacrificeSlot?.gameObject, false);
+        // DEF
+        SetText(statTextDEF, stats.GetDefense().ToString());
+        SetTextColor(statTextDEF, Color.white);
     }
 
     // Mode obstacle : placeholder brun/gris, nom du GameObject, le reste masqué
     private void RefreshObstacle(GameObject obstacle)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
-
         UntrackUnit();
+        UntrackBuilding();
+
+        ConfigureVisibility(EntityType.Obstacle);
 
         // Portrait : placeholder brun/gris
         if (portraitImage != null)
@@ -450,26 +531,23 @@ public class UnitPanelUI : MonoBehaviour
         }
 
         SetText(unitNameText, obstacle != null ? obstacle.name : "Obstacle");
-
-        // Masque tout sauf le nom
-        SetActive(hpBarFill?.gameObject, false);
-        SetActive(hpText?.gameObject, false);
-        SetActive(statValueATK?.gameObject, false);
-        SetActive(statValueDEF?.gameObject, false);
-        SetActive(statValueSPD?.gameObject, false);
-        SetActive(accessibilityText?.gameObject, false);
     }
 
     // Mode Bud : portrait de l'unité en cours, nom, HP bâtiment, DEF, barre de progression
     private void RefreshBud(GameObject budObject)
     {
-        SetActive(budProgressBarFill?.gameObject, false);
         trackedBud = null;
+        UntrackUnit();
+        UntrackBuilding();
 
         BudComponent budComponent = budObject.GetComponent<BudComponent>();
-        BuildingStatsComponent buildingStats = budObject.GetComponent<BuildingStatsComponent>();
-
         if (budComponent == null) return;
+
+        ConfigureVisibility(EntityType.Bud);
+        currentSelectedEntity = budObject;
+
+        SetActive(sacrificeIcon, false);
+        SetActive(cancelIcon,    true);
 
         // Portrait
         if (portraitImage != null)
@@ -492,35 +570,22 @@ public class UnitPanelUI : MonoBehaviour
             : "Bud";
         SetText(unitNameText, displayName);
 
-        // HP via tracking bâtiment
+        // HP et DEF via tracking bâtiment — masqués si pas de BuildingStatsComponent
+        BuildingStatsComponent buildingStats = budObject.GetComponent<BuildingStatsComponent>();
         if (buildingStats != null)
         {
             TrackBuilding(buildingStats);
-            SetActive(hpBarFill?.gameObject, true);
-            SetActive(hpText?.gameObject, true);
             RefreshBuildingHPDisplay(buildingStats);
-
-            // DEF
-            SetActive(statValueDEF?.gameObject, true);
-            SetText(statValueDEF, buildingStats.GetDefense().ToString());
-            SetTextColor(statValueDEF, Color.white);
+            SetText(statTextDEF, buildingStats.GetDefense().ToString());
+            SetTextColor(statTextDEF, Color.white);
         }
         else
         {
-            SetActive(hpBarFill?.gameObject, false);
-            SetActive(hpText?.gameObject, false);
-            SetActive(statValueDEF?.gameObject, false);
+            SetActive(hpContainer, false);
+            SetActive(statSlotDEF, false);
         }
 
-        // Masque les éléments non pertinents
-        SetActive(statValueATK?.gameObject, false);
-        SetActive(statValueSPD?.gameObject, false);
-        SetActive(abilitySlot?.gameObject, false);
-        SetActive(sacrificeSlot?.gameObject, false);
-        SetActive(accessibilityText?.gameObject, false);
-
         // Barre de progression
-        SetActive(budProgressBarFill?.gameObject, true);
         if (budProgressBarFill != null)
             budProgressBarFill.fillAmount = budComponent.Progress;
         trackedBud = budComponent;
@@ -664,6 +729,53 @@ public class UnitPanelUI : MonoBehaviour
         return 3;
     }
 
+    // === CALLBACKS BOUTONS UI ===
+
+    // Appelé quand le bouton Ability est cliqué
+    private void OnAbilityButtonClicked()
+    {
+        if (currentSelectedEntity == null)
+        {
+            Debug.LogWarning("🖱️ Ability button cliqué mais aucune entité sélectionnée");
+            return;
+        }
+
+        AbilityData abilityData = GetAbilityDataFromEntity(currentSelectedEntity);
+        if (abilityData == null)
+        {
+            Debug.LogWarning($"🖱️ Pas d'AbilityData sur {currentSelectedEntity.name}");
+            return;
+        }
+
+        AbilityManager.Instance.TryExecuteAbility(currentSelectedEntity, abilityData);
+    }
+
+    // Appelé quand le bouton Sacrifice ou Cancel est cliqué — contextuel selon l'entité sélectionnée
+    private void OnSacrificeOrCancelButtonClicked()
+    {
+        if (currentSelectedEntity == null) return;
+
+        BudComponent bud = currentSelectedEntity.GetComponent<BudComponent>();
+        if (bud != null)
+            bud.Cancel();
+        else
+            Debug.Log($"🔥 Sacrifice demandé pour {currentSelectedEntity.name}"); // TODO: sacrifice
+    }
+
+    // Récupère l'AbilityData d'une entité (bâtiment ou unité)
+    private AbilityData GetAbilityDataFromEntity(GameObject entity)
+    {
+        BuildingStatsComponent building = entity.GetComponent<BuildingStatsComponent>();
+        if (building != null)
+            return building.GetBaseStats()?.abilityData;
+
+        UnitStatsComponent unit = entity.GetComponent<UnitStatsComponent>();
+        if (unit != null)
+            return unit.GetBaseStats()?.abilityData;
+
+        return null;
+    }
+
     // === HELPERS SÉCURISÉS ===
 
     // Affiche ou masque le panneau principal
@@ -710,4 +822,5 @@ public class UnitPanelUI : MonoBehaviour
             tmp.color = color;
         }
     }
+
 }

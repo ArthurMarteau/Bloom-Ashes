@@ -92,6 +92,13 @@ public class SelectionManager : MonoBehaviour
         inputManager.OnDragUpdate.AddListener(OnDragUpdateHandler);
         inputManager.OnLeftClickUp.AddListener(OnLeftClickUpHandler);
         inputManager.OnDragEnd.AddListener(OnDragEndHandler);
+
+        // Abonnement aux events de spawn/remplacement d'entités
+        if (EntitySpawnManager.Instance != null)
+        {
+            EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
+            EntitySpawnManager.Instance.OnEntityReplaced.AddListener(HandleEntityReplaced);
+        }
     }
 
     // Configure le LineRenderer pour dessiner le rectangle de sélection
@@ -512,10 +519,67 @@ public class SelectionManager : MonoBehaviour
         Debug.Log("Sélection obstacle/ground effacée");
     }
 
-    // Appelé quand l'entité sélectionnée est détruite — efface la sélection et notifie l'UI
+    // Appelé quand l'entité sélectionnée est détruite — fallback vers terrain ou clear
     private void OnSelectedEntityDestroyed()
     {
+        // Récupère la position de l'entité détruite
+        Vector3 lastPosition = Vector3.zero;
+
+        if (trackedUnitStats != null)
+        {
+            lastPosition = trackedUnitStats.transform.position;
+        }
+        else if (trackedBuildingStats != null)
+        {
+            lastPosition = trackedBuildingStats.transform.position;
+        }
+
+        // Fallback : sélectionne le terrain sous l'entité détruite
+        if (lastPosition != Vector3.zero)
+        {
+            Vector2Int gridPosition = GridManager.Instance.WorldToGrid(lastPosition);
+            if (GridManager.Instance.IsInBounds(gridPosition))
+            {
+                SelectGround(gridPosition);
+                Debug.Log($"🔄 SelectionManager : Fallback vers terrain {gridPosition} après destruction d'entité");
+                return;
+            }
+        }
+
+        // Si pas de position valide, clear total
         ClearAllSelection();
+    }
+
+    // === CALLBACKS ENTITY SPAWN EVENTS ===
+
+    // Appelé quand une entité spawn (sans remplacer le spawner)
+    // Si le spawner était sélectionné → sélectionne l'entité spawnée
+    private void HandleEntitySpawned(GameObject spawner, GameObject spawnedEntity)
+    {
+        if (spawner == null || spawnedEntity == null) return;
+
+        bool spawnerWasSelected = (currentSelectedObject == spawner) || IsUnitSelected(spawner);
+
+        if (spawnerWasSelected)
+        {
+            SelectGameObject(spawnedEntity);
+            Debug.Log($"🔄 SelectionManager : Sélection auto {spawnedEntity.name} (spawné par {spawner.name})");
+        }
+    }
+
+    // Appelé quand une entité est remplacée par une autre
+    // Si l'ancienne entité était sélectionnée → sélectionne la nouvelle
+    private void HandleEntityReplaced(GameObject oldEntity, GameObject newEntity)
+    {
+        if (oldEntity == null || newEntity == null) return;
+
+        bool oldWasSelected = (currentSelectedObject == oldEntity) || IsUnitSelected(oldEntity);
+
+        if (oldWasSelected)
+        {
+            SelectGameObject(newEntity);
+            Debug.Log($"🔄 SelectionManager : Sélection auto {newEntity.name} (remplace {oldEntity.name})");
+        }
     }
 
     // Désabonne les events de mort/destruction de l'entité trackée
@@ -568,6 +632,7 @@ public class SelectionManager : MonoBehaviour
     private void OnDestroy()
     {
         UnsubscribeEntityDestroyedEvents();
+
         if (inputManager != null)
         {
             inputManager.OnLeftClickDown.RemoveListener(OnLeftClickDownHandler);
@@ -575,6 +640,12 @@ public class SelectionManager : MonoBehaviour
             inputManager.OnDragUpdate.RemoveListener(OnDragUpdateHandler);
             inputManager.OnLeftClickUp.RemoveListener(OnLeftClickUpHandler);
             inputManager.OnDragEnd.RemoveListener(OnDragEndHandler);
+        }
+
+        if (EntitySpawnManager.Instance != null)
+        {
+            EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
+            EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
         }
     }
 

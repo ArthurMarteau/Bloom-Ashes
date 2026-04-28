@@ -45,6 +45,10 @@ public class BuildingStatsData : ScriptableObject
     [Range(1, 4)]
     public int maxTier = 1;
 
+    [Header("Ability")]
+    [Tooltip("Ability de ce bâtiment (null si pas d'ability)")]
+    public AbilityData abilityData = null;
+
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création de l'asset
     private void OnValidate()

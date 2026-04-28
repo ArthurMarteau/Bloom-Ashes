@@ -44,8 +44,8 @@ public class UnitStatsData : ScriptableObject
     public UnitMovementType movementType = UnitMovementType.Ground;
 
     [Header("Ability")]
-    [Tooltip("Cocher si l'unité possède une abilité active")]
-    public bool hasActiveAbility = false;
+    [Tooltip("Ability de cette unité (null si pas d'ability)")]
+    public AbilityData abilityData = null;
 
     [Header("Production")]
     [Tooltip("Prefab de l'unité à instancier lors de la production")]

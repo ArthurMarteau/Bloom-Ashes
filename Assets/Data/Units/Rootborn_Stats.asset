@@ -17,7 +17,7 @@ MonoBehaviour:
   maxHP: 20
   attackDamage: 3
   attackRange: 1
-  defense: 0
+  defense: 2
   attackSpeed: 2
   moveSpeed: 1
   isRootborn: 1

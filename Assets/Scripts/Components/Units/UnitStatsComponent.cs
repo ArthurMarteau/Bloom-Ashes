@@ -147,6 +147,20 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         }
     }
 
+    // Définit directement les HP actuels (utilisé pour propagation HP Bud→Rootborn, etc.)
+    // Clampe automatiquement entre 0 et maxHP
+    public void SetCurrentHP(int hp)
+    {
+        if (isDead) return;
+
+        currentHP = Mathf.Clamp(hp, 0, baseStats.maxHP);
+
+        if (debugStats)
+        {
+            Debug.Log($"UnitStatsComponent {gameObject.name}: HP définis à {currentHP}/{baseStats.maxHP}");
+        }
+    }
+
     // Gère la mort de l'unité
     // Déclenche l'événement OnDeath et désactive les composants
     private void Die()

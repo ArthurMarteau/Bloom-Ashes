@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c46dc26d49d27504ba70e49500fe2462, type: 3}
+  m_Name: SpawnRootborn_Ability
+  m_EditorClassIdentifier: Assembly-CSharp::SpawnRootbornAbility
+  abilityName: Spawn Rootborn
+  icon: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}
+  watersapCost: 40
+  cooldownDuration: 0
+  description: Spawn a Rootborn for 40 Watersap.
