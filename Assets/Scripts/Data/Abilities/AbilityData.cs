@@ -21,6 +21,10 @@ public abstract class AbilityData : ScriptableObject
     [Tooltip("Temps de recharge en secondes (0 = pas de cooldown)")]
     public float cooldownDuration = 0f;
 
+    [Header("VFX")]
+    [Tooltip("VFX joué après exécution réussie (laissé vide = aucun VFX)")]
+    public VFXData vfxOnExecute;
+
     [Header("Description")]
     [Tooltip("Description affichée au survol (tooltip)")]
     [TextArea(2, 4)]

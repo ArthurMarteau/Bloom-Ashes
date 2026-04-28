@@ -1,10 +1,15 @@
 using UnityEngine;
+using UnityEngine.Events;
 
 // Singleton gérant l'exécution de toutes les abilities
 // Point central pour appeler une ability depuis l'UI ou tout autre système
 public class AbilityManager : MonoBehaviour
 {
     public static AbilityManager Instance { get; private set; }
+
+    [Header("Events")]
+    // Déclenché après chaque exécution réussie d'une ability (CanExecute = true)
+    public UnityEvent<GameObject, AbilityData> OnAbilityExecuted = new UnityEvent<GameObject, AbilityData>();
 
     private void Awake()
     {
@@ -34,7 +39,9 @@ public class AbilityManager : MonoBehaviour
         }
 
         IAbility ability = abilityData.CreateExecutor();
-        ability.Execute(caster);
+        if (!ability.CanExecute(caster)) return;
+        if (ability.Execute(caster))
+            OnAbilityExecuted.Invoke(caster, abilityData);
     }
 
     /// <summary>

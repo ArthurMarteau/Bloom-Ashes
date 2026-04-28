@@ -22,7 +22,7 @@ MonoBehaviour:
   moveSpeed: 1
   isRootborn: 1
   movementType: 0
-  hasActiveAbility: 1
+  abilityData: {fileID: 11400000, guid: 5d4634efcf338c24f88a75b7e00e1cfe, type: 2}
   unitPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
   watersapCost: 40
   buildTime: 0

@@ -59,6 +59,26 @@ public class VFXData : ScriptableObject
     [Tooltip("Durée custom du scale up (utilisé uniquement si scaleUpUseFlashDuration = false)")]
     public float scaleUpCustomDuration = 2f;
 
+    [Header("Watersap Fill (vague qui remonte)")]
+    [Tooltip("Active l'effet de vague Watersap qui remonte le sprite du bas vers le haut")]
+    public bool useWatersapFill = false;
+
+    [Tooltip("Durée de la montée (de 0 à 1) en secondes")]
+    public float watersapFillDuration = 1f;
+
+    [Tooltip("Délai avant reset de _WatersapFill à 0 après avoir atteint 1 (pour laisser le sprite teinté un instant)")]
+    public float watersapFillHoldDuration = 0.2f;
+
+    [Tooltip("Couleur de la vague (bleu cyan magique recommandé)")]
+    public Color watersapFillColor = new Color(0.2f, 0.7f, 1f, 1f);
+
+    [Tooltip("Largeur de la zone de transition (effet vague lumineuse plutôt que ligne nette)")]
+    [Range(0.01f, 0.5f)]
+    public float watersapFillEdgeWidth = 0.1f;
+
+    [Tooltip("Courbe d'animation de la montée (0 → 1)")]
+    public AnimationCurve watersapFillCurve = AnimationCurve.EaseInOut(0f, 0f, 1f, 1f);
+
     [Header("Audio")]
     [Tooltip("Son joué au moment du spawn (optionnel)")]
     [SerializeField] public AudioClip soundEffect;

@@ -47,9 +47,10 @@ public abstract class AbilityExecutor : IAbility
     }
 
     // Exécute l'ability : vérifie les conditions, dépense le Watersap, puis délègue à ExecuteAbility()
-    public void Execute(GameObject caster)
+    // Retourne true si l'action interne a réussi, false si CanExecute échoue ou si l'action est rejetée
+    public bool Execute(GameObject caster)
     {
-        if (!CanExecute(caster)) return;
+        if (!CanExecute(caster)) return false;
 
         // Dépense le Watersap si un coût est défini
         if (abilityData.watersapCost > 0)
@@ -62,10 +63,11 @@ public abstract class AbilityExecutor : IAbility
         // Enregistre le temps d'utilisation pour le cooldown
         lastUsedTime = Time.time;
 
-        // Exécute la logique spécifique de l'ability concrète
-        ExecuteAbility(caster);
+        // Exécute la logique spécifique et propage son résultat
+        return ExecuteAbility(caster);
     }
 
     // Méthode abstraite : chaque ability concrète implémente sa logique ici
-    protected abstract void ExecuteAbility(GameObject caster);
+    // Retourne true si l'action a réellement eu lieu, false si elle a été rejetée en interne
+    protected abstract bool ExecuteAbility(GameObject caster);
 }

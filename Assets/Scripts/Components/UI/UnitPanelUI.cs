@@ -75,6 +75,9 @@ public class UnitPanelUI : MonoBehaviour
     [SerializeField] private GameObject sacrificeIcon;         // Sacrifice_Icon — enfant de sacrificeCancelButton
     [SerializeField] private GameObject cancelIcon;            // Cancel_Icon — enfant de sacrificeCancelButton
 
+    [Header("Watersap Stock (Rootborn)")]
+    [SerializeField] private WatersapStockUI watersapStockUI;
+
     // Entité actuellement sélectionnée — utilisée par les callbacks boutons
     private GameObject currentSelectedEntity;
 
@@ -230,6 +233,7 @@ public class UnitPanelUI : MonoBehaviour
     // Aucune sélection — masque le panneau entier
     private void HandleSelectionCleared()
     {
+        watersapStockUI?.Hide();
         currentSelectedEntity = null;
         trackedBud = null;
         UntrackUnit();
@@ -369,6 +373,16 @@ public class UnitPanelUI : MonoBehaviour
         SetTextColor(statTextDEF, Color.white);
         SetTextColor(statTextSPD, Color.white);
 
+        // Watersap stock UI : visible uniquement pour les Rootborn
+        RootbornStockComponent stockComponent = unitObject.GetComponent<RootbornStockComponent>();
+        if (watersapStockUI != null)
+        {
+            if (stockComponent != null)
+                watersapStockUI.Show(stockComponent);
+            else
+                watersapStockUI.Hide();
+        }
+
         // Slot ability : conditionnel sur la présence d'une AbilityData
         bool showAbility = statsData != null && statsData.abilityData != null;
         SetActive(abilityButton, showAbility);
@@ -377,6 +391,7 @@ public class UnitPanelUI : MonoBehaviour
     // Mode groupe (2+ unités) : placeholder ×N, nom, tout le reste masqué
     private void RefreshGroup(int count)
     {
+        watersapStockUI?.Hide();
         trackedBud = null;
         UntrackUnit();
         UntrackBuilding();
@@ -396,6 +411,7 @@ public class UnitPanelUI : MonoBehaviour
     // Mode terrain : portrait couleur terrain, nom, modificateurs SPD/DEF si non nuls
     private void RefreshGround(Vector2Int gridPosition)
     {
+        watersapStockUI?.Hide();
         trackedBud = null;
         UntrackUnit();
         UntrackBuilding();
@@ -466,6 +482,7 @@ public class UnitPanelUI : MonoBehaviour
     // Mode bâtiment : portrait, nom, HP, DEF — détecte Nexus via NexusController
     private void RefreshBuilding(GameObject buildingObject)
     {
+        watersapStockUI?.Hide();
         trackedBud = null;
         UntrackUnit();
         UntrackBuilding();
@@ -517,6 +534,7 @@ public class UnitPanelUI : MonoBehaviour
     // Mode obstacle : placeholder brun/gris, nom du GameObject, le reste masqué
     private void RefreshObstacle(GameObject obstacle)
     {
+        watersapStockUI?.Hide();
         trackedBud = null;
         UntrackUnit();
         UntrackBuilding();
@@ -536,6 +554,7 @@ public class UnitPanelUI : MonoBehaviour
     // Mode Bud : portrait de l'unité en cours, nom, HP bâtiment, DEF, barre de progression
     private void RefreshBud(GameObject budObject)
     {
+        watersapStockUI?.Hide();
         trackedBud = null;
         UntrackUnit();
         UntrackBuilding();

@@ -7,13 +7,13 @@ public class SpawnRootbornExecutor : AbilityExecutor
 {
     public SpawnRootbornExecutor(AbilityData data) : base(data) { }
 
-    protected override void ExecuteAbility(GameObject caster)
+    protected override bool ExecuteAbility(GameObject caster)
     {
         NexusController nexus = caster.GetComponent<NexusController>();
         if (nexus == null)
         {
             Debug.LogWarning($"⚠️ SpawnRootbornExecutor : NexusController manquant sur {caster.name}");
-            return;
+            return false;
         }
 
         // TrySpawnRootborn gère la vérification et la dépense du Watersap en interne
@@ -21,5 +21,6 @@ public class SpawnRootbornExecutor : AbilityExecutor
 
         if (success)
             Debug.Log($"✅ {abilityData.abilityName} : Rootborn spawné avec succès");
+        return success;
     }
 }

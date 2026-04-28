@@ -20,6 +20,7 @@ GameObject:
   - component: {fileID: -5370382545427022799}
   - component: {fileID: 6610557790646779700}
   - component: {fileID: 2185065320863343654}
+  - component: {fileID: 9138143934450494992}
   m_Layer: 9
   m_Name: Rootborn
   m_TagString: GroundUnit
@@ -225,6 +226,12 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MovementController
   debugMovement: 1
+  OnMovementStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  OnArrived:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &202372915752260335
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -289,4 +296,25 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RootbornProductionController
   budPrefab: {fileID: 1139703711428364788, guid: a8caf4a22cb770c4bb7735c35d3ceba5, type: 3}
+  transformAnimDuration: 1
   debugProduction: 1
+--- !u!114 &9138143934450494992
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 41387421219258777}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0286ca2d399d5f046aea113f3c3b8687, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RootbornStockComponent
+  maxStock: 10
+  collectionInterval: 5
+  OnStockChanged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnTransferTriggered:
+    m_PersistentCalls:
+      m_Calls: []

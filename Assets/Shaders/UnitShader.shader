@@ -1,4 +1,4 @@
-﻿Shader "Custom/TeamColorShader"
+﻿Shader "Custom/UnitShader"
 {
     Properties
     {
@@ -7,6 +7,9 @@
         _HueThreshold ("Hue Threshold", Range(0.01, 0.5)) = 0.1
         _SaturationMin ("Saturation Minimum", Range(0, 1)) = 0.5
         _FlashAmount ("Flash Amount", Range(0, 1)) = 0
+        _WatersapFill ("Watersap Fill", Range(0, 1)) = 0
+        _WatersapColor ("Watersap Color", Color) = (0.2, 0.7, 1, 1)
+        _WatersapEdgeWidth ("Watersap Edge Width", Range(0.01, 0.5)) = 0.1
     }
 
     SubShader
@@ -34,6 +37,9 @@
                 float _HueThreshold;
                 float _SaturationMin;
                 float _FlashAmount;
+                float _WatersapFill;
+                float4 _WatersapColor;
+                float _WatersapEdgeWidth;
             CBUFFER_END
 
             struct Attributes
@@ -121,12 +127,20 @@
                     else rgb = float3(resultHSV.z, p, q);
 
                     float4 teamResult = float4(rgb, pixel.a);
+                    // Bande fine centrée sur _WatersapFill, largeur = _WatersapEdgeWidth
+                    float dist = abs(IN.uv.y - _WatersapFill);
+                    float watersapMask = 1.0 - smoothstep(0, _WatersapEdgeWidth, dist);
+                    teamResult.rgb = lerp(teamResult.rgb, _WatersapColor.rgb, watersapMask * _WatersapColor.a);
                     // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
                     teamResult.rgb = lerp(teamResult.rgb, float3(1, 1, 1), _FlashAmount);
                     return teamResult;
                 }
 
                 float4 finalColor = pixel * IN.color;
+                // Bande fine centrée sur _WatersapFill, largeur = _WatersapEdgeWidth
+                float distNonTeam = abs(IN.uv.y - _WatersapFill);
+                float watersapMask = 1.0 - smoothstep(0, _WatersapEdgeWidth, distNonTeam);
+                finalColor.rgb = lerp(finalColor.rgb, _WatersapColor.rgb, watersapMask * _WatersapColor.a);
                 // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
                 finalColor.rgb = lerp(finalColor.rgb, float3(1, 1, 1), _FlashAmount);
                 return finalColor;

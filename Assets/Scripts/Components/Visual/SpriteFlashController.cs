@@ -15,7 +15,7 @@ public class SpriteFlashController : MonoBehaviour
     private Coroutine activeCoroutine;
 
     private static readonly int FlashAmountProperty = Shader.PropertyToID("_FlashAmount");
-    private const string RequiredShaderName = "SpriteFlash";
+    private const string RequiredShaderName = "UnitShader";
 
     // Initialise le MaterialPropertyBlock et vérifie la présence du shader SpriteFlash
     private void Awake()

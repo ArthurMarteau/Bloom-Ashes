@@ -1,7 +1,8 @@
 using UnityEngine;
 
 // Singleton MonoBehaviour qui orchestre les VFX liés aux événements de spawn/remplacement d'entités
-// Écoute EntitySpawnManager.OnEntityReplaced et OnEntitySpawned pour déclencher les effets visuels
+// Écoute EntitySpawnManager.OnEntityReplaced et OnEntitySpawned pour les VFX de spawn
+// Écoute AbilityManager.OnAbilityExecuted pour les VFX d'exécution d'abilities
 public class VFXManager : MonoBehaviour
 {
     public static VFXManager Instance { get; private set; }
@@ -24,7 +25,7 @@ public class VFXManager : MonoBehaviour
         Instance = this;
     }
 
-    // Abonnement aux events de spawn et remplacement d'entités de l'EntitySpawnManager
+    // Abonnement aux events de spawn, remplacement d'entités et exécution d'abilities
     private void Start()
     {
         if (EntitySpawnManager.Instance == null)
@@ -38,6 +39,9 @@ public class VFXManager : MonoBehaviour
 
         EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
         Debug.Log("✨ VFXManager : abonné à EntitySpawnManager.OnEntitySpawned");
+
+        if (AbilityManager.Instance != null)
+            AbilityManager.Instance.OnAbilityExecuted.AddListener(HandleAbilityExecuted);
     }
 
     // Désabonnement propre pour éviter les références pendantes
@@ -48,6 +52,9 @@ public class VFXManager : MonoBehaviour
             EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
             EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
         }
+
+        if (AbilityManager.Instance != null)
+            AbilityManager.Instance.OnAbilityExecuted.RemoveListener(HandleAbilityExecuted);
     }
 
     // Réagit au remplacement d'entité : déclenche le VFX selon le cas (éclosion ou annulation)
@@ -129,6 +136,19 @@ public class VFXManager : MonoBehaviour
             ApplyScaleUp(rootbornEntity, rootbornSpawnVFX);
     }
 
+    // Réagit à l'exécution d'une ability : joue le VFX configuré dans AbilityData.vfxOnExecute
+    private void HandleAbilityExecuted(GameObject caster, AbilityData abilityData)
+    {
+        if (caster == null || abilityData == null || abilityData.vfxOnExecute == null) return;
+
+        Debug.Log($"✨ VFXManager : VFX ability '{abilityData.abilityName}' sur {caster.name}");
+        VFXPlayer.PlayAt(abilityData.vfxOnExecute, caster.transform.position);
+
+        if (abilityData.vfxOnExecute.useWatersapFill) ApplyWatersapFill(caster, abilityData.vfxOnExecute);
+        if (abilityData.vfxOnExecute.useSpriteFlash)  ApplySpawnFlash(caster, abilityData.vfxOnExecute);
+        if (abilityData.vfxOnExecute.useScaleUp)      ApplyScaleUp(caster, abilityData.vfxOnExecute);
+    }
+
     // Applique un flash blanc fade-out sur le sprite de l'entité
     // Le SpriteFlashController est ajouté si absent
     private void ApplySpawnFlash(GameObject entity, VFXData data)
@@ -162,6 +182,24 @@ public class VFXManager : MonoBehaviour
         );
 
         Debug.Log($"✨ VFXManager : scale up sur {entity.name} ({data.scaleUpStartScale} → {data.scaleUpEndScale} sur {scaleDuration}s)");
+    }
+
+    // Applique l'effet de vague Watersap qui remonte le sprite du bas vers le haut
+    // Le WatersapFillController est ajouté dynamiquement si absent
+    private void ApplyWatersapFill(GameObject entity, VFXData data)
+    {
+        WatersapFillController fillController = entity.GetComponent<WatersapFillController>();
+        if (fillController == null)
+            fillController = entity.AddComponent<WatersapFillController>();
+
+        fillController.Configure(data.watersapFillColor, data.watersapFillEdgeWidth);
+        fillController.PlayFillAnimation(
+            data.watersapFillDuration,
+            data.watersapFillHoldDuration,
+            data.watersapFillCurve
+        );
+
+        Debug.Log($"✨ VFXManager : watersap fill sur {entity.name} ({data.watersapFillDuration}s + hold {data.watersapFillHoldDuration}s)");
     }
 
     // Déclenche le flash fade-in sur le Bud au début de sa phase Hatching

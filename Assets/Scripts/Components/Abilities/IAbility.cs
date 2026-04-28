@@ -11,8 +11,9 @@ public interface IAbility
 
     /// <summary>
     /// Exécute l'ability (vérifie CanExecute en interne avant d'agir)
+    /// Retourne true si l'action interne a réussi, false sinon
     /// </summary>
-    void Execute(GameObject caster);
+    bool Execute(GameObject caster);
 
     /// <summary>
     /// Retourne les données ScriptableObject de l'ability
