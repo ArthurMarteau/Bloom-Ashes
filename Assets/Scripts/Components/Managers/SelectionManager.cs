@@ -51,11 +51,13 @@ public class SelectionManager : MonoBehaviour
 
     [Header("Events — UI")]
     // Notifie l'UI lors de tout changement de sélection (abonnés par UnitPanelUI)
-    public UnityEvent<List<GameObject>> OnUnitsSelected    = new UnityEvent<List<GameObject>>(); // Unités sélectionnées (liste vide si désélection)
-    public UnityEvent<Vector2Int>       OnGroundSelected   = new UnityEvent<Vector2Int>();        // Coordonnées grille du terrain sélectionné
-    public UnityEvent<GameObject>       OnObstacleSelected = new UnityEvent<GameObject>();        // Obstacle sélectionné
-    public UnityEvent<GameObject>       OnBuildingSelected = new UnityEvent<GameObject>();        // Bâtiment sélectionné
-    public UnityEvent                   OnSelectionCleared = new UnityEvent();                    // Toute sélection effacée
+    public UnityEvent<List<GameObject>>    OnUnitsSelected      = new UnityEvent<List<GameObject>>(); // Unités sélectionnées (liste vide si désélection)
+    public UnityEvent<Vector2Int>          OnGroundSelected     = new UnityEvent<Vector2Int>();        // Coordonnées grille du terrain sélectionné
+    public UnityEvent<GameObject>          OnObstacleSelected   = new UnityEvent<GameObject>();        // Obstacle sélectionné
+    public UnityEvent<GameObject>          OnBuildingSelected   = new UnityEvent<GameObject>();        // Bâtiment sélectionné
+    public UnityEvent                      OnSelectionCleared   = new UnityEvent();                    // Toute sélection effacée
+    // Déclenché quand un Rootborn local sélectionné est sur les cases d'une Foundation (null = masquer le panneau)
+    public UnityEvent<FoundationComponent> OnFoundationSelected = new UnityEvent<FoundationComponent>();
 
     // Méthode appelée au démarrage pour initialiser les références et composants
     private void Awake()
@@ -252,6 +254,7 @@ public class SelectionManager : MonoBehaviour
             }
 
             OnBuildingSelected.Invoke(unit);
+            OnFoundationSelected.Invoke(null);
             UnsubscribeEntityDestroyedEvents();
             BuildingStatsComponent buildingStats = unit.GetComponent<BuildingStatsComponent>();
             if (buildingStats != null)
@@ -294,7 +297,12 @@ public class SelectionManager : MonoBehaviour
         else
         {
             OnSelectionCleared.Invoke();
+            OnFoundationSelected.Invoke(null);
+            return;
         }
+
+        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
+        DetectFoundationFromSelection(currentUnits);
     }
 
     // Traite la sélection de terrain à partir d'une position mondiale
@@ -346,7 +354,12 @@ public class SelectionManager : MonoBehaviour
         }
 
         // Notifie l'UI avec la nouvelle liste d'unités
-        OnUnitsSelected.Invoke(GetSelectedUnits());
+        List<GameObject> rectangleUnits = GetSelectedUnits();
+        OnUnitsSelected.Invoke(rectangleUnits);
+
+        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
+        DetectFoundationFromSelection(rectangleUnits);
+
         Debug.Log($"Rectangle sélection : {unitsInArea.Length} unités sélectionnées");
     }
 
@@ -439,6 +452,7 @@ public class SelectionManager : MonoBehaviour
             hasGroundSelection = false;
 
             OnObstacleSelected.Invoke(obstacle);
+            OnFoundationSelected.Invoke(null);
             Debug.Log($"Obstacle sélectionné : {obstacle.name}");
         }
     }
@@ -461,6 +475,7 @@ public class SelectionManager : MonoBehaviour
             hasGroundSelection = true;
 
             OnGroundSelected.Invoke(gridCoordinates);
+            OnFoundationSelected.Invoke(null);
             Debug.Log($"Terrain sélectionné : cellule {gridCoordinates}");
         }
     }
@@ -611,6 +626,7 @@ public class SelectionManager : MonoBehaviour
     {
         ClearAllSelectionSilent();
         OnSelectionCleared.Invoke();
+        OnFoundationSelected.Invoke(null);
         Debug.Log("Toute sélection effacée");
     }
 
@@ -647,6 +663,73 @@ public class SelectionManager : MonoBehaviour
             EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
             EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
         }
+    }
+
+    // === DÉTECTION FOUNDATION ===
+
+    // Cherche une FoundationComponent sous les Rootborn locaux de la sélection
+    // Fire OnFoundationSelected(foundation) si trouvée, sinon OnFoundationSelected(null)
+    private void DetectFoundationFromSelection(List<GameObject> selectedUnits)
+    {
+        if (selectedUnits == null || selectedUnits.Count == 0)
+        {
+            OnFoundationSelected.Invoke(null);
+            return;
+        }
+
+        if (PlayerManager.Instance == null)
+        {
+            OnFoundationSelected.Invoke(null);
+            return;
+        }
+
+        int localTeamID = PlayerManager.Instance.LocalPlayer.teamID;
+
+        foreach (GameObject unit in selectedUnits)
+        {
+            if (unit == null) continue;
+
+            UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
+            if (stats == null || !stats.IsRootborn()) continue;
+
+            TeamComponent team = unit.GetComponent<TeamComponent>();
+            if (team == null || team.GetTeamID() != localTeamID) continue;
+
+            FoundationComponent foundation = FindFoundationAtUnit(unit);
+            if (foundation != null)
+            {
+                OnFoundationSelected.Invoke(foundation);
+                return;
+            }
+        }
+
+        // Aucun Rootborn local sur une Foundation — masque le panneau
+        OnFoundationSelected.Invoke(null);
+    }
+
+    // Retourne la FoundationComponent dont l'une des cases correspond à la position logique de l'unité
+    // Utilise Object.FindObjectsByType pour éviter d'ajouter un collider sur la Foundation
+    private FoundationComponent FindFoundationAtUnit(GameObject unit)
+    {
+        MovementController movement = unit.GetComponent<MovementController>();
+        if (movement == null) return null;
+
+        Vector2Int unitGridPosition = movement.GetCurrentGridPosition();
+
+        FoundationComponent[] foundations = Object.FindObjectsByType<FoundationComponent>(FindObjectsSortMode.None);
+
+        foreach (FoundationComponent foundation in foundations)
+        {
+            Vector2Int[] cells = foundation.GetOccupiedCells();
+            if (cells == null) continue;
+
+            foreach (Vector2Int cell in cells)
+            {
+                if (cell == unitGridPosition) return foundation;
+            }
+        }
+
+        return null;
     }
 
     // === METHODES PUBLIQUES POUR ACCES EXTERNE ===

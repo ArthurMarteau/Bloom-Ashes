@@ -1,7 +1,7 @@
 using UnityEngine;
 
-// Logique d'exécution de l'ability de transfert manuel de Watersap du Rootborn
-// Délègue à RootbornStockComponent.TryManualTransfer() qui valide les conditions du GDD
+// Logique d'exécution de l'ability de transfert de Watersap du Rootborn (auto et manuel)
+// Délègue à RootbornStockComponent.TryTransfer()
 public class WatersapTransferExecutor : AbilityExecutor
 {
     public WatersapTransferExecutor(AbilityData data) : base(data) { }
@@ -15,10 +15,10 @@ public class WatersapTransferExecutor : AbilityExecutor
             return false;
         }
 
-        bool success = stockComponent.TryManualTransfer();
+        bool success = stockComponent.TryTransfer();
 
         if (success)
-            Debug.Log($"✅ {abilityData.abilityName} : Watersap transféré manuellement");
+            Debug.Log($"✅ {abilityData.abilityName} : Watersap transféré");
         return success;
     }
 }

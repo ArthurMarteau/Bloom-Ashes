@@ -45,6 +45,10 @@ public class BuildingStatsData : ScriptableObject
     [Range(1, 4)]
     public int maxTier = 1;
 
+    [Header("Prefab")]
+    [Tooltip("Prefab du bâtiment instancié lors d'un build depuis une Foundation (laisser null si non constructible)")]
+    public GameObject buildingPrefab = null;
+
     [Header("Ability")]
     [Tooltip("Ability de ce bâtiment (null si pas d'ability)")]
     public AbilityData abilityData = null;

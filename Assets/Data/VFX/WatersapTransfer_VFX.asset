@@ -12,8 +12,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3960d2690da7794ca22d2dc56f19981, type: 3}
   m_Name: WatersapTransfer_VFX
   m_EditorClassIdentifier: Assembly-CSharp::VFXData
-  particlesPrefab: {fileID: 0}
-  particlesLifetime: 2
+  particlesPrefab: {fileID: 8450520131109981464, guid: 3005090200d0bd748ae80b4b0e3c355d, type: 3}
+  particlesLifetime: 1.5
   useLight2D: 1
   lightColor: {r: 0.040643062, g: 0.8616352, b: 0.85640603, a: 1}
   lightIntensity: 1.5

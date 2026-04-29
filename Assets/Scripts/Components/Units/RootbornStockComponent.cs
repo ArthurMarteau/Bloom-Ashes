@@ -81,7 +81,7 @@ public class RootbornStockComponent : MonoBehaviour
 
     // Tentative de transfert — appelée par WatersapTransferExecutor (auto et manuel)
     // Retourne false si stock = 0
-    public bool TryManualTransfer()
+    public bool TryTransfer()
     {
         if (collectionSystem == null) return false;
         if (!collectionSystem.CanTransfer())

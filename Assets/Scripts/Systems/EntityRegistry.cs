@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Events;
 
 // Registre centralisé de toutes les entités IDamageable actives dans la scène
 // Remplace Physics2D.OverlapBoxAll pour la recherche d'ennemis — critique pour 80x80 avec 50+ unités
@@ -23,6 +24,9 @@ public class EntityRegistry : MonoBehaviour
     // Cases en cours d'abandon : unité logiquement partie mais Lerp visuel pas encore terminé
     // Permet à une autre unité de s'y engager sans attendre la fin du Lerp
     private Dictionary<GameObject, Vector2Int> leavingPositions = new Dictionary<GameObject, Vector2Int>();
+
+    // Déclenché après chaque mise à jour de position logique — abonné par FoundationComponent
+    public UnityEvent<GameObject, Vector2Int> OnLogicalPositionUpdated = new UnityEvent<GameObject, Vector2Int>();
 
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
@@ -88,10 +92,12 @@ public class EntityRegistry : MonoBehaviour
 
     // Met à jour la position logique d'une unité dans le registre
     // Appelé par MovementController à chaque étape logique (avant le Lerp visuel)
+    // Fire OnLogicalPositionUpdated APRÈS mise à jour du dict pour garantir la cohérence aux listeners
     public void UpdateLogicalPosition(GameObject go, Vector2Int position)
     {
         if (go == null) return;
         logicalPositions[go] = position;
+        OnLogicalPositionUpdated.Invoke(go, position);
     }
 
     // Enregistre qu'une unité est en train de quitter une case (Lerp pas encore terminé)
