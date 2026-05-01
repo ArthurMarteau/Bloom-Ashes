@@ -65,7 +65,6 @@
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingDeathAnimationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapStockUI.cs" />
-    <Compile Include="Assets\Scripts\Components\UI\FoundationBuildPanelUI.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
@@ -117,8 +116,10 @@
     <Compile Include="Assets\Scripts\Components\Abilities\IAbility.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\SelectionManager.cs" />
     <Compile Include="Assets\Scripts\Rendering\OutlineRendererFeature.cs" />
+    <Compile Include="Assets\Scripts\Components\Selection\SelectableResolver.cs" />
     <Compile Include="Assets\Scripts\Tests\TestClick.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapBarUI.cs" />
+    <Compile Include="Assets\Scripts\Components\Selection\SelectableType.cs" />
     <Compile Include="Assets\Scripts\Systems\VFX\FlashCurveSystem.cs" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />

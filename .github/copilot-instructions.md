@@ -2,7 +2,7 @@
 - Project name: Bloom and Ashes
 - Unity version: Unity 6000.2.14f1
 - Active game object:
-  - Name: Slot_3
+  - Name: Shroomhaven
   - Tag: Untagged
-  - Layer: UI
+  - Layer: Buildings
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->

@@ -2,9 +2,10 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Panneau d'actions affiché selon la sélection courante — deux contextes mutuellement exclusifs :
-// - PRODUCTION : Rootborn adjacent à un bâtiment → slots de production d'unités
-// - UPGRADE    : Bâtiment sélectionné → slots d'upgrade T2/T3/T4
+// Panneau d'actions affiché selon la sélection courante — trois contextes mutuellement exclusifs :
+// - PRODUCTION      : Rootborn adjacent à un bâtiment → slots de production d'unités
+// - UPGRADE         : Bâtiment sélectionné → slots d'upgrade T2/T3/T4
+// - FOUNDATION_BUILD: Rootborn local sur une Foundation → slots de construction de bâtiments
 // Branché sur les UnityEvents de SelectionManager — pas de polling dans Update
 //
 // SETUP PREFAB — Hiérarchie attendue :
@@ -32,11 +33,12 @@ public class ActionPanelUI : MonoBehaviour
     private Coroutine showAnimationCoroutine;
     private MovementController trackedMovementController;
     private BuildingStatsComponent trackedBuilding;
+    private FoundationComponent trackedFoundation;
     private GameObject currentRootborn;
     private int trackedTeamID;
 
     // Enum interne pour savoir quel contexte est actif
-    private enum PanelContext { None, Production, Upgrade }
+    private enum PanelContext { None, Production, Upgrade, FoundationBuild }
     private PanelContext currentContext = PanelContext.None;
 
     // Trouve le SelectionManager et s'abonne à ses events
@@ -72,34 +74,71 @@ public class ActionPanelUI : MonoBehaviour
 
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
     }
 
-    // === CONTEXTE PRODUCTION ===
+    // === CONTEXTE PRODUCTION / FOUNDATION BUILD ===
 
     // Reçoit la liste des unités sélectionnées
-    // Affiche le panneau uniquement si 1 Rootborn avec RootbornProductionController est sélectionné
+    // Priorité : Rootborn local sur Foundation → FoundationBuild ; sinon Production ; sinon HidePanel
     private void HandleUnitsSelected(List<GameObject> units)
     {
-        if (units == null || units.Count != 1)
-        {
-            HidePanel();
-            return;
-        }
+        // Nettoie tous les contextes précédents
+        UnsubscribeMovementEvents();
+        UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
+        currentRootborn = null;
+        currentContext  = PanelContext.None;
+
+        if (units == null || units.Count != 1) { HidePanel(); return; }
 
         GameObject unit = units[0];
-        RootbornProductionController pc = unit.GetComponent<RootbornProductionController>();
 
-        if (pc == null)
+        // Vérifie si c'est un Rootborn de l'équipe locale
+        UnitStatsComponent unitStats = unit.GetComponent<UnitStatsComponent>();
+        TeamComponent teamComp       = unit.GetComponent<TeamComponent>();
+        bool isLocalRootborn = unitStats != null && unitStats.IsRootborn()
+            && teamComp != null
+            && PlayerManager.Instance != null
+            && teamComp.GetTeamID() == PlayerManager.Instance.LocalPlayer.teamID;
+
+        if (!isLocalRootborn) { HidePanel(); return; }
+
+        // Priorité 1 : Rootborn sur une Foundation → contexte FoundationBuild
+        MovementController movement = unit.GetComponent<MovementController>();
+        if (movement != null)
         {
-            HidePanel();
-            return;
+            Vector2Int unitCell = movement.GetCurrentGridPosition();
+            FoundationComponent[] foundations = Object.FindObjectsByType<FoundationComponent>(FindObjectsSortMode.None);
+
+            foreach (FoundationComponent foundation in foundations)
+            {
+                Vector2Int[] cells = foundation.GetOccupiedCells();
+                if (cells == null) continue;
+
+                foreach (Vector2Int cell in cells)
+                {
+                    if (cell != unitCell) continue;
+
+                    trackedFoundation = foundation;
+                    trackedFoundation.OnStateChanged.AddListener(RefreshPanel);
+                    trackedFoundation.OnDestroyed.AddListener(HandleFoundationDestroyed);
+                    currentContext = PanelContext.FoundationBuild;
+
+                    Debug.Log($"🌱 ActionPanelUI : Rootborn local sur Foundation {foundation.gameObject.name} — FoundationBuild");
+                    RefreshPanel();
+                    return;
+                }
+            }
         }
 
-        currentRootborn = unit;
-        currentContext = PanelContext.Production;
+        // Priorité 2 : Rootborn adjacent à un bâtiment → contexte Production
+        RootbornProductionController pc = unit.GetComponent<RootbornProductionController>();
+        if (pc == null) { HidePanel(); return; }
 
-        // Désabonne l'ancien Rootborn puis s'abonne au nouveau
-        UnsubscribeMovementEvents();
+        currentRootborn = unit;
+        currentContext  = PanelContext.Production;
+
         MovementController movementController = currentRootborn.GetComponent<MovementController>();
         if (movementController != null)
         {
@@ -151,26 +190,64 @@ public class ActionPanelUI : MonoBehaviour
         Debug.Log($"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}");
     }
 
+    // Met à jour les slots de construction disponibles sur la Foundation trackée
+    private void RefreshFoundationBuild()
+    {
+        if (trackedFoundation == null) { HidePanel(); return; }
+
+        FoundationData foundationData = trackedFoundation.GetData();
+        if (foundationData == null || foundationData.availableBuildings == null) { HidePanel(); return; }
+
+        List<BuildingStatsData> availableBuildings = foundationData.availableBuildings;
+        bool canBuild = trackedFoundation.IsReadyToBuild();
+
+        ShowPanel();
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            if (slots[i] == null) continue;
+
+            if (i >= availableBuildings.Count)
+            {
+                slots[i].gameObject.SetActive(false);
+                continue;
+            }
+
+            BuildingStatsData building = availableBuildings[i];
+            ProductionSlotUI.SlotState state = canBuild
+                ? ProductionSlotUI.SlotState.Available
+                : ProductionSlotUI.SlotState.Locked;
+
+            BuildingStatsData capturedBuilding = building;
+            slots[i].Setup(building, state, (_) => trackedFoundation?.RequestBuild(capturedBuilding));
+        }
+
+        Debug.Log($"🌱 ActionPanelUI : foundationBuild — canBuild={canBuild}, {Mathf.Min(availableBuildings.Count, slots.Count)} slot(s)");
+    }
+
     // === CONTEXTE UPGRADE ===
 
     // Reçoit le bâtiment sélectionné — affiche les slots d'upgrade si ce n'est pas un Nexus
     private void HandleBuildingSelected(GameObject buildingObject)
     {
+        UnsubscribeMovementEvents();
+        UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
+        currentRootborn = null;
+        currentContext  = PanelContext.None;
+
         if (buildingObject == null) { HidePanel(); return; }
 
         BuildingStatsComponent stats = buildingObject.GetComponent<BuildingStatsComponent>();
 
-        // Masque le panneau pour le Nexus et le Bud (pas d'upgrades pour eux)
         bool isNexus = stats != null && stats.GetBaseStats().isNexus;
         bool isBud   = buildingObject.GetComponent<BudComponent>() != null;
 
         if (stats == null || isNexus || isBud) { HidePanel(); return; }
 
-        UnsubscribeUpgradeEvents();
-
         trackedBuilding = stats;
-        trackedTeamID = buildingObject.GetComponent<TeamComponent>()?.GetTeamID() ?? 0;
-        currentContext = PanelContext.Upgrade;
+        trackedTeamID   = buildingObject.GetComponent<TeamComponent>()?.GetTeamID() ?? 0;
+        currentContext  = PanelContext.Upgrade;
 
         trackedBuilding.OnTierUpgraded.AddListener(RefreshPanel);
 
@@ -189,14 +266,12 @@ public class ActionPanelUI : MonoBehaviour
         {
             if (slots[i] == null) continue;
 
-            // Seulement 3 slots d'upgrade (T2/T3/T4) — le 4e est toujours masqué
             if (i >= 3)
             {
                 slots[i].gameObject.SetActive(false);
                 continue;
             }
 
-            // Pas d'unité à afficher pour ce tier → slot masqué
             if (i + 1 >= allUnits.Count)
             {
                 slots[i].gameObject.SetActive(false);
@@ -215,7 +290,7 @@ public class ActionPanelUI : MonoBehaviour
                 state = ProductionSlotUI.SlotState.Available;
 
             int capturedCost = costs[i];
-            slots[i].Setup(unitData, state, (_) => { trackedBuilding.UpgradeTier(trackedTeamID, capturedCost); });
+            slots[i].Setup(unitData, state, (_) => trackedBuilding.UpgradeTier(trackedTeamID, capturedCost));
         }
 
         Debug.Log($"🌿 ActionPanelUI : upgrade — tier {trackedBuilding.GetCurrentTier()}/{trackedBuilding.GetMaxTier()} pour {trackedBuilding.GetBuildingName()}");
@@ -232,14 +307,42 @@ public class ActionPanelUI : MonoBehaviour
                 if (currentRootborn != null) RefreshProduction();
                 else HidePanel();
                 break;
+
             case PanelContext.Upgrade:
                 if (trackedBuilding != null) RefreshUpgrade();
                 else HidePanel();
                 break;
+
+            case PanelContext.FoundationBuild:
+                if (trackedFoundation != null) RefreshFoundationBuild();
+                else HidePanel();
+                break;
+
             default:
                 HidePanel();
                 break;
         }
+    }
+
+    // === FOUNDATION TRACKING ===
+
+    // Appelé quand la Foundation trackée est détruite — masque le panneau sans RemoveListener
+    // (La Foundation est en cours de destruction, ses events se nettoient automatiquement)
+    private void HandleFoundationDestroyed()
+    {
+        trackedFoundation = null;
+        currentContext    = PanelContext.None;
+        HidePanel();
+        Debug.Log("🌱 ActionPanelUI : Foundation détruite — panneau masqué");
+    }
+
+    // Désabonne proprement les events de la Foundation trackée et oublie la référence
+    private void UnsubscribeFoundationEvents()
+    {
+        if (trackedFoundation == null) return;
+        trackedFoundation.OnStateChanged.RemoveListener(RefreshPanel);
+        trackedFoundation.OnDestroyed.RemoveListener(HandleFoundationDestroyed);
+        trackedFoundation = null;
     }
 
     // === CLEAR ===
@@ -249,9 +352,10 @@ public class ActionPanelUI : MonoBehaviour
     {
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
         currentRootborn = null;
         trackedBuilding = null;
-        currentContext = PanelContext.None;
+        currentContext  = PanelContext.None;
         HidePanel();
     }
 
@@ -261,7 +365,7 @@ public class ActionPanelUI : MonoBehaviour
     // Adapte la signature OnObstacleSelected (GameObject) vers HandleSelectionCleared
     private void OnObstacleSelectedAdapter(GameObject _) => HandleSelectionCleared();
 
-    // Désabonne les events du MovementController tracké (try/catch pour objets détruits)
+    // Désabonne les events du MovementController tracké
     private void UnsubscribeMovementEvents()
     {
         if (trackedMovementController == null) return;
@@ -313,12 +417,11 @@ public class ActionPanelUI : MonoBehaviour
     // Anime le scale X de ce GameObject de 0 à 1 sur showAnimationDuration secondes
     private IEnumerator AnimateShow()
     {
-        Vector3 startScale = new Vector3(0f, transform.localScale.y, transform.localScale.z);
+        Vector3 startScale  = new Vector3(0f, transform.localScale.y, transform.localScale.z);
         Vector3 targetScale = new Vector3(1f, transform.localScale.y, transform.localScale.z);
         transform.localScale = startScale;
 
         float elapsed = 0f;
-
         while (elapsed < showAnimationDuration)
         {
             elapsed += Time.deltaTime;

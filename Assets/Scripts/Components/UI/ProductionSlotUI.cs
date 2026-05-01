@@ -1,17 +1,17 @@
 using UnityEngine;
 using UnityEngine.UI;
 
-// Slot rond représentant une unité produisible dans le ProductionPanel
-// Configuré dynamiquement par ProductionPanelUI selon la disponibilité et le Watersap
-// Chaque slot est réutilisé via Setup() — pas de création/destruction de GameObjects
+// Slot rond représentant une unité ou un bâtiment produisible dans l'ActionPanel
+// Configuré dynamiquement via Setup() — pas de création/destruction de GameObjects
+// Deux surcharges : UnitStatsData (production/upgrade) et BuildingStatsData (foundation build)
 public class ProductionSlotUI : MonoBehaviour
 {
-    // État de disponibilité d'un slot — déterminé par ProductionPanelUI
+    // État de disponibilité d'un slot — déterminé par ActionPanelUI
     public enum SlotState
     {
-        Available,          // Watersap suffisant et tier débloqué
-        NotEnoughWatersap,  // Tier débloqué mais ressources insuffisantes
-        Locked              // Tier verrouillé (recherche non effectuée)
+        Available,          // Ressources suffisantes et conditions remplies
+        NotEnoughWatersap,  // Conditions remplies mais ressources insuffisantes
+        Locked              // Conditions non remplies (tier verrouillé, foundation pas prête)
     }
 
     [Header("Références")]
@@ -24,71 +24,60 @@ public class ProductionSlotUI : MonoBehaviour
     [Tooltip("Button cliquable sur le slot — interactable selon l'état")]
     [SerializeField] private Button slotButton;
 
-    // Overlay bleu léger pour l'état NotEnoughWatersap
     private static readonly Color ColorOverlayNotEnoughWatersap = new Color(0.1f, 0.3f, 0.8f, 0.45f);
+    private static readonly Color ColorPortraitLocked            = new Color(0.4f, 0.4f, 0.4f, 1f);
 
-    // Couleur grise pour le portrait en état Locked (simule le noir et blanc)
-    private static readonly Color ColorPortraitLocked = new Color(0.4f, 0.4f, 0.4f, 1f);
-
-    // Configure le slot avec l'unité, l'état et le callback de clic
-    // Appelé par ProductionPanelUI.RefreshPanel() à chaque mise à jour de la sélection
+    // Configure le slot avec une unité, son état et le callback de clic
     public void Setup(UnitStatsData unitData, SlotState state, System.Action<UnitStatsData> onClick)
     {
-        // Unité null : masque le slot entier
-        if (unitData == null)
-        {
-            gameObject.SetActive(false);
-            return;
-        }
-
-        gameObject.SetActive(true);
+        if (unitData == null) { gameObject.SetActive(false); return; }
 
         Debug.Log($"🌿 ProductionSlotUI Setup — état: {state} | slotButton null: {slotButton == null} | portraitImage null: {portraitImage == null}");
+        SetupInternal(unitData.portrait, state, onClick != null ? () => onClick(unitData) : null);
+    }
 
-        // Portrait
+    // Configure le slot avec un bâtiment (Foundation build), son état et le callback de clic
+    public void Setup(BuildingStatsData buildingData, SlotState state, System.Action<BuildingStatsData> onClick)
+    {
+        if (buildingData == null) { gameObject.SetActive(false); return; }
+
+        Debug.Log($"🌱 ProductionSlotUI Setup building — état: {state} | {buildingData.buildingName}");
+        SetupInternal(buildingData.portrait, state, onClick != null ? () => onClick(buildingData) : null);
+    }
+
+    // Logique d'affichage commune aux deux surcharges : portrait, overlay, interactabilité
+    private void SetupInternal(Sprite portrait, SlotState state, System.Action onClick)
+    {
+        gameObject.SetActive(true);
+
         if (portraitImage != null)
-            portraitImage.sprite = unitData.portrait;
+            portraitImage.sprite = portrait;
 
-        // Nettoie les listeners précédents pour éviter les doublons sur les appels successifs
         slotButton?.onClick.RemoveAllListeners();
 
         switch (state)
         {
             case SlotState.Available:
-                // Portrait en couleur normale, pas d'overlay, bouton actif
-                if (portraitImage != null)
-                    portraitImage.color = Color.white;
-                if (slotBackground != null)
-                    slotBackground.color = Color.white;
+                if (portraitImage != null) portraitImage.color  = Color.white;
+                if (slotBackground != null) slotBackground.color = Color.white;
                 if (slotButton != null)
                 {
                     slotButton.interactable = true;
                     if (onClick != null)
-                    {
-                        Debug.Log($"🌿 ProductionSlotUI : listener ajouté pour {unitData.unitName}");
-                        slotButton.onClick.AddListener(() => onClick(unitData));
-                    }
+                        slotButton.onClick.AddListener(() => onClick());
                 }
                 break;
 
             case SlotState.NotEnoughWatersap:
-                // Portrait normal, overlay bleu sur le fond, bouton désactivé
-                if (portraitImage != null)
-                    portraitImage.color = Color.white;
-                if (slotBackground != null)
-                    slotBackground.color = ColorOverlayNotEnoughWatersap;
-                if (slotButton != null)
-                    slotButton.interactable = false;
+                if (portraitImage != null) portraitImage.color  = Color.white;
+                if (slotBackground != null) slotBackground.color = ColorOverlayNotEnoughWatersap;
+                if (slotButton != null) slotButton.interactable = false;
                 break;
 
             case SlotState.Locked:
-                // Portrait grisé (simule noir et blanc), pas d'overlay, bouton désactivé
-                if (portraitImage != null)
-                    portraitImage.color = ColorPortraitLocked;
-                if (slotBackground != null)
-                    slotBackground.color = Color.white;
-                if (slotButton != null)
-                    slotButton.interactable = false;
+                if (portraitImage != null) portraitImage.color  = ColorPortraitLocked;
+                if (slotBackground != null) slotBackground.color = Color.white;
+                if (slotButton != null) slotButton.interactable = false;
                 break;
         }
     }

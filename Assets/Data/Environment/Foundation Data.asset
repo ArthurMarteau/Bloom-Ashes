@@ -12,4 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 9291a14a3d7ce364788858870ca6eaff, type: 3}
   m_Name: Foundation Data
   m_EditorClassIdentifier: Assembly-CSharp::FoundationData
-  availableBuildings: []
+  availableBuildings:
+  - {fileID: 11400000, guid: 37bb31b95cbbebe4babd88043abc8380, type: 2}
+  - {fileID: 0}
+  - {fileID: 0}

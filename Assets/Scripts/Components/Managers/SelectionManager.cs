@@ -4,13 +4,12 @@ using UnityEngine.Events;
 using UnityEngine.EventSystems;
 
 // Gère la sélection d'objets avec clic simple et rectangle de sélection
-// Système hybride : raycast direct + Physics2D pour rectangle
-// Priorité : Unités (multiple) > Obstacles/Ground (unique, remplace unités)
-// Consomme les events de InputManager — aucun accès direct à Input.*
+// Système hybride : registry logique (unités) + Physics2D (bâtiments/env)
+// Priorité unique via SelectAtCell : Unit > Building > Environment > Ground
+// Tracking destruction symétrique par entité via trackedDestroyHandlers
 public class SelectionManager : MonoBehaviour
 {
     [Header("Selection Settings")]
-    // Filtre pour détecter uniquement les objets sur le layer "Units"
     [SerializeField] private LayerMask unitLayer = 1 << 9;
     [SerializeField] private LayerMask buildingLayer = 1 << 8;
     [SerializeField] private LayerMask environmentWalkableLayer = 1 << 7;
@@ -18,68 +17,50 @@ public class SelectionManager : MonoBehaviour
     [SerializeField] private LayerMask groundLayer = 1 << 3;
 
     [Header("Selection Square")]
-    // Prefab du carré de sélection à instancier pour chaque objet sélectionné
     [SerializeField] private GameObject selectionSquarePrefab;
 
     // === SELECTION MULTIPLE UNITES ===
-    // Stocke toutes les unités actuellement sélectionnées avec leurs carrés
     private Dictionary<GameObject, SelectionSquare> selectedUnits = new Dictionary<GameObject, SelectionSquare>();
 
     // === SELECTION UNIQUE OBSTACLE/GROUND ===
-    // Stocke la sélection actuelle d'obstacle ou ground (exclusif avec unités)
     private GameObject currentSelectedObject;
     private SelectionSquare currentObjectSelectionSquare;
     private Vector2Int currentGroundSelection;
     private bool hasGroundSelection;
 
     // === RECTANGLE SELECTION ===
-    // Variables pour gérer la sélection par drag rectangle
     private bool isDragging;
-    private Vector3 dragStartPosition;       // Position écran au début du drag (fournie par InputManager)
-    private Vector3 lastDragScreenPosition;  // Dernière position écran reçue pendant le drag
+    private Vector3 dragStartPosition;
+    private Vector3 lastDragScreenPosition;
     private LineRenderer rectangleRenderer;
 
-    // Référence à la caméra pour convertir les clics souris en rayons 3D
     private Camera mainCamera;
-
-    // Référence à l'InputManager (abonnement aux events, accès à IsShiftHeld)
     private InputManager inputManager;
 
-    // Composants trackés pour détecter la destruction de l'entité sélectionnée
-    private UnitStatsComponent trackedUnitStats;
-    private BuildingStatsComponent trackedBuildingStats;
+    // Handlers de destruction indexés par entité — permet RemoveListener avec callback exact
+    private Dictionary<GameObject, UnityAction> trackedDestroyHandlers = new Dictionary<GameObject, UnityAction>();
 
     [Header("Events — UI")]
-    // Notifie l'UI lors de tout changement de sélection (abonnés par UnitPanelUI)
-    public UnityEvent<List<GameObject>>    OnUnitsSelected      = new UnityEvent<List<GameObject>>(); // Unités sélectionnées (liste vide si désélection)
-    public UnityEvent<Vector2Int>          OnGroundSelected     = new UnityEvent<Vector2Int>();        // Coordonnées grille du terrain sélectionné
-    public UnityEvent<GameObject>          OnObstacleSelected   = new UnityEvent<GameObject>();        // Obstacle sélectionné
-    public UnityEvent<GameObject>          OnBuildingSelected   = new UnityEvent<GameObject>();        // Bâtiment sélectionné
-    public UnityEvent                      OnSelectionCleared   = new UnityEvent();                    // Toute sélection effacée
-    // Déclenché quand un Rootborn local sélectionné est sur les cases d'une Foundation (null = masquer le panneau)
-    public UnityEvent<FoundationComponent> OnFoundationSelected = new UnityEvent<FoundationComponent>();
+    public UnityEvent<List<GameObject>>    OnUnitsSelected    = new UnityEvent<List<GameObject>>();
+    public UnityEvent<Vector2Int>          OnGroundSelected   = new UnityEvent<Vector2Int>();
+    public UnityEvent<GameObject>          OnObstacleSelected = new UnityEvent<GameObject>();
+    public UnityEvent<GameObject>          OnBuildingSelected = new UnityEvent<GameObject>();
+    public UnityEvent                      OnSelectionCleared = new UnityEvent();
 
     // Méthode appelée au démarrage pour initialiser les références et composants
     private void Awake()
     {
-        // Trouve la caméra principale automatiquement
         mainCamera = Camera.main;
         if (mainCamera == null)
-        {
             Debug.LogError("SelectionManager nécessite une caméra principale dans la scène !");
-        }
 
-        // Vérifie que le prefab est assigné
         if (selectionSquarePrefab == null)
-        {
             Debug.LogError("SelectionManager nécessite un prefab SelectionSquare assigné !");
-        }
 
-        // Crée le LineRenderer pour le rectangle de sélection
         SetupRectangleRenderer();
     }
 
-    // S'abonne aux events de InputManager pour découpler la lecture d'input
+    // S'abonne aux events de InputManager et EntitySpawnManager
     private void Start()
     {
         inputManager = InputManager.Instance;
@@ -95,7 +76,6 @@ public class SelectionManager : MonoBehaviour
         inputManager.OnLeftClickUp.AddListener(OnLeftClickUpHandler);
         inputManager.OnDragEnd.AddListener(OnDragEndHandler);
 
-        // Abonnement aux events de spawn/remplacement d'entités
         if (EntitySpawnManager.Instance != null)
         {
             EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
@@ -104,23 +84,20 @@ public class SelectionManager : MonoBehaviour
     }
 
     // Configure le LineRenderer pour dessiner le rectangle de sélection
-    // Utilisé une seule fois à l'initialisation pour optimiser les performances
     private void SetupRectangleRenderer()
     {
-        // Crée un GameObject enfant pour le LineRenderer
         GameObject rectangleObject = new GameObject("SelectionRectangle");
         rectangleObject.transform.SetParent(transform);
 
-        // Configure le LineRenderer pour dessiner un rectangle
         rectangleRenderer = rectangleObject.AddComponent<LineRenderer>();
         rectangleRenderer.material = new Material(Shader.Find("Sprites/Default"));
         rectangleRenderer.startColor = Color.white;
         rectangleRenderer.startWidth = 0.05f;
         rectangleRenderer.endWidth = 0.05f;
-        rectangleRenderer.positionCount = 5; // 4 coins + retour au début
+        rectangleRenderer.positionCount = 5;
         rectangleRenderer.useWorldSpace = true;
-        rectangleRenderer.sortingOrder = 100; // Au-dessus de tout
-        rectangleRenderer.enabled = false; // Masqué par défaut
+        rectangleRenderer.sortingOrder = 100;
+        rectangleRenderer.enabled = false;
     }
 
     // --- Handlers InputManager ---
@@ -129,7 +106,6 @@ public class SelectionManager : MonoBehaviour
     private void OnLeftClickDownHandler(Vector3 worldPosition)
     {
         isDragging = false;
-
         Debug.Log($"🎯 START Selection — monde {worldPosition}");
     }
 
@@ -140,25 +116,19 @@ public class SelectionManager : MonoBehaviour
         lastDragScreenPosition = screenPosition;
         isDragging = true;
         rectangleRenderer.enabled = true;
-
         Debug.Log("🟢 Mode rectangle ACTIVÉ !");
     }
 
     // Drag en cours — met à jour la position courante et redessine le rectangle
     private void OnDragUpdateHandler(Vector3 screenPosition)
     {
-        if (!isDragging)
-        {
-            return;
-        }
-
+        if (!isDragging) return;
         lastDragScreenPosition = screenPosition;
-
         Debug.Log("🎨 Dessin du rectangle...");
         DrawSelectionRectangle();
     }
 
-    // Clic simple relâché (pas de drag) — sélectionne l'objet sous le curseur
+    // Clic simple relâché — filtre UI puis délègue à SelectAtCell
     private void OnLeftClickUpHandler(Vector3 screenPosition)
     {
         PointerEventData eventData = new PointerEventData(EventSystem.current);
@@ -173,11 +143,7 @@ public class SelectionManager : MonoBehaviour
     // Fin du drag — complète la sélection rectangle et masque le rectangle
     private void OnDragEndHandler()
     {
-        if (!isDragging)
-        {
-            return;
-        }
-
+        if (!isDragging) return;
         CompleteRectangleSelection();
         isDragging = false;
         rectangleRenderer.enabled = false;
@@ -185,67 +151,92 @@ public class SelectionManager : MonoBehaviour
 
     // --- Logique de sélection ---
 
-    // Traite la sélection par clic simple avec système de priorité
-    // Priorité : unitLayer > buildingLayer > obstacleLayer > groundLayer
+    // Traite la sélection par clic simple — convertit screen→world puis délègue à SelectAtCell
     private void HandleSimpleClick(Vector3 screenPosition)
     {
-        // Convertit la position écran en rayon 3D dans le monde
-        Ray ray = mainCamera.ScreenPointToRay(screenPosition);
         Vector3 clickWorldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
         clickWorldPosition.z = 0;
-
-        // 1. Vérifie d'abord les unités (priorité la plus haute)
-        RaycastHit2D unitHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, unitLayer);
-        if (unitHit.collider != null)
-        {
-            HandleUnitSelection(unitHit.collider.gameObject, clickWorldPosition);
-            return;
-        }
-
-        // 2. Vérifie les bâtiments (layer Buildings)
-        RaycastHit2D buildingHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, buildingLayer);
-        if (buildingHit.collider != null)
-        {
-            HandleUnitSelection(buildingHit.collider.gameObject, clickWorldPosition);
-            return;
-        }
-
-        // 2b. Vérifie les bâtiments sur Environment_Walkable (ex: Nexus)
-        RaycastHit2D envBuildingHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, environmentWalkableLayer);
-        if (envBuildingHit.collider != null)
-        {
-            HandleUnitSelection(envBuildingHit.collider.gameObject, clickWorldPosition);
-            return;
-        }
-
-        // 3. Si pas d'unité ni bâtiment, vérifie les obstacles
-        RaycastHit2D obstacleHit = Physics2D.Raycast(ray.origin, ray.direction, Mathf.Infinity, obstacleLayer);
-        if (obstacleHit.collider != null)
-        {
-            SelectObstacle(obstacleHit.collider.gameObject);
-            return;
-        }
-
-        // 3. Si ni unité ni obstacle, sélection ground
-        Vector3 worldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
-        worldPosition.z = 0;
-        HandleGroundSelection(worldPosition);
+        Vector2Int cell = GridManager.Instance.WorldToGrid(clickWorldPosition);
+        SelectAtCell(cell);
     }
 
-    // Gère la sélection d'unité avec support Shift pour sélection multiple
-    // Détecte si l'objet est un bâtiment (BuildingStatsComponent) → déclenche OnBuildingSelected
-    // worldPosition : position monde du clic, utilisée pour placer le carré sur la tile cl iquée
+    // Point d'entrée unique pour la logique de priorité de sélection par cellule
+    // Priorité : Unit (registry) > Building (Physics2D + BuildingStatsComponent) > Environment > Ground
+    public void SelectAtCell(Vector2Int cell)
+    {
+        Vector3 worldPos = GridManager.Instance.GridToWorld(cell);
+
+        // Priorité 1 : unité via registry logique (fiable pendant le Lerp visuel)
+        if (EntityRegistry.Instance != null)
+        {
+            GameObject unit = EntityRegistry.Instance.GetUnitAtLogicalPosition(cell);
+            if (unit != null)
+            {
+                UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
+                if (stats == null || !stats.IsDead())
+                {
+                    HandleUnitSelection(unit, worldPos);
+                    return;
+                }
+            }
+        }
+
+        // Priorité 2 : bâtiment (BuildingStatsComponent présent sur layer 8 ou 7)
+        Collider2D buildingCollider = Physics2D.OverlapPoint(worldPos, buildingLayer | environmentWalkableLayer);
+        if (buildingCollider != null && SelectableResolver.IsBuilding(buildingCollider.gameObject))
+        {
+            HandleUnitSelection(buildingCollider.gameObject, worldPos);
+            return;
+        }
+
+        // Priorité 3 : environnement (obstacle ou env walkable sans BuildingStats)
+        Collider2D envCollider = Physics2D.OverlapPoint(worldPos, obstacleLayer | environmentWalkableLayer);
+        if (envCollider != null && !SelectableResolver.IsBuilding(envCollider.gameObject))
+        {
+            SelectObstacle(envCollider.gameObject);
+            return;
+        }
+
+        // Fallback : terrain
+        if (GridManager.Instance.IsInBounds(cell))
+            SelectGround(cell);
+        else
+            ClearAllSelection();
+    }
+
+    // Retourne la cellule de la première entité sélectionnée (unité ou objet courant)
+    // Utile comme fallback quand le transform peut déjà être détruit à l'appel
+    public bool TryGetSelectedEntityCell(out Vector2Int cell)
+    {
+        foreach (var kvp in selectedUnits)
+        {
+            if (kvp.Key != null)
+            {
+                cell = GridManager.Instance.WorldToGrid(kvp.Key.transform.position);
+                return true;
+            }
+        }
+        if (currentSelectedObject != null)
+        {
+            cell = GridManager.Instance.WorldToGrid(currentSelectedObject.transform.position);
+            return true;
+        }
+        cell = Vector2Int.zero;
+        return false;
+    }
+
+    // Gère la sélection d'une entité (unit ou building) avec support Shift pour sélection multiple
+    // Utilise SelectableResolver pour classifier et router vers la bonne branche
     private void HandleUnitSelection(GameObject unit, Vector3 worldPosition = default)
     {
-        // Détecte si c'est un bâtiment → event dédié, carré sur la tile cliquée
-        BuildingStatsComponent building = unit.GetComponent<BuildingStatsComponent>();
-        if (building != null)
+        SelectableType type = SelectableResolver.ResolveType(unit);
+
+        if (type == SelectableType.Building)
         {
             ClearAllSelectionSilent();
             currentSelectedObject = unit;
             hasGroundSelection = false;
 
-            // Place le carré sur la tile cliquée (pas sur le pivot du bâtiment)
             currentObjectSelectionSquare = CreateSelectionSquare();
             if (currentObjectSelectionSquare != null)
             {
@@ -253,235 +244,138 @@ public class SelectionManager : MonoBehaviour
                 currentObjectSelectionSquare.AttachToGridPosition(clickedTile);
             }
 
+            TrackEntityDestruction(unit);
             OnBuildingSelected.Invoke(unit);
-            OnFoundationSelected.Invoke(null);
-            UnsubscribeEntityDestroyedEvents();
-            BuildingStatsComponent buildingStats = unit.GetComponent<BuildingStatsComponent>();
-            if (buildingStats != null)
-            {
-                trackedBuildingStats = buildingStats;
-                trackedBuildingStats.OnBuildingDestroyed.AddListener(OnSelectedEntityDestroyed);
-            }
-            Debug.Log($"Bâtiment sélectionné : {unit.name}");
+            Debug.Log($"🏗️ Bâtiment sélectionné : {unit.name}");
             return;
         }
 
-        // Efface les sélections obstacle/ground (unités prioritaires)
+        // Branche unité — efface obstacle/ground, conserve les autres unités (shift)
         ClearNonUnitSelection();
 
         if (InputManager.Instance.IsShiftHeld)
         {
-            // Mode sélection multiple - ajoute ou retire l'unité
-            if (IsUnitSelected(unit))
-            {
-                DeselectUnit(unit);
-            }
-            else
-            {
-                SelectUnit(unit);
-            }
+            if (IsUnitSelected(unit)) DeselectUnit(unit);
+            else SelectUnit(unit);
         }
         else
         {
-            // Mode sélection simple - remplace toute la sélection
             ClearUnitSelection();
             SelectUnit(unit);
         }
 
-        // Notifie l'UI avec la liste courante (peut être vide si shift-désélection du dernier)
         List<GameObject> currentUnits = GetSelectedUnits();
         if (currentUnits.Count > 0)
-        {
             OnUnitsSelected.Invoke(currentUnits);
-        }
         else
-        {
             OnSelectionCleared.Invoke();
-            OnFoundationSelected.Invoke(null);
-            return;
-        }
-
-        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
-        DetectFoundationFromSelection(currentUnits);
-    }
-
-    // Traite la sélection de terrain à partir d'une position mondiale
-    // Convertit en coordonnées grille et crée la sélection ground
-    private void HandleGroundSelection(Vector3 worldPosition)
-    {
-        Vector2Int gridCoordinates = GridManager.Instance.WorldToGrid(worldPosition);
-
-        if (GridManager.Instance.IsInBounds(gridCoordinates))
-        {
-            SelectGround(gridCoordinates);
-        }
-        else
-        {
-            // Position hors grille - efface toute sélection
-            ClearAllSelection();
-        }
     }
 
     // Finalise la sélection rectangle en récupérant toutes les unités dans la zone
-    // Utilise Physics2D.OverlapArea pour détecter les unités en temps réel
     private void CompleteRectangleSelection()
     {
-        // Convertit les positions écran en positions monde
         Vector3 startWorld = mainCamera.ScreenToWorldPoint(dragStartPosition);
-        Vector3 endWorld = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
+        Vector3 endWorld   = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
         startWorld.z = endWorld.z = 0;
 
-        // Calcule les coins de la zone de sélection
-        Vector2 bottomLeft = new Vector2(
-            Mathf.Min(startWorld.x, endWorld.x),
-            Mathf.Min(startWorld.y, endWorld.y)
-        );
-        Vector2 topRight = new Vector2(
-            Mathf.Max(startWorld.x, endWorld.x),
-            Mathf.Max(startWorld.y, endWorld.y)
-        );
+        Vector2 bottomLeft = new Vector2(Mathf.Min(startWorld.x, endWorld.x), Mathf.Min(startWorld.y, endWorld.y));
+        Vector2 topRight   = new Vector2(Mathf.Max(startWorld.x, endWorld.x), Mathf.Max(startWorld.y, endWorld.y));
 
-        // Trouve toutes les unités dans la zone rectangle
         Collider2D[] unitsInArea = Physics2D.OverlapAreaAll(bottomLeft, topRight, unitLayer);
 
-        // Efface sélections précédentes sans émettre d'event (remplacé par OnUnitsSelected)
         ClearAllSelectionSilent();
 
-        // Sélectionne toutes les unités trouvées
         foreach (Collider2D unitCollider in unitsInArea)
-        {
             SelectUnit(unitCollider.gameObject);
-        }
 
-        // Notifie l'UI avec la nouvelle liste d'unités
         List<GameObject> rectangleUnits = GetSelectedUnits();
         OnUnitsSelected.Invoke(rectangleUnits);
 
-        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
-        DetectFoundationFromSelection(rectangleUnits);
-
-        Debug.Log($"Rectangle sélection : {unitsInArea.Length} unités sélectionnées");
+        Debug.Log($"🔲 Rectangle sélection : {unitsInArea.Length} unités sélectionnées");
     }
 
     // Dessine le rectangle de sélection en temps réel pendant le drag
-    // Met à jour les positions du LineRenderer pour afficher la zone
     private void DrawSelectionRectangle()
     {
-        // Convertit les positions écran en positions monde
         Vector3 startWorld = mainCamera.ScreenToWorldPoint(dragStartPosition);
-        Vector3 endWorld = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
+        Vector3 endWorld   = mainCamera.ScreenToWorldPoint(lastDragScreenPosition);
         startWorld.z = endWorld.z = 0;
 
-        // Définit les 4 coins du rectangle + retour au début
         Vector3[] corners = new Vector3[5];
-        corners[0] = new Vector3(startWorld.x, startWorld.y, 0); // Bas-gauche
-        corners[1] = new Vector3(endWorld.x, startWorld.y, 0);   // Bas-droite
-        corners[2] = new Vector3(endWorld.x, endWorld.y, 0);     // Haut-droite
-        corners[3] = new Vector3(startWorld.x, endWorld.y, 0);   // Haut-gauche
-        corners[4] = corners[0]; // Retour au début pour fermer
+        corners[0] = new Vector3(startWorld.x, startWorld.y, 0);
+        corners[1] = new Vector3(endWorld.x,   startWorld.y, 0);
+        corners[2] = new Vector3(endWorld.x,   endWorld.y,   0);
+        corners[3] = new Vector3(startWorld.x, endWorld.y,   0);
+        corners[4] = corners[0];
 
-        // Met à jour le LineRenderer
         rectangleRenderer.SetPositions(corners);
     }
 
-    // Ajoute une unité à la sélection multiple et crée son carré visuel
-    // Maintient le dictionnaire unité→carré pour la gestion de sélection
-    // Toute unité est sélectionnable — la restriction d'équipe appartient à OrderManager
+    // Ajoute une unité à la sélection multiple — track sa destruction individuellement
     private void SelectUnit(GameObject unit)
     {
         if (unit == null || IsUnitSelected(unit)) return;
 
-        // Crée le carré de sélection pour cette unité
         SelectionSquare selectionSquare = CreateSelectionSquare();
         if (selectionSquare != null)
         {
             selectionSquare.AttachToGameObject(unit);
-
-            // Ajoute au dictionnaire de sélection
             selectedUnits.Add(unit, selectionSquare);
-
-            UnsubscribeEntityDestroyedEvents();
-            UnitStatsComponent unitStats = unit.GetComponent<UnitStatsComponent>();
-            if (unitStats != null)
-            {
-                trackedUnitStats = unitStats;
-                trackedUnitStats.OnDeath.AddListener(OnSelectedEntityDestroyed);
-            }
-
-            Debug.Log($"Unité sélectionnée : {unit.name} (Total: {selectedUnits.Count})");
+            TrackEntityDestruction(unit);
+            Debug.Log($"✅ Unité sélectionnée : {unit.name} (Total: {selectedUnits.Count})");
         }
     }
 
-    // Retire une unité de la sélection multiple et détruit son carré
-    // Maintient la cohérence du dictionnaire unité→carré
+    // Retire une unité de la sélection multiple et annule le tracking de destruction
     private void DeselectUnit(GameObject unit)
     {
         if (unit == null || !IsUnitSelected(unit)) return;
 
-        // Récupère et détruit le carré de sélection
         if (selectedUnits.TryGetValue(unit, out SelectionSquare selectionSquare))
         {
-            if (selectionSquare != null)
-            {
-                selectionSquare.DestroySelectionSquare();
-            }
-
-            // Retire du dictionnaire
+            if (selectionSquare != null) selectionSquare.DestroySelectionSquare();
             selectedUnits.Remove(unit);
-
-            Debug.Log($"Unité désélectionnée : {unit.name} (Total: {selectedUnits.Count})");
+            UntrackEntityDestruction(unit);
+            Debug.Log($"❌ Unité désélectionnée : {unit.name} (Total: {selectedUnits.Count})");
         }
     }
 
-    // Sélectionne un obstacle (unique, remplace toute sélection unité)
-    // Obstacle sélectionné en priorité si aucune unité sur la cellule
+    // Sélectionne un obstacle/environnement (unique, remplace toute sélection)
     private void SelectObstacle(GameObject obstacle)
     {
         if (obstacle == null) return;
 
-        // Efface toutes les sélections précédentes sans émettre d'event (remplacé par OnObstacleSelected)
         ClearAllSelectionSilent();
 
-        // Crée le carré de sélection pour l'obstacle
         currentObjectSelectionSquare = CreateSelectionSquare();
         if (currentObjectSelectionSquare != null)
         {
             currentObjectSelectionSquare.AttachToGameObject(obstacle);
-
             currentSelectedObject = obstacle;
             hasGroundSelection = false;
-
             OnObstacleSelected.Invoke(obstacle);
-            OnFoundationSelected.Invoke(null);
-            Debug.Log($"Obstacle sélectionné : {obstacle.name}");
+            Debug.Log($"🌳 Obstacle sélectionné : {obstacle.name}");
         }
     }
 
     // Sélectionne une cellule de terrain (unique, remplace toute sélection)
-    // Ground sélectionné seulement si aucune unité ni obstacle sur la cellule
     private void SelectGround(Vector2Int gridCoordinates)
     {
-        // Efface toutes les sélections précédentes sans émettre d'event (remplacé par OnGroundSelected)
         ClearAllSelectionSilent();
 
-        // Crée le carré de sélection pour le terrain
         currentObjectSelectionSquare = CreateSelectionSquare();
         if (currentObjectSelectionSquare != null)
         {
             currentObjectSelectionSquare.AttachToGridPosition(gridCoordinates);
-
             currentSelectedObject = null;
             currentGroundSelection = gridCoordinates;
             hasGroundSelection = true;
-
             OnGroundSelected.Invoke(gridCoordinates);
-            OnFoundationSelected.Invoke(null);
-            Debug.Log($"Terrain sélectionné : cellule {gridCoordinates}");
+            Debug.Log($"🌱 Terrain sélectionné : cellule {gridCoordinates}");
         }
     }
 
     // Crée une nouvelle instance du carré de sélection
-    // Factory method pour instancier et configurer les carrés
     private SelectionSquare CreateSelectionSquare()
     {
         if (selectionSquarePrefab == null)
@@ -503,24 +397,19 @@ public class SelectionManager : MonoBehaviour
         return selectionSquare;
     }
 
-    // Efface uniquement la sélection des unités (garde obstacle/ground)
-    // Utilisé lors de sélection obstacle/ground pour les remplacer
+    // Efface uniquement la sélection des unités, annule leur tracking de destruction
     private void ClearUnitSelection()
     {
-        UnsubscribeEntityDestroyedEvents();
         foreach (var kvp in selectedUnits)
         {
-            if (kvp.Value != null)
-            {
-                kvp.Value.DestroySelectionSquare();
-            }
+            if (kvp.Value != null) kvp.Value.DestroySelectionSquare();
+            UntrackEntityDestruction(kvp.Key);
         }
         selectedUnits.Clear();
-        Debug.Log("Sélection unités effacée");
+        Debug.Log("🗑️ Sélection unités effacée");
     }
 
-    // Efface uniquement la sélection obstacle/ground (garde unités)
-    // Utilisé lors de sélection unité pour les remplacer
+    // Efface uniquement la sélection obstacle/ground, annule le tracking de l'objet courant
     private void ClearNonUnitSelection()
     {
         if (currentObjectSelectionSquare != null)
@@ -529,52 +418,121 @@ public class SelectionManager : MonoBehaviour
             currentObjectSelectionSquare = null;
         }
 
+        if (currentSelectedObject != null)
+            UntrackEntityDestruction(currentSelectedObject);
+
         currentSelectedObject = null;
         hasGroundSelection = false;
-        Debug.Log("Sélection obstacle/ground effacée");
     }
 
-    // Appelé quand l'entité sélectionnée est détruite — fallback vers terrain ou clear
-    private void OnSelectedEntityDestroyed()
+    // === TRACKING DESTRUCTION ===
+
+    // S'abonne à l'event de mort/destruction d'une entité — stocke le handler pour RemoveListener exact
+    private void TrackEntityDestruction(GameObject entity)
     {
-        // Récupère la position de l'entité détruite
-        Vector3 lastPosition = Vector3.zero;
+        if (entity == null || trackedDestroyHandlers.ContainsKey(entity)) return;
 
-        if (trackedUnitStats != null)
+        UnitStatsComponent unitStats = entity.GetComponent<UnitStatsComponent>();
+        if (unitStats != null)
         {
-            lastPosition = trackedUnitStats.transform.position;
-        }
-        else if (trackedBuildingStats != null)
-        {
-            lastPosition = trackedBuildingStats.transform.position;
+            UnityAction handler = () => HandleEntityDestroyed(entity);
+            trackedDestroyHandlers[entity] = handler;
+            unitStats.OnDeath.AddListener(handler);
+            return;
         }
 
-        // Fallback : sélectionne le terrain sous l'entité détruite
-        if (lastPosition != Vector3.zero)
+        BuildingStatsComponent buildingStats = entity.GetComponent<BuildingStatsComponent>();
+        if (buildingStats != null)
         {
-            Vector2Int gridPosition = GridManager.Instance.WorldToGrid(lastPosition);
-            if (GridManager.Instance.IsInBounds(gridPosition))
+            UnityAction handler = () => HandleEntityDestroyed(entity);
+            trackedDestroyHandlers[entity] = handler;
+            buildingStats.OnBuildingDestroyed.AddListener(handler);
+        }
+    }
+
+    // Désabonne l'event de mort/destruction d'une entité vivante — symétrique à TrackEntityDestruction
+    private void UntrackEntityDestruction(GameObject entity)
+    {
+        if (entity == null || !trackedDestroyHandlers.TryGetValue(entity, out UnityAction handler)) return;
+
+        UnitStatsComponent unitStats = entity.GetComponent<UnitStatsComponent>();
+        if (unitStats != null) unitStats.OnDeath.RemoveListener(handler);
+
+        BuildingStatsComponent buildingStats = entity.GetComponent<BuildingStatsComponent>();
+        if (buildingStats != null) buildingStats.OnBuildingDestroyed.RemoveListener(handler);
+
+        trackedDestroyHandlers.Remove(entity);
+    }
+
+    // Désabonne tous les handlers de destruction — utilisé par ClearAllSelectionSilent et OnDestroy
+    private void UntrackAllEntityDestruction()
+    {
+        foreach (var kvp in trackedDestroyHandlers)
+        {
+            if (kvp.Key == null) continue;
+
+            UnitStatsComponent unitStats = kvp.Key.GetComponent<UnitStatsComponent>();
+            if (unitStats != null) unitStats.OnDeath.RemoveListener(kvp.Value);
+
+            BuildingStatsComponent buildingStats = kvp.Key.GetComponent<BuildingStatsComponent>();
+            if (buildingStats != null) buildingStats.OnBuildingDestroyed.RemoveListener(kvp.Value);
+        }
+        trackedDestroyHandlers.Clear();
+    }
+
+    // Appelé quand une entité sélectionnée est détruite
+    // Capture la position AVANT toute opération (transform encore valide à cet instant)
+    // Si d'autres unités restent sélectionnées → met à jour l'UI ; sinon → fallback SelectAtCell
+    private void HandleEntityDestroyed(GameObject destroyed)
+    {
+        if (destroyed == null) return;
+
+        // Capture position monde avant tout traitement — le transform est encore valide ici
+        Vector3 worldPos     = destroyed.transform.position;
+        Vector2Int cellDestroyed = GridManager.Instance.WorldToGrid(worldPos);
+
+        // Retire du dict sans appeler RemoveListener (entité en cours de destruction)
+        trackedDestroyHandlers.Remove(destroyed);
+
+        if (selectedUnits.ContainsKey(destroyed))
+        {
+            if (selectedUnits.TryGetValue(destroyed, out SelectionSquare sq) && sq != null)
+                sq.DestroySelectionSquare();
+            selectedUnits.Remove(destroyed);
+
+            if (selectedUnits.Count > 0)
             {
-                SelectGround(gridPosition);
-                Debug.Log($"🔄 SelectionManager : Fallback vers terrain {gridPosition} après destruction d'entité");
+                OnUnitsSelected.Invoke(GetSelectedUnits());
+                Debug.Log($"💀 {destroyed.name} détruit — {selectedUnits.Count} unité(s) encore sélectionnée(s)");
                 return;
             }
         }
+        else if (currentSelectedObject == destroyed)
+        {
+            if (currentObjectSelectionSquare != null)
+            {
+                currentObjectSelectionSquare.DestroySelectionSquare();
+                currentObjectSelectionSquare = null;
+            }
+            currentSelectedObject = null;
+        }
+        else
+        {
+            return; // Entité détruite mais non sélectionnée — rien à faire
+        }
 
-        // Si pas de position valide, clear total
-        ClearAllSelection();
+        Debug.Log($"💀 {destroyed.name} détruit — fallback SelectAtCell({cellDestroyed})");
+        SelectAtCell(cellDestroyed);
     }
 
     // === CALLBACKS ENTITY SPAWN EVENTS ===
 
-    // Appelé quand une entité spawn (sans remplacer le spawner)
-    // Si le spawner était sélectionné → sélectionne l'entité spawnée
+    // Appelé quand une entité spawn — si le spawner était sélectionné, sélectionne le spawné
     private void HandleEntitySpawned(GameObject spawner, GameObject spawnedEntity)
     {
         if (spawner == null || spawnedEntity == null) return;
 
         bool spawnerWasSelected = (currentSelectedObject == spawner) || IsUnitSelected(spawner);
-
         if (spawnerWasSelected)
         {
             SelectGameObject(spawnedEntity);
@@ -582,14 +540,12 @@ public class SelectionManager : MonoBehaviour
         }
     }
 
-    // Appelé quand une entité est remplacée par une autre
-    // Si l'ancienne entité était sélectionnée → sélectionne la nouvelle
+    // Appelé quand une entité est remplacée — si l'ancienne était sélectionnée, sélectionne la nouvelle
     private void HandleEntityReplaced(GameObject oldEntity, GameObject newEntity)
     {
         if (oldEntity == null || newEntity == null) return;
 
         bool oldWasSelected = (currentSelectedObject == oldEntity) || IsUnitSelected(oldEntity);
-
         if (oldWasSelected)
         {
             SelectGameObject(newEntity);
@@ -597,48 +553,28 @@ public class SelectionManager : MonoBehaviour
         }
     }
 
-    // Désabonne les events de mort/destruction de l'entité trackée
-    private void UnsubscribeEntityDestroyedEvents()
-    {
-        if (trackedUnitStats != null)
-        {
-            trackedUnitStats.OnDeath.RemoveListener(OnSelectedEntityDestroyed);
-            trackedUnitStats = null;
-        }
-        if (trackedBuildingStats != null)
-        {
-            trackedBuildingStats.OnBuildingDestroyed.RemoveListener(OnSelectedEntityDestroyed);
-            trackedBuildingStats = null;
-        }
-    }
-
-    // Efface complètement toute sélection sans émettre d'event (usage interne uniquement)
-    // Appelé par SelectObstacle/SelectGround/CompleteRectangleSelection avant de définir une nouvelle sélection
+    // Efface complètement toute sélection sans émettre d'event (usage interne)
     private void ClearAllSelectionSilent()
     {
         ClearUnitSelection();
         ClearNonUnitSelection();
     }
 
-    // Efface complètement toute sélection (unités + obstacle/ground) et notifie l'UI
-    // Méthode publique pour reset total depuis l'extérieur
+    // Efface complètement toute sélection et notifie l'UI
     public void ClearAllSelection()
     {
         ClearAllSelectionSilent();
         OnSelectionCleared.Invoke();
-        OnFoundationSelected.Invoke(null);
-        Debug.Log("Toute sélection effacée");
+        Debug.Log("🗑️ Toute sélection effacée");
     }
 
     // Vérifie si un GameObject est sur un layer spécifique
-    // Utilitaire pour tester l'appartenance aux layers de sélection
     private bool IsOnLayer(GameObject obj, LayerMask layer)
     {
         return (layer & (1 << obj.layer)) != 0;
     }
 
     // Vérifie si une unité spécifique est actuellement sélectionnée
-    // Utilisé pour la logique Shift+clic (ajout/retrait)
     private bool IsUnitSelected(GameObject unit)
     {
         return selectedUnits.ContainsKey(unit);
@@ -647,7 +583,7 @@ public class SelectionManager : MonoBehaviour
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
     private void OnDestroy()
     {
-        UnsubscribeEntityDestroyedEvents();
+        UntrackAllEntityDestruction();
 
         if (inputManager != null)
         {
@@ -665,83 +601,15 @@ public class SelectionManager : MonoBehaviour
         }
     }
 
-    // === DÉTECTION FOUNDATION ===
-
-    // Cherche une FoundationComponent sous les Rootborn locaux de la sélection
-    // Fire OnFoundationSelected(foundation) si trouvée, sinon OnFoundationSelected(null)
-    private void DetectFoundationFromSelection(List<GameObject> selectedUnits)
-    {
-        if (selectedUnits == null || selectedUnits.Count == 0)
-        {
-            OnFoundationSelected.Invoke(null);
-            return;
-        }
-
-        if (PlayerManager.Instance == null)
-        {
-            OnFoundationSelected.Invoke(null);
-            return;
-        }
-
-        int localTeamID = PlayerManager.Instance.LocalPlayer.teamID;
-
-        foreach (GameObject unit in selectedUnits)
-        {
-            if (unit == null) continue;
-
-            UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
-            if (stats == null || !stats.IsRootborn()) continue;
-
-            TeamComponent team = unit.GetComponent<TeamComponent>();
-            if (team == null || team.GetTeamID() != localTeamID) continue;
-
-            FoundationComponent foundation = FindFoundationAtUnit(unit);
-            if (foundation != null)
-            {
-                OnFoundationSelected.Invoke(foundation);
-                return;
-            }
-        }
-
-        // Aucun Rootborn local sur une Foundation — masque le panneau
-        OnFoundationSelected.Invoke(null);
-    }
-
-    // Retourne la FoundationComponent dont l'une des cases correspond à la position logique de l'unité
-    // Utilise Object.FindObjectsByType pour éviter d'ajouter un collider sur la Foundation
-    private FoundationComponent FindFoundationAtUnit(GameObject unit)
-    {
-        MovementController movement = unit.GetComponent<MovementController>();
-        if (movement == null) return null;
-
-        Vector2Int unitGridPosition = movement.GetCurrentGridPosition();
-
-        FoundationComponent[] foundations = Object.FindObjectsByType<FoundationComponent>(FindObjectsSortMode.None);
-
-        foreach (FoundationComponent foundation in foundations)
-        {
-            Vector2Int[] cells = foundation.GetOccupiedCells();
-            if (cells == null) continue;
-
-            foreach (Vector2Int cell in cells)
-            {
-                if (cell == unitGridPosition) return foundation;
-            }
-        }
-
-        return null;
-    }
-
-    // === METHODES PUBLIQUES POUR ACCES EXTERNE ===
+    // === METHODES PUBLIQUES ===
 
     // Retourne la liste de toutes les unités sélectionnées
-    // Interface principale pour les autres systèmes (mouvement, combat)
     public List<GameObject> GetSelectedUnits()
     {
         return new List<GameObject>(selectedUnits.Keys);
     }
 
-    // Retourne l'obstacle actuellement sélectionné (null si aucun)
+    // Retourne l'obstacle actuellement sélectionné (null si aucun ou si ground)
     public GameObject GetSelectedObstacle()
     {
         return !hasGroundSelection ? currentSelectedObject : null;
@@ -754,53 +622,40 @@ public class SelectionManager : MonoBehaviour
     }
 
     // Vérifie les types de sélection actuelle
-    public bool HasUnitsSelected()
-    {
-        return selectedUnits.Count > 0;
-    }
+    public bool HasUnitsSelected()    => selectedUnits.Count > 0;
+    public bool HasObstacleSelected() => currentSelectedObject != null && !hasGroundSelection;
+    public bool HasGroundSelected()   => hasGroundSelection;
+    public bool HasAnySelection()     => HasUnitsSelected() || HasObstacleSelected() || HasGroundSelected();
+    public int  GetSelectedUnitCount() => selectedUnits.Count;
 
-    public bool HasObstacleSelected()
-    {
-        return currentSelectedObject != null && !hasGroundSelection;
-    }
-
-    public bool HasGroundSelected()
-    {
-        return hasGroundSelection;
-    }
-
-    public bool HasAnySelection()
-    {
-        return HasUnitsSelected() || HasObstacleSelected() || HasGroundSelected();
-    }
-
-    // Retourne le nombre d'unités sélectionnées
-    public int GetSelectedUnitCount()
-    {
-        return selectedUnits.Count;
-    }
-
-    // Sélectionne un GameObject externe (ex: Bud après transformation Rootborn)
-    // Efface la sélection courante et sélectionne l'unité donnée
+    // Sélectionne un GameObject externe en le classifiant via SelectableResolver
+    // Utilisé par HandleEntitySpawned/HandleEntityReplaced — efface la sélection courante
     public void SelectGameObject(GameObject unit)
     {
         if (unit == null) return;
         ClearAllSelectionSilent();
 
-        BuildingStatsComponent building = unit.GetComponent<BuildingStatsComponent>();
-        if (building != null)
+        SelectableType type = SelectableResolver.ResolveType(unit);
+        switch (type)
         {
-            currentSelectedObject = unit;
-            hasGroundSelection = false;
-            currentObjectSelectionSquare = CreateSelectionSquare();
-            if (currentObjectSelectionSquare != null)
-                currentObjectSelectionSquare.AttachToGameObject(unit);
-            OnBuildingSelected.Invoke(unit);
-        }
-        else
-        {
-            SelectUnit(unit);
-            OnUnitsSelected.Invoke(GetSelectedUnits());
+            case SelectableType.Building:
+                currentSelectedObject = unit;
+                hasGroundSelection = false;
+                currentObjectSelectionSquare = CreateSelectionSquare();
+                if (currentObjectSelectionSquare != null)
+                    currentObjectSelectionSquare.AttachToGameObject(unit);
+                TrackEntityDestruction(unit);
+                OnBuildingSelected.Invoke(unit);
+                break;
+
+            case SelectableType.Environment:
+                SelectObstacle(unit);
+                break;
+
+            default: // Unit ou None
+                SelectUnit(unit);
+                OnUnitsSelected.Invoke(GetSelectedUnits());
+                break;
         }
     }
 }
