@@ -163,6 +163,9 @@ public class AnimatorController : MonoBehaviour
     public void PlayIdleAttackAnimation(Vector2Int fromPosition, Vector2Int toPosition)
     {
         if (unitAnimator == null) return;
+        
+        // Ne pas écraser une anim Attack en cours (taguée "Attack")
+        if (unitAnimator.GetCurrentAnimatorStateInfo(0).IsTag("Attack")) return;
 
         // Ne joue pas d'animation si l'unité est morte
         if (unitStatsComponent != null && unitStatsComponent.IsDead())

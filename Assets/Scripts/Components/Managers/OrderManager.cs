@@ -115,6 +115,57 @@ public class OrderManager : MonoBehaviour
         int attackOrders = 0;
         int chaseOrders = 0;
 
+        Vector2Int targetGridPos = GridManager.Instance.WorldToGrid(targetUnit.transform.position);
+        ITeamMember targetTM = targetUnit.GetComponent<ITeamMember>();
+
+        // Multi-target dispatch range-aware : groupage par range effectif.
+        // Attaque (ennemi) -> range réel de l'unité. Chase (allié/neutre) -> range=1 forcé (adjacent).
+        Dictionary<GameObject, Vector2Int> approachAssignment = new Dictionary<GameObject, Vector2Int>();
+        if (selectedUnits.Count > 1)
+        {
+            Dictionary<int, List<GameObject>> byRange = new Dictionary<int, List<GameObject>>();
+            foreach (GameObject u in selectedUnits)
+            {
+                ITeamMember utm = u.GetComponent<ITeamMember>();
+                bool isEnemyTarget = utm != null && targetTM != null && utm.IsEnemy(targetTM);
+
+                int effectiveRange;
+                if (isEnemyTarget)
+                {
+                    UnitStatsComponent stats = u.GetComponent<UnitStatsComponent>();
+                    effectiveRange = stats != null ? stats.GetAttackRange() : 1;
+                }
+                else
+                {
+                    // Chase : adjacent, peu importe le range d'attaque
+                    effectiveRange = 1;
+                }
+
+                if (!byRange.ContainsKey(effectiveRange)) byRange[effectiveRange] = new List<GameObject>();
+                byRange[effectiveRange].Add(u);
+            }
+
+            HashSet<Vector2Int> globallyTaken = new HashSet<Vector2Int>();
+            foreach (var kvp in byRange)
+            {
+                int range = kvp.Key;
+                List<GameObject> unitsInGroup = kvp.Value;
+
+                List<Vector2Int> candidateCells = DispatchHelper.ComputeRangeApproachCells(
+                    targetGridPos, range, unitsInGroup.Count + 4, unitsInGroup[0]);
+
+                candidateCells.Remove(targetGridPos);
+                candidateCells.RemoveAll(c => globallyTaken.Contains(c));
+
+                Dictionary<GameObject, Vector2Int> groupAssignment = DispatchHelper.AssignCellsGreedy(unitsInGroup, candidateCells);
+                foreach (var pair in groupAssignment)
+                {
+                    approachAssignment[pair.Key] = pair.Value;
+                    globallyTaken.Add(pair.Value);
+                }
+            }
+        }
+
         foreach (GameObject unit in selectedUnits)
         {
             MovementController movementController = unit.GetComponent<MovementController>();
@@ -149,6 +200,28 @@ public class OrderManager : MonoBehaviour
                         chaseController.StopChase();
                     }
 
+                    if (approachAssignment.TryGetValue(unit, out Vector2Int assignedAttackCell) && movementController != null)
+                    {
+                        if (movementController.GetCurrentGridPosition() != assignedAttackCell)
+                        {
+                            UnityEngine.Events.UnityAction startAttackOnArrive = null;
+                            startAttackOnArrive = () =>
+                            {
+                                movementController.OnArrived.RemoveListener(startAttackOnArrive);
+                                if (movementController.GetCurrentGridPosition() == assignedAttackCell && targetUnit != null && attackController != null) attackController.StartAttack(targetUnit);
+                            };
+                            movementController.OnArrived.AddListener(startAttackOnArrive);
+
+                            if (movementController.MoveTo(assignedAttackCell))
+                            {
+                                attackOrders++;
+                                continue;
+                            }
+
+                            movementController.OnArrived.RemoveListener(startAttackOnArrive);
+                        }
+                    }
+
                     attackController.StartAttack(targetUnit);
                     attackOrders++;
                 }
@@ -168,6 +241,28 @@ public class OrderManager : MonoBehaviour
                     if (attackController != null && attackController.IsAttacking())
                     {
                         attackController.StopAttack();
+                    }
+
+                    if (approachAssignment.TryGetValue(unit, out Vector2Int assignedChaseCell) && movementController != null)
+                    {
+                        if (movementController.GetCurrentGridPosition() != assignedChaseCell)
+                        {
+                            UnityEngine.Events.UnityAction startChaseOnArrive = null;
+                            startChaseOnArrive = () =>
+                            {
+                                movementController.OnArrived.RemoveListener(startChaseOnArrive);
+                                if (movementController.GetCurrentGridPosition() == assignedChaseCell && targetUnit != null && chaseController != null) chaseController.StartChase(targetUnit);
+                            };
+                            movementController.OnArrived.AddListener(startChaseOnArrive);
+
+                            if (movementController.MoveTo(assignedChaseCell))
+                            {
+                                chaseOrders++;
+                                continue;
+                            }
+
+                            movementController.OnArrived.RemoveListener(startChaseOnArrive);
+                        }
                     }
 
                     chaseController.StartChase(targetUnit);

@@ -49,6 +49,57 @@ public static class DispatchHelper
         return result;
     }
 
+    // Génère cases walkable à distance Chebyshev EXACTE = `range` autour du centre.
+    public static List<Vector2Int> ComputeRing(Vector2Int center, int range, GameObject referenceUnit)
+    {
+        List<Vector2Int> result = new List<Vector2Int>();
+        if (referenceUnit == null || range < 1) return result;
+
+        for (int dx = -range; dx <= range; dx++)
+        {
+            for (int dy = -range; dy <= range; dy++)
+            {
+                if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != range) continue;
+
+                Vector2Int cell = center + new Vector2Int(dx, dy);
+                if (!GridManager.Instance.IsInBounds(cell)) continue;
+                if (!GridManager.Instance.IsWalkableFor(cell, referenceUnit)) continue;
+                result.Add(cell);
+            }
+        }
+        return result;
+    }
+
+    // Génère cases d'approche pour une unité avec un range donné.
+    // Priorité : anneau exact = range, fallback range-1, range+1, range-2, range+2...
+    public static List<Vector2Int> ComputeRangeApproachCells(Vector2Int center, int range, int maxCells, GameObject referenceUnit)
+    {
+        List<Vector2Int> result = new List<Vector2Int>();
+        if (referenceUnit == null || maxCells <= 0) return result;
+
+        int effectiveRange = Mathf.Max(1, range);
+
+        result.AddRange(ComputeRing(center, effectiveRange, referenceUnit));
+        if (result.Count >= maxCells) return result;
+
+        const int MAX_FALLBACK_DELTA = 3;
+        for (int delta = 1; delta <= MAX_FALLBACK_DELTA; delta++)
+        {
+            int lower = effectiveRange - delta;
+            if (lower >= 1)
+            {
+                foreach (var cell in ComputeRing(center, lower, referenceUnit))
+                    if (!result.Contains(cell)) result.Add(cell);
+                if (result.Count >= maxCells) return result;
+            }
+            int upper = effectiveRange + delta;
+            foreach (var cell in ComputeRing(center, upper, referenceUnit))
+                if (!result.Contains(cell)) result.Add(cell);
+            if (result.Count >= maxCells) return result;
+        }
+        return result;
+    }
+
     // Assignment greedy : pour chaque unité (dans l'ordre fourni), prend la case disponible la plus proche
     // Retourne un dictionnaire unité → case assignée.
     // Si moins de cases que d'unités, les unités en surplus ne sont pas dans le dictionnaire (caller doit gérer le fallback).

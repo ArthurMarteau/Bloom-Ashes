@@ -14,12 +14,18 @@ public class AttackController : MonoBehaviour
     [SerializeField] private float projectileTravelTimePerCell = 0.2f;
     [SerializeField] private GameObject projectilePrefab; // Prefab du projectile visuel
 
+    public enum AttackState
+    {
+        Idle,         // Pas d'ordre d'attaque actif
+        Approaching,  // Ordre actif, hors portée — en cours de déplacement vers la cible
+        Ready,        // À portée, prêt à frapper ou en attente de cooldown
+        Performing    // Animation + dégâts en cours d'exécution
+    }
+
     // État de l'attaque
     private GameObject currentTarget;
-    private bool isAttacking = false;
     private float lastAttackTime;      // Temps de la dernière attaque (pour cooldown)
     private float lastCheckTime;  
-    private bool isPerformingAttack = false;
     private bool hasManualOrder = false; // Bloque l'auto-attaque pendant un ordre manuel en cours
 
     // Références
@@ -29,6 +35,7 @@ public class AttackController : MonoBehaviour
     private GameObject unitGameObject;
     private Coroutine damageCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
+    private AttackState currentState = AttackState.Idle;
 
     // Initialise les références
     private void Awake()
@@ -69,7 +76,7 @@ public class AttackController : MonoBehaviour
         }
 
 
-        if (!isAttacking || currentTarget == null)
+        if (currentState == AttackState.Idle || currentTarget == null)
         {
             // Si aucune attaque en cours, vérifie automatiquement les ennemis à portée
             if (autoAttackEnabled && Time.time - lastCheckTime >= checkInterval)
@@ -98,7 +105,7 @@ public class AttackController : MonoBehaviour
                 state == MovementController.MovementState.Blocked)
             {
                 // Ne pas interrompre une attaque en cours d'exécution
-                if (isPerformingAttack)
+                if (currentState == AttackState.Performing)
                 {
                     if (debugAttack)
                     {
@@ -289,13 +296,13 @@ public class AttackController : MonoBehaviour
         }
 
         // Arrête l'attaque précédente si existe
-        if (isAttacking)
+        if (currentState != AttackState.Idle)
         {
             StopAttack();
         }
 
         currentTarget = target;
-        isAttacking = true;
+        currentState = AttackState.Approaching;  // Sera Ready dès qu'à portée via ProcessAttackLogic
         lastCheckTime = Time.time;
 
         // Vide la queue de mouvement pour attaquer après la case actuelle
@@ -328,13 +335,12 @@ public class AttackController : MonoBehaviour
     // Appelé lors d'un nouvel ordre manuel ou destruction de la cible
     public void StopAttack()
     {
-        if (!isAttacking)
+        if (currentState == AttackState.Idle)
         {
             return;
         }
 
-        isAttacking = false;
-        isPerformingAttack = false;
+        currentState = AttackState.Idle;
         currentTarget = null;
 
         // Arrête la coroutine de dégâts si active
@@ -374,6 +380,12 @@ public class AttackController : MonoBehaviour
         // Vérifie si la cible est à portée
         if (IsTargetInRange())
         {
+            // Transition vers Ready dès qu'on est à portée (sauf si Performing en cours, qu'on ne casse pas)
+            if (currentState == AttackState.Approaching)
+            {
+                currentState = AttackState.Ready;
+            }
+
             // Vérifie que l'unité est bien centrée sur sa case avant de jouer AttackIdle
             if (movementController != null)
             {
@@ -407,7 +419,7 @@ public class AttackController : MonoBehaviour
                     float attackSpeedR = unitStatsComponent.GetAttackSpeed();
                     bool cooldownReadyR = Time.time - lastAttackTime >= attackSpeedR;
 
-                    if (!isPerformingAttack && cooldownReadyR)
+                    if (currentState != AttackState.Performing && cooldownReadyR)
                     {
                         PerformAttack();
                         lastAttackTime = Time.time;
@@ -422,7 +434,7 @@ public class AttackController : MonoBehaviour
 
             // Joue AttackIdle seulement si on n'est pas en train d'attaquer
             // et qu'aucune animation Hit n'est en cours (évite d'écraser le trigger Hit)
-            if (!isPerformingAttack && animatorController != null)
+            if (currentState != AttackState.Performing && animatorController != null)
             {
                 if (!animatorController.IsPlayingHitAnimation())
                 {
@@ -432,7 +444,7 @@ public class AttackController : MonoBehaviour
                 }
             }
 
-            if (!isPerformingAttack && cooldownReady)
+            if (currentState != AttackState.Performing && cooldownReady)
             {
                 PerformAttack();
                 lastAttackTime = Time.time; // Enregistre le temps de cette attaque
@@ -445,6 +457,12 @@ public class AttackController : MonoBehaviour
             }
             else
             {
+                // Transition vers Approaching si on était Ready (la cible s'est éloignée)
+                if (currentState == AttackState.Ready)
+                {
+                    currentState = AttackState.Approaching;
+                }
+
                 // Hors portée → annule les dégâts en cours et déplace vers la cible
                 if (damageCoroutine != null)
                 {
@@ -602,7 +620,7 @@ public class AttackController : MonoBehaviour
     private void PerformAttack()
     {
         // Empêche les doubles appels pendant qu'une attaque est en cours
-        if (isPerformingAttack)
+        if (currentState == AttackState.Performing)
         {
             if (debugAttack)
             {
@@ -631,7 +649,7 @@ public class AttackController : MonoBehaviour
         }
 
         // Marque qu'une attaque est en cours
-        isPerformingAttack = true;
+        currentState = AttackState.Performing;
 
         // Gestion spéciale Rootborn : IdleReversed avant première attaque de la session
         if (IsRootborn())
@@ -776,8 +794,11 @@ public class AttackController : MonoBehaviour
         // Attend le cooldown
         yield return new WaitForSeconds(cooldown);
 
-        // Réinitialise le flag
-        isPerformingAttack = false;
+        // Repasse en Ready si on est toujours en attaque, sinon laisse Idle (StopAttack a pu être appelé)
+        if (currentState == AttackState.Performing)
+        {
+            currentState = AttackState.Ready;
+        }
 
         // Libère la référence
         damageCoroutine = null;
@@ -793,7 +814,12 @@ public class AttackController : MonoBehaviour
     // Retourne si l'unité est actuellement en train d'attaquer
     public bool IsAttacking()
     {
-        return isAttacking;
+        return currentState != AttackState.Idle;
+    }
+
+    public AttackState GetCurrentState()
+    {
+        return currentState;
     }
 
     // Retourne la cible actuelle (peut être null)
@@ -807,9 +833,9 @@ public class AttackController : MonoBehaviour
     private void DebugAttackState()
     {
         Debug.Log($"=== AttackController Debug - {gameObject.name} ===");
-        Debug.Log($"En attaque: {isAttacking}");
+        Debug.Log($"En attaque: {currentState}");
         Debug.Log($"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}");
-        Debug.Log($"À portée: {(isAttacking ? IsTargetInRange() : false)}");
+        Debug.Log($"À portée: {(currentState != AttackState.Idle ? IsTargetInRange() : false)}");
         Debug.Log($"Portée d'attaque: {(unitStatsComponent != null ? unitStatsComponent.GetAttackRange() : 0)} cases");
     }
 }

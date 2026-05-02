@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -52,7 +52,6 @@ public class MovementController : MonoBehaviour
     private bool returnToOriginRequested = false; // Inversion de Lerp demandée vers previousLogicalPosition
 
     // ========== ÉTAT ==========
-    private bool isMoving = false;
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
     private Vector2Int? finalDestination = null;  // Destination finale persistante — l'unité ne lâche jamais son ordre tant que ce champ est non-null
 
@@ -63,7 +62,7 @@ public class MovementController : MonoBehaviour
     public UnityEngine.Events.UnityEvent OnArrived = new();
 
     // Vrai si l'unité est actuellement en mouvement
-    public bool IsMoving => isMoving;
+    public bool IsMoving => currentState == MovementState.Moving;
 
     // Références cached pour performance
     private GameObject unitGameObject;
@@ -185,7 +184,6 @@ public class MovementController : MonoBehaviour
         // Si pas encore en interpolation, démarre la boucle
         if (!isInterpolating)
         {
-            isMoving = true;
             OnMovementStarted.Invoke();
             currentState = MovementState.Moving;
             interpolationCoroutine = StartCoroutine(InterpolationLoop());
@@ -286,7 +284,6 @@ public class MovementController : MonoBehaviour
                             Debug.Log($"MovementController {gameObject.name}: Bloquée + ennemi à portée → auto-attaque, ordre abandonné");
                         finalDestination = null;
                         attackController.StartAttack(nearestEnemy);
-                        isMoving = false;
                         isInterpolating = false;
                         currentState = MovementState.Idle;
                         yield break;
@@ -294,7 +291,6 @@ public class MovementController : MonoBehaviour
                 }
 
                 // Pas de défense possible → retry persistant
-                isMoving = false;
                 isInterpolating = false;
                 currentState = MovementState.Blocked;
                 // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
@@ -357,7 +353,7 @@ public class MovementController : MonoBehaviour
 
                 while (returnElapsed < returnTime)
                 {
-                    if (!isMoving) yield break;
+                    if (currentState != MovementState.Moving) yield break;
                     transform.position = Vector3.Lerp(currentPosition, startPosition, returnElapsed / returnTime);
                     returnElapsed += Time.deltaTime;
                     yield return null;
@@ -376,7 +372,7 @@ public class MovementController : MonoBehaviour
             }
 
             // Vérifie qu'on n'a pas été arrêté pendant l'animation
-            if (!isMoving)
+            if (currentState != MovementState.Moving)
             {
                 yield break;
             }
@@ -473,7 +469,6 @@ public class MovementController : MonoBehaviour
     private void HandlePathBlocked()
     {
         currentState = MovementState.Idle;
-        isMoving = false;
         isInterpolating = false;
         logicalPath.Clear();
 
@@ -502,7 +497,6 @@ public class MovementController : MonoBehaviour
     private void OnMovementCompleted()
     {
         finalDestination = null;
-        isMoving = false;
         currentState = MovementState.Arrived;
         OnArrived.Invoke();
 
@@ -584,7 +578,6 @@ public class MovementController : MonoBehaviour
         transform.position = GridManager.Instance.GridToWorld(logicalPosition);
 
         // Remet à zéro les variables d'état
-        isMoving = false;
         isInterpolating = false;
         currentState = MovementState.Idle;
         isFirstMoveOfSession = true;
@@ -765,7 +758,7 @@ public class MovementController : MonoBehaviour
     {
         Debug.Log($"=== MovementController Debug - {gameObject.name} ===");
         Debug.Log($"État: {currentState}");
-        Debug.Log($"En mouvement: {isMoving}");
+        Debug.Log($"En mouvement: {IsMoving}");
         Debug.Log($"Position LOGIQUE: {logicalPosition}");
         Debug.Log($"Position VISUELLE: {transform.position} → {GridManager.Instance.WorldToGrid(transform.position)}");
         Debug.Log($"Queue: {logicalPath.Count} cases restantes");
@@ -812,3 +805,4 @@ public class MovementController : MonoBehaviour
         }
     }
 }
+
