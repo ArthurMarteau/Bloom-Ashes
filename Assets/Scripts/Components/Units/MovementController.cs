@@ -54,6 +54,8 @@ public class MovementController : MonoBehaviour
     // ========== ÉTAT ==========
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
     private Vector2Int? finalDestination = null;  // Destination finale persistante — l'unité ne lâche jamais son ordre tant que ce champ est non-null
+    private int consecutiveCollisions = 0;     // Compteur collisions sur la même case
+    private Vector2Int lastCollisionCell;      // Dernière case ayant causé une collision
 
     // Déclenché quand l'unité commence à se déplacer (premier step du chemin)
     public UnityEngine.Events.UnityEvent OnMovementStarted = new();
@@ -304,6 +306,9 @@ public class MovementController : MonoBehaviour
             EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
             EntityRegistry.Instance?.ClearLeaving(gameObject);
 
+            // Reset le compteur de collisions consécutives — l'unité a progressé
+            consecutiveCollisions = 0;
+
             // Rafraîchit l'animation vers la vraie prochaine direction en cas de remplacement de queue mid-mouvement
             // Évite que l'unité continue à afficher l'animation de l'ancienne direction après un nouvel ordre
             if (logicalPath.Count > 0 && animatorController != null)
@@ -400,6 +405,37 @@ public class MovementController : MonoBehaviour
             }
             if (collision)
             {
+                // Compteur de collisions consécutives sur la même case
+                if (toCell == lastCollisionCell)
+                {
+                    consecutiveCollisions++;
+                }
+                else
+                {
+                    consecutiveCollisions = 1;
+                    lastCollisionCell = toCell;
+                }
+
+                // Tentative de détour SEULEMENT à partir de la 2ème collision consécutive sur la même case
+                if (consecutiveCollisions >= 2)
+                {
+                    Vector2Int? detour = FindDetourCell(toCell);
+                    if (detour.HasValue)
+                    {
+                        if (debugMovement)
+                            Debug.Log($"MovementController {gameObject.name}: Danse détectée sur {toCell} ({consecutiveCollisions}× consécutives), détour vers {detour.Value}");
+
+                        // Reset compteur car on change de stratégie
+                        consecutiveCollisions = 0;
+
+                        yield return StartCoroutine(LerpToDetourCell(detour.Value));
+
+                        lastStepResult = StepResult.CollisionReturned;
+                        yield break;
+                    }
+                    // Pas de case détour libre → fallback retour classique ci-dessous
+                }
+
                 // Case occupée → retour animé à la case précédente
                 Vector3 currentPosition = transform.position;
 
@@ -489,6 +525,8 @@ public class MovementController : MonoBehaviour
 
         // Lance retry persistant — la collision en cours de Lerp est gérée directement dans InterpolationLoop
         currentState = MovementState.Blocked;
+        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
+        attackController?.SetManualOrder(false);
         retryCoroutine = StartCoroutine(RetryPathPeriodically(finalDestination.Value));
     }
 
@@ -497,6 +535,7 @@ public class MovementController : MonoBehaviour
     private void OnMovementCompleted()
     {
         finalDestination = null;
+        consecutiveCollisions = 0;
         currentState = MovementState.Arrived;
         OnArrived.Invoke();
 
@@ -548,6 +587,7 @@ public class MovementController : MonoBehaviour
     public void StopMovement()
     {
         finalDestination = null;
+        consecutiveCollisions = 0;
 
         // Arrête la coroutine d'interpolation
         if (interpolationCoroutine != null)
@@ -674,6 +714,8 @@ public class MovementController : MonoBehaviour
             Debug.Log($"MovementController {gameObject.name}: Retry vers {destination}");
         }
 
+        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
+        attackController?.SetManualOrder(false);
         retryCoroutine = StartCoroutine(RetryPathPeriodically(destination));
     }
 
@@ -723,6 +765,81 @@ public class MovementController : MonoBehaviour
         Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(cell);
         float distance = Vector3.Distance(transform.position, cellWorldPosition);
         return distance < centerTolerance;
+    }
+
+    // Cherche une case adjacente libre pour détour, plus proche de finalDestination.
+    // Exclut la case bloquée et previousLogicalPosition (on ne veut pas y revenir).
+    private Vector2Int? FindDetourCell(Vector2Int blockedCell)
+    {
+        if (!finalDestination.HasValue) return null;
+
+        Vector2Int target = finalDestination.Value;
+        Vector2Int[] offsets = {
+            new Vector2Int(-1, 0), new Vector2Int(1, 0),
+            new Vector2Int(0, 1),  new Vector2Int(0, -1),
+            new Vector2Int(-1, 1), new Vector2Int(1, 1),
+            new Vector2Int(-1,-1), new Vector2Int(1,-1)
+        };
+
+        Vector2Int? bestCell = null;
+        int bestDistance = int.MaxValue;
+
+        foreach (var off in offsets)
+        {
+            Vector2Int cell = previousLogicalPosition + off;
+
+            if (cell == blockedCell) continue;
+            if (cell == previousLogicalPosition) continue;
+
+            if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject)) continue;
+            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
+            if (occupant != null && occupant != unitGameObject) continue;
+
+            int dist = Mathf.Max(Mathf.Abs(cell.x - target.x), Mathf.Abs(cell.y - target.y));
+            if (dist < bestDistance)
+            {
+                bestDistance = dist;
+                bestCell = cell;
+            }
+        }
+
+        return bestCell;
+    }
+
+    // Lerp animé depuis position courante vers la case détour, met à jour logicalPosition à la fin.
+    private IEnumerator LerpToDetourCell(Vector2Int detourCell)
+    {
+        Vector3 currentPosition = transform.position;
+        Vector3 detourPosition = GridManager.Instance.GridToWorld(detourCell);
+
+        Vector2Int currentGridPos = GridManager.Instance.WorldToGrid(currentPosition);
+        if (animatorController != null)
+        {
+            animatorController.PlayWalkAnimation(currentGridPos, detourCell);
+        }
+
+        float distanceToDetour = Vector3.Distance(currentPosition, detourPosition);
+        float detourTime = distanceToDetour / movementSpeed;
+        float elapsed = 0f;
+
+        while (elapsed < detourTime)
+        {
+            if (currentState != MovementState.Moving) yield break;
+            transform.position = Vector3.Lerp(currentPosition, detourPosition, elapsed / detourTime);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.position = detourPosition;
+
+        logicalPosition = detourCell;
+        EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
+        EntityRegistry.Instance?.ClearLeaving(gameObject);
+
+        if (debugMovement)
+        {
+            Debug.Log($"MovementController {gameObject.name}: Détour vers {detourCell} terminé");
+        }
     }
 
     // Callback appelé par AnimatorController quand IdleReversed se termine
