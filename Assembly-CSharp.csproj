@@ -64,8 +64,8 @@
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingDeathAnimationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
+    <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapStockUI.cs" />
-    <Compile Include="Assets\Scripts\Components\UI\FoundationBuildPanelUI.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
@@ -84,7 +84,6 @@
     <Compile Include="Assets\Scripts\Components\Visual\WatersapFillController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
-    <Compile Include="Assets\Scripts\Data\Environment\FoundationData.cs" />
     <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SpawnRootbornAbility.cs" />
@@ -94,7 +93,6 @@
     <Compile Include="Assets\Scripts\Components\UI\ActionPanelUI.cs" />
     <Compile Include="Assets\Scripts\Systems\EntityRegistry.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BudComponent.cs" />
-    <Compile Include="Assets\Scripts\Components\Environment\FoundationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GridManager.cs" />
     <Compile Include="Assets\Scripts\Systems\WatersapSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />

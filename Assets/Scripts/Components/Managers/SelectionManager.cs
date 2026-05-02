@@ -16,6 +16,7 @@ public class SelectionManager : MonoBehaviour
     [SerializeField] private LayerMask environmentWalkableLayer = 1 << 7;
     [SerializeField] private LayerMask obstacleLayer = 1 << 6;
     [SerializeField] private LayerMask groundLayer = 1 << 3;
+    private const int MAX_SELECTED_UNITS = 10;
 
     [Header("Selection Square")]
     // Prefab du carré de sélection à instancier pour chaque objet sélectionné
@@ -56,8 +57,6 @@ public class SelectionManager : MonoBehaviour
     public UnityEvent<GameObject>          OnObstacleSelected   = new UnityEvent<GameObject>();        // Obstacle sélectionné
     public UnityEvent<GameObject>          OnBuildingSelected   = new UnityEvent<GameObject>();        // Bâtiment sélectionné
     public UnityEvent                      OnSelectionCleared   = new UnityEvent();                    // Toute sélection effacée
-    // Déclenché quand un Rootborn local sélectionné est sur les cases d'une Foundation (null = masquer le panneau)
-    public UnityEvent<FoundationComponent> OnFoundationSelected = new UnityEvent<FoundationComponent>();
 
     // Méthode appelée au démarrage pour initialiser les références et composants
     private void Awake()
@@ -254,7 +253,6 @@ public class SelectionManager : MonoBehaviour
             }
 
             OnBuildingSelected.Invoke(unit);
-            OnFoundationSelected.Invoke(null);
             UnsubscribeEntityDestroyedEvents();
             BuildingStatsComponent buildingStats = unit.GetComponent<BuildingStatsComponent>();
             if (buildingStats != null)
@@ -297,12 +295,9 @@ public class SelectionManager : MonoBehaviour
         else
         {
             OnSelectionCleared.Invoke();
-            OnFoundationSelected.Invoke(null);
             return;
         }
 
-        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
-        DetectFoundationFromSelection(currentUnits);
     }
 
     // Traite la sélection de terrain à partir d'une position mondiale
@@ -347,8 +342,28 @@ public class SelectionManager : MonoBehaviour
         // Efface sélections précédentes sans émettre d'event (remplacé par OnUnitsSelected)
         ClearAllSelectionSilent();
 
-        // Sélectionne toutes les unités trouvées
-        foreach (Collider2D unitCollider in unitsInArea)
+        // Si plus de MAX_SELECTED_UNITS unités dans la zone : ne garder que les 10 plus proches du centre du drag
+        Vector2 dragCenter = (bottomLeft + topRight) * 0.5f;
+        List<Collider2D> selectedColliders;
+
+        if (unitsInArea.Length > MAX_SELECTED_UNITS)
+        {
+            selectedColliders = new List<Collider2D>(unitsInArea);
+            selectedColliders.Sort((a, b) =>
+            {
+                float distA = ((Vector2)a.transform.position - dragCenter).sqrMagnitude;
+                float distB = ((Vector2)b.transform.position - dragCenter).sqrMagnitude;
+                return distA.CompareTo(distB);
+            });
+            selectedColliders = selectedColliders.GetRange(0, MAX_SELECTED_UNITS);
+            Debug.Log($"⚠️ Drag-select : {unitsInArea.Length} unités dans la zone → cap à {MAX_SELECTED_UNITS} (plus proches du centre)");
+        }
+        else
+        {
+            selectedColliders = new List<Collider2D>(unitsInArea);
+        }
+
+        foreach (Collider2D unitCollider in selectedColliders)
         {
             SelectUnit(unitCollider.gameObject);
         }
@@ -357,10 +372,8 @@ public class SelectionManager : MonoBehaviour
         List<GameObject> rectangleUnits = GetSelectedUnits();
         OnUnitsSelected.Invoke(rectangleUnits);
 
-        // Détecte si un Rootborn local parmi les sélectionnés est sur une Foundation
-        DetectFoundationFromSelection(rectangleUnits);
 
-        Debug.Log($"Rectangle sélection : {unitsInArea.Length} unités sélectionnées");
+        Debug.Log($"Rectangle sélection : {selectedUnits.Count} unités sélectionnées (zone contenait {unitsInArea.Length})");
     }
 
     // Dessine le rectangle de sélection en temps réel pendant le drag
@@ -390,6 +403,12 @@ public class SelectionManager : MonoBehaviour
     private void SelectUnit(GameObject unit)
     {
         if (unit == null || IsUnitSelected(unit)) return;
+
+        if (selectedUnits.Count >= MAX_SELECTED_UNITS)
+        {
+            Debug.Log($"⚠️ Sélection plafonnée à {MAX_SELECTED_UNITS} unités — {unit.name} ignorée");
+            return;
+        }
 
         // Crée le carré de sélection pour cette unité
         SelectionSquare selectionSquare = CreateSelectionSquare();
@@ -452,7 +471,6 @@ public class SelectionManager : MonoBehaviour
             hasGroundSelection = false;
 
             OnObstacleSelected.Invoke(obstacle);
-            OnFoundationSelected.Invoke(null);
             Debug.Log($"Obstacle sélectionné : {obstacle.name}");
         }
     }
@@ -475,7 +493,6 @@ public class SelectionManager : MonoBehaviour
             hasGroundSelection = true;
 
             OnGroundSelected.Invoke(gridCoordinates);
-            OnFoundationSelected.Invoke(null);
             Debug.Log($"Terrain sélectionné : cellule {gridCoordinates}");
         }
     }
@@ -626,7 +643,6 @@ public class SelectionManager : MonoBehaviour
     {
         ClearAllSelectionSilent();
         OnSelectionCleared.Invoke();
-        OnFoundationSelected.Invoke(null);
         Debug.Log("Toute sélection effacée");
     }
 
@@ -663,73 +679,6 @@ public class SelectionManager : MonoBehaviour
             EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
             EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
         }
-    }
-
-    // === DÉTECTION FOUNDATION ===
-
-    // Cherche une FoundationComponent sous les Rootborn locaux de la sélection
-    // Fire OnFoundationSelected(foundation) si trouvée, sinon OnFoundationSelected(null)
-    private void DetectFoundationFromSelection(List<GameObject> selectedUnits)
-    {
-        if (selectedUnits == null || selectedUnits.Count == 0)
-        {
-            OnFoundationSelected.Invoke(null);
-            return;
-        }
-
-        if (PlayerManager.Instance == null)
-        {
-            OnFoundationSelected.Invoke(null);
-            return;
-        }
-
-        int localTeamID = PlayerManager.Instance.LocalPlayer.teamID;
-
-        foreach (GameObject unit in selectedUnits)
-        {
-            if (unit == null) continue;
-
-            UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
-            if (stats == null || !stats.IsRootborn()) continue;
-
-            TeamComponent team = unit.GetComponent<TeamComponent>();
-            if (team == null || team.GetTeamID() != localTeamID) continue;
-
-            FoundationComponent foundation = FindFoundationAtUnit(unit);
-            if (foundation != null)
-            {
-                OnFoundationSelected.Invoke(foundation);
-                return;
-            }
-        }
-
-        // Aucun Rootborn local sur une Foundation — masque le panneau
-        OnFoundationSelected.Invoke(null);
-    }
-
-    // Retourne la FoundationComponent dont l'une des cases correspond à la position logique de l'unité
-    // Utilise Object.FindObjectsByType pour éviter d'ajouter un collider sur la Foundation
-    private FoundationComponent FindFoundationAtUnit(GameObject unit)
-    {
-        MovementController movement = unit.GetComponent<MovementController>();
-        if (movement == null) return null;
-
-        Vector2Int unitGridPosition = movement.GetCurrentGridPosition();
-
-        FoundationComponent[] foundations = Object.FindObjectsByType<FoundationComponent>(FindObjectsSortMode.None);
-
-        foreach (FoundationComponent foundation in foundations)
-        {
-            Vector2Int[] cells = foundation.GetOccupiedCells();
-            if (cells == null) continue;
-
-            foreach (Vector2Int cell in cells)
-            {
-                if (cell == unitGridPosition) return foundation;
-            }
-        }
-
-        return null;
     }
 
     // === METHODES PUBLIQUES POUR ACCES EXTERNE ===

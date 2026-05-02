@@ -1,6 +1,5 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Events;
 
 // Registre centralisé de toutes les entités IDamageable actives dans la scène
 // Remplace Physics2D.OverlapBoxAll pour la recherche d'ennemis — critique pour 80x80 avec 50+ unités
@@ -24,9 +23,8 @@ public class EntityRegistry : MonoBehaviour
     // Cases en cours d'abandon : unité logiquement partie mais Lerp visuel pas encore terminé
     // Permet à une autre unité de s'y engager sans attendre la fin du Lerp
     private Dictionary<GameObject, Vector2Int> leavingPositions = new Dictionary<GameObject, Vector2Int>();
-
-    // Déclenché après chaque mise à jour de position logique — abonné par FoundationComponent
-    public UnityEvent<GameObject, Vector2Int> OnLogicalPositionUpdated = new UnityEvent<GameObject, Vector2Int>();
+    private Dictionary<Vector2Int, GameObject> positionToUnit = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, GameObject> leavingPositionToUnit = new Dictionary<Vector2Int, GameObject>();
 
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
@@ -81,7 +79,15 @@ public class EntityRegistry : MonoBehaviour
         if (go == null) return;
 
         entities.Remove(go);
+        if (logicalPositions.TryGetValue(go, out var lp) && positionToUnit.TryGetValue(lp, out var rl) && rl == go)
+        {
+            positionToUnit.Remove(lp);
+        }
         logicalPositions.Remove(go);
+        if (leavingPositions.TryGetValue(go, out var leP) && leavingPositionToUnit.TryGetValue(leP, out var reL) && reL == go)
+        {
+            leavingPositionToUnit.Remove(leP);
+        }
         leavingPositions.Remove(go);
 
         if (debugRegistry)
@@ -92,12 +98,22 @@ public class EntityRegistry : MonoBehaviour
 
     // Met à jour la position logique d'une unité dans le registre
     // Appelé par MovementController à chaque étape logique (avant le Lerp visuel)
-    // Fire OnLogicalPositionUpdated APRÈS mise à jour du dict pour garantir la cohérence aux listeners
     public void UpdateLogicalPosition(GameObject go, Vector2Int position)
     {
         if (go == null) return;
+
+        if (logicalPositions.TryGetValue(go, out var oldPos) && positionToUnit.TryGetValue(oldPos, out var registered) && registered == go)
+        {
+            positionToUnit.Remove(oldPos);
+        }
+
         logicalPositions[go] = position;
-        OnLogicalPositionUpdated.Invoke(go, position);
+
+        if (positionToUnit.TryGetValue(position, out var existing) && existing != go && existing != null)
+        {
+            Debug.LogWarning($" EntityRegistry: collision logique sur {position} entre {existing.name} et {go.name}");
+        }
+        positionToUnit[position] = go;
     }
 
     // Enregistre qu'une unité est en train de quitter une case (Lerp pas encore terminé)
@@ -105,34 +121,51 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
         leavingPositions[go] = position;
+        leavingPositionToUnit[position] = go;
     }
 
     // Retire l'entrée de départ quand le Lerp est terminé
     public void ClearLeaving(GameObject go)
     {
         if (go == null) return;
+        if (leavingPositions.TryGetValue(go, out var leftPos) && leavingPositionToUnit.TryGetValue(leftPos, out var registered) && registered == go)
+        {
+            leavingPositionToUnit.Remove(leftPos);
+        }
         leavingPositions.Remove(go);
     }
 
-    // Retourne true si une unité est en train de quitter cette case (case contestable)
-    public bool IsBeingLeft(Vector2Int position)
+    // Libère la position logique d'une entité sans la désenregistrer du registry
+    // Appelée à la mort d'une unité : la case devient walkable immédiatement,
+    // mais l'entité reste dans `entities` pendant l'animation de mort (filtrée par IsDead() ailleurs)
+    public void ReleaseLogicalPosition(GameObject go)
     {
-        foreach (var kvp in leavingPositions)
+        if (go == null) return;
+
+        if (logicalPositions.TryGetValue(go, out var lp) && positionToUnit.TryGetValue(lp, out var rl) && rl == go)
         {
-            if (kvp.Key != null && kvp.Value == position) return true;
+            positionToUnit.Remove(lp);
         }
-        return false;
+        logicalPositions.Remove(go);
+
+        if (leavingPositions.TryGetValue(go, out var leP) && leavingPositionToUnit.TryGetValue(leP, out var reL) && reL == go)
+        {
+            leavingPositionToUnit.Remove(leP);
+        }
+        leavingPositions.Remove(go);
     }
 
-    // Retourne l'unité occupant une position logique donnée (null si aucune)
+    // Retourne true si une unité est en train de quitter cette case (case contestable) (reverse map O(1))
+    public bool IsBeingLeft(Vector2Int position)
+    {
+        return leavingPositionToUnit.TryGetValue(position, out GameObject go) && go != null;
+    }
+
+    // Retourne l'unité occupant une position logique donnée (null si aucune) (reverse map O(1))
     // Fiable pendant le Lerp contrairement à Physics2D.OverlapPoint
     public GameObject GetUnitAtLogicalPosition(Vector2Int position)
     {
-        foreach (var kvp in logicalPositions)
-        {
-            if (kvp.Key == null) continue;
-            if (kvp.Value == position) return kvp.Key;
-        }
+        if (positionToUnit.TryGetValue(position, out GameObject go) && go != null) return go;
         return null;
     }
 
@@ -229,6 +262,8 @@ public class EntityRegistry : MonoBehaviour
     private void CleanupNullEntities()
     {
         List<GameObject> toRemove = new List<GameObject>();
+        List<GameObject> logicalPositionsToRemove = new List<GameObject>();
+        List<GameObject> leavingPositionsToRemove = new List<GameObject>();
 
         foreach (var kvp in entities)
         {
@@ -238,9 +273,47 @@ public class EntityRegistry : MonoBehaviour
             }
         }
 
+        foreach (var kvp in logicalPositions)
+        {
+            if (kvp.Key == null)
+            {
+                logicalPositionsToRemove.Add(kvp.Key);
+            }
+        }
+
+        foreach (var kvp in leavingPositions)
+        {
+            if (kvp.Key == null)
+            {
+                leavingPositionsToRemove.Add(kvp.Key);
+            }
+        }
+
         foreach (GameObject go in toRemove)
         {
             entities.Remove(go);
+        }
+
+        foreach (GameObject go in logicalPositionsToRemove)
+        {
+            logicalPositions.Remove(go);
+        }
+
+        foreach (GameObject go in leavingPositionsToRemove)
+        {
+            leavingPositions.Remove(go);
+        }
+
+        positionToUnit.Clear();
+        foreach (var kvp in logicalPositions)
+        {
+            if (kvp.Key != null) positionToUnit[kvp.Value] = kvp.Key;
+        }
+
+        leavingPositionToUnit.Clear();
+        foreach (var kvp in leavingPositions)
+        {
+            if (kvp.Key != null) leavingPositionToUnit[kvp.Value] = kvp.Key;
         }
 
         if (toRemove.Count > 0)

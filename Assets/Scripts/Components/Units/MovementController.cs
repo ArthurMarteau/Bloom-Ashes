@@ -9,7 +9,9 @@ public class MovementController : MonoBehaviour
 {
     [Header("Movement Settings")]
     private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
-    private float centerTolerance = 1f;      // Distance pour considérer case "atteinte"
+    private float centerTolerance = 0.1f;      // Distance pour considérer case "atteinte"
+    [SerializeField] private float contestThreshold = 0.1f;  // Distance au centre de la case cible pour qu'une autre unité soit considérée "installée" (collision tardive)
+    [SerializeField] private float retryInterval = 0.5f;     // Intervalle entre tentatives de recalcul quand bloquée
 
     // Modifie la vitesse de déplacement de l'unité
     // Appelé par UnitStats pour synchroniser les stats
@@ -35,6 +37,9 @@ public class MovementController : MonoBehaviour
         Arrived     // Destination finale atteinte
     }
 
+    private enum StepResult { Completed, CollisionReturned, Reversed }
+    private StepResult lastStepResult;
+
     // ========== LOGIQUE (Source de vérité) ==========
     private Vector2Int logicalPosition;           // Case actuellement occupée (STABLE)
     private Queue<Vector2Int> logicalPath;        // Chemin logique à suivre
@@ -49,6 +54,7 @@ public class MovementController : MonoBehaviour
     // ========== ÉTAT ==========
     private bool isMoving = false;
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
+    private Vector2Int? finalDestination = null;  // Destination finale persistante — l'unité ne lâche jamais son ordre tant que ce champ est non-null
 
     // Déclenché quand l'unité commence à se déplacer (premier step du chemin)
     public UnityEngine.Events.UnityEvent OnMovementStarted = new();
@@ -103,6 +109,12 @@ public class MovementController : MonoBehaviour
     // Remplace la queue sans arrêt brutal si déjà en mouvement
     public bool MoveTo(Vector2Int targetPosition)
     {
+        if (retryCoroutine != null)
+        {
+            StopCoroutine(retryCoroutine);
+            retryCoroutine = null;
+        }
+
         // Initialise logicalPosition si pas encore fait (fallback si Awake a échoué)
         if (logicalPosition == Vector2Int.zero && GridManager.Instance != null)
         {
@@ -151,13 +163,15 @@ public class MovementController : MonoBehaviour
 
         if (path == null || path.Count == 0)
         {
-            Debug.LogWarning($"MovementController {gameObject.name}: Pas de chemin trouvé vers {targetPosition}");
+            finalDestination = targetPosition;
+            Debug.LogWarning($"MovementController {gameObject.name}: Pas de chemin trouvé vers {targetPosition} — retry persistant");
             StartRetryToDestination(targetPosition);
             return false;
         }
 
         // Remplace la queue de chemin (pas de StopCoroutine brutal)
         logicalPath.Clear();
+        finalDestination = targetPosition;
         foreach (var cell in path)
         {
             logicalPath.Enqueue(cell);
@@ -215,16 +229,15 @@ public class MovementController : MonoBehaviour
                 yield break;
             }
 
-            // ========== UPDATE LOGIQUE IMMÉDIATE ==========
+            // ========== UPDATE LOGIQUE DIFFÉRÉE ==========
             previousLogicalPosition = logicalPosition;
             EntityRegistry.Instance?.SetLeaving(gameObject, previousLogicalPosition);
-            logicalPosition = nextCell;
-            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
             visualTargetCell = nextCell;
+            // logicalPosition et UpdateLogicalPosition NE SONT PAS mis à jour ici — décalés à la fin du Lerp pour éviter la "réservation forward" qui empêche la détection de collision tardive
 
             if (debugMovement)
             {
-                Debug.Log($"MovementController {gameObject.name}: Logique {previousLogicalPosition} -> {logicalPosition}");
+                Debug.Log($"MovementController {gameObject.name}: Logique {previousLogicalPosition} -> {nextCell}");
             }
 
             // Lance l'animation de marche
@@ -235,6 +248,64 @@ public class MovementController : MonoBehaviour
 
             // Interpole le visuel (peut être interrompu par collision)
             yield return StartCoroutine(InterpolateToCell(previousLogicalPosition, nextCell));
+
+            // Consomme le résultat du step
+            if (lastStepResult == StepResult.Reversed)
+            {
+                EntityRegistry.Instance?.ClearLeaving(gameObject);
+                yield break;
+            }
+
+            if (lastStepResult == StepResult.CollisionReturned)
+            {
+                EntityRegistry.Instance?.ClearLeaving(gameObject);
+
+                // Tenter recalcul A* immédiat depuis logicalPosition (inchangée car update différée)
+                if (!finalDestination.HasValue) yield break;
+
+                Vector2Int dest = finalDestination.Value;
+                List<Vector2Int> retryPath = PathFinding.FindPath(logicalPosition, dest, unitGameObject);
+
+                if (retryPath != null && retryPath.Count > 0)
+                {
+                    if (debugMovement)
+                        Debug.Log($"MovementController {gameObject.name}: Recalcul après collision réussi vers {dest}");
+                    logicalPath.Clear();
+                    foreach (var c in retryPath) logicalPath.Enqueue(c);
+                    continue; // Reprend la boucle while avec le nouveau path
+                }
+
+                // A* échoué → priorité auto-attaque si ennemi à portée (avant test encerclement)
+                if (attackController != null)
+                {
+                    attackController.SetManualOrder(false);
+                    GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
+                    if (nearestEnemy != null)
+                    {
+                        if (debugMovement)
+                            Debug.Log($"MovementController {gameObject.name}: Bloquée + ennemi à portée → auto-attaque, ordre abandonné");
+                        finalDestination = null;
+                        attackController.StartAttack(nearestEnemy);
+                        isMoving = false;
+                        isInterpolating = false;
+                        currentState = MovementState.Idle;
+                        yield break;
+                    }
+                }
+
+                // Pas de défense possible → retry persistant
+                isMoving = false;
+                isInterpolating = false;
+                currentState = MovementState.Blocked;
+                // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
+                attackController?.SetManualOrder(false);
+                retryCoroutine = StartCoroutine(RetryPathPeriodically(dest));
+                yield break;
+            }
+
+            // StepResult.Completed → step réussi
+            logicalPosition = nextCell;
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
             EntityRegistry.Instance?.ClearLeaving(gameObject);
 
             // Rafraîchit l'animation vers la vraie prochaine direction en cas de remplacement de queue mid-mouvement
@@ -244,16 +315,6 @@ public class MovementController : MonoBehaviour
                 animatorController.PlayWalkAnimation(logicalPosition, logicalPath.Peek());
             }
 
-            // Vérifie si le Lerp s'est terminé correctement
-            if (!IsAtCellCenter(nextCell))
-            {
-                if (debugMovement)
-                {
-                    Debug.LogWarning($"MovementController {gameObject.name}: Interpolation interrompue");
-                }
-                HandlePathBlocked();
-                yield break;
-            }
         }
 
         // Mouvement terminé avec succès
@@ -310,7 +371,7 @@ public class MovementController : MonoBehaviour
                 if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
                     animatorController.PlayIdleAnimation();
 
-                HandlePathBlocked();
+                lastStepResult = StepResult.Reversed;
                 yield break;
             }
 
@@ -321,8 +382,27 @@ public class MovementController : MonoBehaviour
             }
 
             // ========== DÉTECTION COLLISION TEMPS RÉEL ==========
-            if (GridManager.Instance.GetUnitAt(toCell) != null &&
-                GridManager.Instance.GetUnitAt(toCell) != unitGameObject)
+            GameObject otherUnit = EntityRegistry.Instance?.GetUnitAtLogicalPosition(toCell);
+            bool collision = false;
+            if (otherUnit != null && otherUnit != unitGameObject)
+            {
+                float otherDistToCenter = Vector3.Distance(otherUnit.transform.position, GridManager.Instance.GridToWorld(toCell));
+                collision = otherDistToCenter < contestThreshold;
+
+                // Tie-breaker en zone grise : si l'autre approche du centre sans encore l'atteindre,
+                // l'unité avec l'InstanceID le plus élevé cède. Rompt la symétrie pour éviter
+                // que deux unités finissent simultanément sur la même case.
+                if (!collision && otherDistToCenter < contestThreshold * 2f)
+                {
+                    if (unitGameObject.GetInstanceID() > otherUnit.GetInstanceID())
+                    {
+                        collision = true;
+                        if (debugMovement)
+                            Debug.Log($"MovementController {gameObject.name}: Tie-breaker — cède la case {toCell} à {otherUnit.name}");
+                    }
+                }
+            }
+            if (collision)
             {
                 // Case occupée → retour animé à la case précédente
                 Vector3 currentPosition = transform.position;
@@ -354,6 +434,7 @@ public class MovementController : MonoBehaviour
 
                 // Restaure position logique à fromCell
                 logicalPosition = fromCell;
+                EntityRegistry.Instance?.ClearLeaving(gameObject);
 
                 // Arrête l'animation de marche et retourne à Idle (sauf si en train d'attaquer)
                 if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
@@ -366,7 +447,7 @@ public class MovementController : MonoBehaviour
                     Debug.Log($"MovementController {gameObject.name}: Collision détectée, retour à {fromCell}");
                 }
 
-                HandlePathBlocked();
+                lastStepResult = StepResult.CollisionReturned;
                 yield break;
             }
 
@@ -383,6 +464,7 @@ public class MovementController : MonoBehaviour
 
         // Assure position finale exacte
         transform.position = targetPosition;
+        lastStepResult = StepResult.Completed;
     }
 
     // Gère la situation où le chemin devient inaccessible
@@ -393,8 +475,6 @@ public class MovementController : MonoBehaviour
         currentState = MovementState.Idle;
         isMoving = false;
         isInterpolating = false;
-
-        // Vide la queue
         logicalPath.Clear();
 
         if (debugMovement)
@@ -402,29 +482,26 @@ public class MovementController : MonoBehaviour
             Debug.LogWarning($"MovementController {gameObject.name}: Chemin bloqué à {logicalPosition}");
         }
 
-        // Arrête l'animation (sauf si en train d'attaquer)
         if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
         {
             animatorController.PlayIdleAnimation();
         }
 
-        // Vérifie si un ennemi est à portée après blocage — déclenche l'attaque immédiatement
-        // Même logique que OnMovementCompleted(), car l'unité est maintenant stationnaire
-        if (attackController != null)
+        if (!finalDestination.HasValue)
         {
-            attackController.SetManualOrder(false);
-            GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
-            if (nearestEnemy != null)
-            {
-                attackController.StartAttack(nearestEnemy);
-            }
+            return;
         }
+
+        // Lance retry persistant — la collision en cours de Lerp est gérée directement dans InterpolationLoop
+        currentState = MovementState.Blocked;
+        retryCoroutine = StartCoroutine(RetryPathPeriodically(finalDestination.Value));
     }
 
     // Appelé quand le mouvement se termine avec succès
     // Nettoie l'état et déclenche animations de fin
     private void OnMovementCompleted()
     {
+        finalDestination = null;
         isMoving = false;
         currentState = MovementState.Arrived;
         OnArrived.Invoke();
@@ -476,6 +553,8 @@ public class MovementController : MonoBehaviour
     // Nettoie l'état, arrête toutes les coroutines
     public void StopMovement()
     {
+        finalDestination = null;
+
         // Arrête la coroutine d'interpolation
         if (interpolationCoroutine != null)
         {
@@ -610,8 +689,6 @@ public class MovementController : MonoBehaviour
     // Continue jusqu'à succès ou arrêt manuel
     private IEnumerator RetryPathPeriodically(Vector2Int destination)
     {
-        float retryInterval = 0.5f;
-
         while (true)
         {
             yield return new WaitForSeconds(retryInterval);

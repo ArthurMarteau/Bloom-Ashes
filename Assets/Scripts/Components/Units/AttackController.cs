@@ -93,7 +93,9 @@ public class AttackController : MonoBehaviour
             }
 
             // Si vient d'arriver (Idle ou Arrived), force un check immédiat
-            if (state == MovementController.MovementState.Idle || state == MovementController.MovementState.Arrived)
+            if (state == MovementController.MovementState.Idle ||
+                state == MovementController.MovementState.Arrived ||
+                state == MovementController.MovementState.Blocked)
             {
                 // Ne pas interrompre une attaque en cours d'exécution
                 if (isPerformingAttack)
@@ -171,8 +173,7 @@ public class AttackController : MonoBehaviour
         if (movementController != null)
         {
             MovementController.MovementState state = movementController.GetCurrentState();
-            if (state == MovementController.MovementState.Moving ||
-                state == MovementController.MovementState.Blocked)
+            if (state == MovementController.MovementState.Moving)
             {
                 return false;
             }

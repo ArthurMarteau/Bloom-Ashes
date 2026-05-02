@@ -183,6 +183,12 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         // Désactive les composants de gameplay
         DisableGameplayComponents();
 
+        // Libère la case logique immédiatement — autres unités peuvent traverser le cadavre
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.ReleaseLogicalPosition(gameObject);
+        }
+
         // Abaisse le sprite pour qu'il soit derrière les unités vivantes
         SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
         if (spriteRenderer != null)
