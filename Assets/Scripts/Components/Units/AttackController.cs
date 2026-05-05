@@ -27,6 +27,7 @@ public class AttackController : MonoBehaviour
     private float lastAttackTime;      // Temps de la dernière attaque (pour cooldown)
     private float lastCheckTime;  
     private bool hasManualOrder = false; // Bloque l'auto-attaque pendant un ordre manuel en cours
+    private GameObject pendingChaseTarget;
 
     // Références
     private MovementController movementController;
@@ -162,7 +163,7 @@ public class AttackController : MonoBehaviour
             {
                 Debug.Log($"🎯 AttackController {gameObject.name}: Ennemi détecté à portée ({nearestEnemy.name}), attaque automatique !");
             }
-            StartAttack(nearestEnemy);
+            InterruptChaseAndAttack(nearestEnemy);
         }
     }
 
@@ -174,6 +175,21 @@ public class AttackController : MonoBehaviour
         if (hasManualOrder)
         {
             return false;
+        }
+
+        // Autorise l'auto-attaque pendant la chase : c'est un mouvement automatique interruptible
+        ChaseController chaseController = GetComponent<ChaseController>();
+        if (chaseController != null && chaseController.IsChasing())
+        {
+            GameObject chaseTarget = chaseController.GetCurrentTarget();
+            if (chaseTarget == null) return true;
+
+            MovementController targetMovement = chaseTarget.GetComponent<MovementController>();
+            if (targetMovement != null && targetMovement.GetCurrentState() == MovementController.MovementState.Moving)
+            {
+                return false; // Cible chase en mouvement → on la poursuit, pas d'auto-attack
+            }
+            return true;
         }
 
         // Vérifie MovementController
@@ -199,6 +215,29 @@ public class AttackController : MonoBehaviour
         {
             Debug.Log($"AttackController {gameObject.name}: Ordre manuel → {value}");
         }
+    }
+
+    // Retourne si un ordre manuel bloque actuellement l'auto-attaque
+    public bool HasManualOrder() => hasManualOrder;
+
+    // Stocke une cible de chase à reprendre après l'attaque courante
+    public void SetPendingChaseTarget(GameObject target)
+    {
+        pendingChaseTarget = target;
+    }
+
+    // Interrompt une chase automatique pour attaquer une cible prioritaire
+    public void InterruptChaseAndAttack(GameObject enemy)
+    {
+        ChaseController chaseController = GetComponent<ChaseController>();
+        if (chaseController != null && chaseController.IsChasing())
+        {
+            GameObject chaseTarget = chaseController.GetCurrentTarget();
+            chaseController.StopChase();
+            SetPendingChaseTarget(chaseTarget);
+        }
+
+        StartAttack(enemy);
     }
 
     // Trouve l'ennemi le plus proche à portée d'attaque
@@ -340,6 +379,9 @@ public class AttackController : MonoBehaviour
             return;
         }
 
+        GameObject resumeTarget = pendingChaseTarget;
+        pendingChaseTarget = null;
+
         currentState = AttackState.Idle;
         currentTarget = null;
 
@@ -359,6 +401,20 @@ public class AttackController : MonoBehaviour
         if (debugAttack)
         {
             Debug.Log($"AttackController {gameObject.name}: Attaque arrêtée, retour en Idle");
+        }
+
+        if (resumeTarget != null)
+        {
+            IDamageable resumeDamageable = resumeTarget.GetComponent<IDamageable>();
+            if (resumeDamageable == null || !resumeDamageable.IsDead())
+            {
+                GetComponent<ChaseController>()?.StartChase(resumeTarget);
+
+                if (debugAttack)
+                {
+                    Debug.Log($"🔄 Reprise chase sur {resumeTarget.name}");
+                }
+            }
         }
     }
 

@@ -285,7 +285,7 @@ public class MovementController : MonoBehaviour
                         if (debugMovement)
                             Debug.Log($"MovementController {gameObject.name}: Bloquée + ennemi à portée → auto-attaque, ordre abandonné");
                         finalDestination = null;
-                        attackController.StartAttack(nearestEnemy);
+                        attackController.InterruptChaseAndAttack(nearestEnemy);
                         isInterpolating = false;
                         currentState = MovementState.Idle;
                         yield break;
@@ -553,7 +553,7 @@ public class MovementController : MonoBehaviour
             GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
             if (nearestEnemy != null)
             {
-                attackController.StartAttack(nearestEnemy);
+                attackController.InterruptChaseAndAttack(nearestEnemy);
                 return;
             }
         }

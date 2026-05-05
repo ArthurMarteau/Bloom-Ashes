@@ -120,6 +120,58 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
                 animatorController.PlayHitAnimation(attackerPos, victimPos);
             }
         }
+
+        // Déclenche une riposte automatique si l'attaquant est une cible ennemie valide
+        if (attacker == null)
+        {
+            return;
+        }
+
+        IDamageable attackerDamageable = attacker.GetComponent<IDamageable>();
+        if (attackerDamageable == null || attackerDamageable.IsDead() || attackerDamageable.IsInvulnerable())
+        {
+            return;
+        }
+
+        ITeamMember localTeamMember = GetComponent<ITeamMember>();
+        ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
+        if (localTeamMember == null || attackerTeamMember == null || !localTeamMember.IsEnemy(attackerTeamMember))
+        {
+            return;
+        }
+
+        AttackController attackController = GetComponent<AttackController>();
+        if (attackController == null || !attackController.enabled)
+        {
+            return;
+        }
+
+        if (attackController.IsAttacking())
+        {
+            return;
+        }
+
+        if (attackController.HasManualOrder())
+        {
+            return;
+        }
+
+        ChaseController chaseController = GetComponent<ChaseController>();
+        bool isChasing = chaseController != null && chaseController.IsChasing();
+        MovementController movementController = GetComponent<MovementController>();
+        if (movementController != null &&
+            movementController.GetCurrentState() == MovementController.MovementState.Moving &&
+            !isChasing)
+        {
+            return;
+        }
+
+        attackController.InterruptChaseAndAttack(attacker);
+
+        if (debugStats)
+        {
+            Debug.Log($"⚔️ Riposte auto sur {attacker.name}");
+        }
     }
 
     // Soigne l'unité d'un certain montant

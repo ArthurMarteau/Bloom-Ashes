@@ -56,12 +56,14 @@
     <Compile Include="Assets\Scripts\Components\Visual\VFXPlayer.cs" />
     <Compile Include="Assets\Scripts\Components\Units\IdleMoveExitBehaviour.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
+    <Compile Include="Assets\Scripts\Systems\Selection\SelectionType.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\HighlightTarget.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\EntitySpawnManager.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\AbilityExecutor.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\WatersapManager.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
+    <Compile Include="Assets\Scripts\Systems\Selection\SelectionResolver.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingDeathAnimationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
@@ -90,6 +92,7 @@
     <Compile Include="Assets\Scripts\Components\UI\UnitPanelUI.cs" />
     <Compile Include="Assets\Scripts\Tests\MinHeapTests.cs" />
     <Compile Include="Assets\Scripts\Components\Units\ChaseController.cs" />
+    <Compile Include="Assets\Scripts\Tests\Selection\SelectionResolverTests.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ActionPanelUI.cs" />
     <Compile Include="Assets\Scripts\Systems\EntityRegistry.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BudComponent.cs" />
@@ -112,9 +115,12 @@
     <Compile Include="Assets\Scripts\Components\Interfaces\IDamageable.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ProductionSlotUI.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\VFXManager.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\CameraController.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\IAbility.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\SelectionManager.cs" />
     <Compile Include="Assets\Scripts\Rendering\OutlineRendererFeature.cs" />
+    <Compile Include="Assets\Scripts\Tests\Selection\SelectionStateTests.cs" />
+    <Compile Include="Assets\Scripts\Systems\Selection\SelectionState.cs" />
     <Compile Include="Assets\Scripts\Tests\TestClick.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapBarUI.cs" />
     <Compile Include="Assets\Scripts\Systems\VFX\FlashCurveSystem.cs" />
