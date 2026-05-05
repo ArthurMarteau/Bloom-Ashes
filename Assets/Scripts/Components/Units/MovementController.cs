@@ -53,6 +53,7 @@ public class MovementController : MonoBehaviour
 
     // ========== ÉTAT ==========
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
+    private Vector2Int? deferredDestination = null;
     private Vector2Int? finalDestination = null;  // Destination finale persistante — l'unité ne lâche jamais son ordre tant que ce champ est non-null
     private int consecutiveCollisions = 0;     // Compteur collisions sur la même case
     private Vector2Int lastCollisionCell;      // Dernière case ayant causé une collision
@@ -151,11 +152,21 @@ public class MovementController : MonoBehaviour
         pendingDestination = null;
 
         // ========== INVERSION DE LERP ==========
-        // Si un Lerp est en cours vers nextCell et qu'on demande previousLogicalPosition → inverser immédiatement
-        if (isInterpolating && targetPosition == previousLogicalPosition)
+        // Tout ordre pendant un Lerp force d'abord un retour vers previousLogicalPosition.
+        if (isInterpolating)
         {
             logicalPath.Clear();
             returnToOriginRequested = true;
+            // Si target == case de retour, simple inversion
+            if (targetPosition == previousLogicalPosition)
+            {
+                deferredDestination = null;
+                return true;
+            }
+
+            // Sinon, planifie le nouveau path après retour
+            deferredDestination = targetPosition;
+            finalDestination = targetPosition;
             return true;
         }
 
@@ -253,6 +264,20 @@ public class MovementController : MonoBehaviour
             if (lastStepResult == StepResult.Reversed)
             {
                 EntityRegistry.Instance?.ClearLeaving(gameObject);
+                returnToOriginRequested = false;
+                if (deferredDestination.HasValue)
+                {
+                    Vector2Int dest = deferredDestination.Value;
+                    deferredDestination = null;
+                    isInterpolating = false;
+                    MoveTo(dest);
+                    yield break;
+                }
+
+                isInterpolating = false;
+                currentState = MovementState.Idle;
+                finalDestination = null;
+                isFirstMoveOfSession = true;
                 yield break;
             }
 
@@ -369,7 +394,8 @@ public class MovementController : MonoBehaviour
                 EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
                 EntityRegistry.Instance?.ClearLeaving(gameObject);
 
-                if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
+                bool willChain = deferredDestination.HasValue;
+                if (!willChain && animatorController != null && !(attackController != null && attackController.IsAttacking()))
                     animatorController.PlayIdleAnimation();
 
                 lastStepResult = StepResult.Reversed;
@@ -587,6 +613,7 @@ public class MovementController : MonoBehaviour
     public void StopMovement()
     {
         finalDestination = null;
+        deferredDestination = null;
         consecutiveCollisions = 0;
 
         // Arrête la coroutine d'interpolation
