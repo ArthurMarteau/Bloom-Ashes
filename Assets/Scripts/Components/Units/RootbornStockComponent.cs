@@ -13,9 +13,6 @@ public class RootbornStockComponent : MonoBehaviour
     [Tooltip("Intervalle de collecte en secondes")]
     [SerializeField] private float collectionInterval = 5f;
 
-    [Tooltip("AbilityData de transfert (pour passage par AbilityManager → VFX)")]
-    [SerializeField] private AbilityData watersapTransferAbility;
-
     [Header("Events")]
     [Tooltip("Déclenché quand le stock change (collecte ou transfert). Argument = stock courant.")]
     public UnityEvent<int> OnStockChanged = new UnityEvent<int>();
@@ -113,11 +110,17 @@ public class RootbornStockComponent : MonoBehaviour
     }
 
     // Route l'auto-transfer via AbilityManager pour déclencher les VFX de l'ability
-    // Fallback sur ExecuteTransfer() si watersapTransferAbility ou AbilityManager est absent
+    private AbilityData GetTransferAbilityData()
+    {
+        return GetComponent<UnitStatsComponent>()?.GetBaseStats()?.abilityData;
+    }
+
+    // Fallback sur ExecuteTransfer() si le SO est mal configuré ou AbilityManager est absent
     private void TriggerTransferViaAbilityManager()
     {
-        if (watersapTransferAbility != null && AbilityManager.Instance != null)
-            AbilityManager.Instance.TryExecuteAbility(gameObject, watersapTransferAbility);
+        AbilityData data = GetTransferAbilityData();
+        if (data != null && AbilityManager.Instance != null)
+            AbilityManager.Instance.TryExecuteAbility(gameObject, data);
         else
             ExecuteTransfer();
     }

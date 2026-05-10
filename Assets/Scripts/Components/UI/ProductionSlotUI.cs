@@ -24,6 +24,8 @@ public class ProductionSlotUI : MonoBehaviour
     [Tooltip("Button cliquable sur le slot — interactable selon l'état")]
     [SerializeField] private Button slotButton;
 
+    [SerializeField] private TooltipTrigger tooltipTrigger;
+
     // Overlay bleu léger pour l'état NotEnoughWatersap
     private static readonly Color ColorOverlayNotEnoughWatersap = new Color(0.1f, 0.3f, 0.8f, 0.45f);
 
@@ -32,7 +34,7 @@ public class ProductionSlotUI : MonoBehaviour
 
     // Configure le slot avec l'unité, l'état et le callback de clic
     // Appelé par ProductionPanelUI.RefreshPanel() à chaque mise à jour de la sélection
-    public void Setup(UnitStatsData unitData, SlotState state, System.Action<UnitStatsData> onClick)
+    public void Setup(UnitStatsData unitData, SlotState state, System.Action<UnitStatsData> onClick, int tooltipCost = -1)
     {
         // Unité null : masque le slot entier
         if (unitData == null)
@@ -42,6 +44,11 @@ public class ProductionSlotUI : MonoBehaviour
         }
 
         gameObject.SetActive(true);
+
+        int watersapCost = tooltipCost == -1 ? unitData.watersapCost : tooltipCost;
+        string title = unitData.unitName;
+        string body = $"{unitData.description}\n<color=#007A8A>Coût : {watersapCost} Watersap</color>";
+        tooltipTrigger?.SetContent(title, body);
 
         Debug.Log($"🌿 ProductionSlotUI Setup — état: {state} | slotButton null: {slotButton == null} | portraitImage null: {portraitImage == null}");
 

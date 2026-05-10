@@ -48,6 +48,7 @@
   <ItemGroup>
     <Compile Include="Assets\Editor\GridAutoSnapping.cs" />
     <Compile Include="Assets\Editor\AnimationGenerator.cs" />
+    <Compile Include="Assets\Editor\HierarchyAutoOrganizer.cs" />
     <Compile Include="Assets\Editor\SpriteSlicer.cs" />
     <Compile Include="Assets\Editor\SpriteRenamer.cs" />
     <Compile Include="Assets\Editor\SpritePivotAdjuster.cs" />

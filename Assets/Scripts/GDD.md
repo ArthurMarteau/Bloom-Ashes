@@ -79,7 +79,7 @@ The base unit shared by all factions, created at the Nexus.
 
 **Description**:
 
-*A humble golem of mud and roots, the Rootborn is the backbone of every army. It gathers Watersap, builds structures, and sacrifices itself to birth combat units. Weak in battle but indispensable for economy.*
+*Worker unit. Collects Watersap, builds faction structures, and transforms into combat units.*
 
 | Stat          | Value     |
 | ------------- | --------- |
@@ -108,6 +108,21 @@ See the **Abilities** section below for detailed mechanics.
 
 ---
 
+## Bud (Transitional State)
+
+When a Rootborn transforms into a combat unit adjacent to a building, it enters the **Bud** state — a dormant seed-pod that gestates the chosen unit.
+
+**Description**:
+
+*Transitional state. Keeps the Rootborn's current HP but gains defense. Immobile until transformation is complete.*
+
+- The Bud is **immobile** — it can be attacked and destroyed before hatching
+- A progress bar tracks the remaining build time
+- The Bud can be **cancelled** (Cancel button in UnitPanelUI) — the Rootborn is lost, no refund
+- On completion, the Bud is destroyed and the combat unit spawns on its tile
+
+---
+
 ## Nexus (Common Building)
 
 | Stat    | Value        |
@@ -128,7 +143,19 @@ See the **Abilities** section below for detailed mechanics.
 **Biomes**: Dark Forest, Caves
 **Strength**: Very versatile — healing, control, defense, damage, flying unit
 **Weakness**: Doesn't excel at anything
-**Building**: Great Oak (2x2)
+**Building**: Shroomhaven
+
+#### Building
+
+**Shroomhaven**
+
+*Fungal stronghold rooted deep into the earth. Produces all Mycelian combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -136,7 +163,7 @@ See the **Abilities** section below for detailed mechanics.
 
 **Description**:
 
-*A small glowing mushroom that serves as the Mycelian Champions' frontline healer. Fragile but essential, it keeps allies alive with regenerating spores.*
+*Melee support unit. Heals adjacent allies with regenerating spores.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -156,13 +183,14 @@ See the **Abilities** section below for detailed mechanics.
 | Ability             | Type   | Cost | Cooldown | Area Effect | Heal | Time Effect | Description             |
 | ------------------- | ------ | ---- | -------- | ----------- | ---- | ----------- | ----------------------- |
 | Regenerating Spores | Active | 5    | 20       | 1x1         | 5hp  | Once        | Heals an ally for 5 HP. |
+|                     |        |      |          |             |      |             |                         |
 
 
 **Deathcap Assassin** — CAC DPS / Control / Scout (T2)
 
 **Description**:
 
-*A swift and deadly mushroom that strikes from the shadows. It lays paralyzing traps to control the battlefield and can vanish into bushes, waiting for the perfect moment to strike.*
+*Melee DPS and control unit. Sets paralyzing traps and hides in bushes to ambush enemies.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -189,7 +217,7 @@ See the **Abilities** section below for detailed mechanics.
 
 **Description**:
 
-*A massive creature made of hardened mycelia and rock. Slow but nearly unbreakable, it absorbs punishment so its allies don't have to.*
+*Frontline tank. Slow but extremely durable — absorbs damage for the rest of the army.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -213,7 +241,7 @@ No active ability.
 
 **Description**:
 
-*A toxic airborne mushroom that spews venomous clouds from above. Its spore mist is devastating against paralyzed targets, making it a deadly combo partner for the Deathcap Assassin.*
+*Ranged flying DPS. Spits poison clouds that deal increased damage to paralyzed targets.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -243,7 +271,19 @@ No active ability.
 **Biomes**: Meadows, Gardens
 **Strength**: Control and defense, flying unit
 **Weakness**: No heavy damage, no tank
-**Building**: Great Solar Crystal (2x2)
+**Building**: Great Solar Crystal
+
+#### Building
+
+**Great Solar Crystal**
+
+*A towering crystal that channels sunlight into the battlefield. Produces all Charmer combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -251,7 +291,7 @@ No active ability.
 
 **Description**:
 
-*A sturdy thorn-covered fighter, the Thistle Warrior is the Charmers' reliable frontline. It hits hard for its cost and can take a beating thanks to its natural bark armor.*
+*Melee frontline unit. Solid damage and defense for its cost.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -275,7 +315,7 @@ No active ability.
 
 **Description**:
 
-*An elegant airborne flower that fires thorn projectiles piercing through everything in their path. Fragile but lethal in groups, it excels at harassing from angles enemies can't reach.*
+*Ranged flying DPS. Fires piercing projectiles that hit multiple targets in a line.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -302,7 +342,7 @@ No active ability.
 
 **Description**:
 
-*A radiant flower mage that channels sunlight into devastating beams. Its Blazing Mirror ability makes it a nightmare for ranged enemies, turning their own projectiles against them.*
+*Ranged mage. Reflects enemy projectiles back to their sender.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -328,7 +368,7 @@ No active ability.
 
 **Description**:
 
-*The most manipulative unit on the battlefield. The Dahlia's hypnotic pollen can turn the strongest enemy into a temporary ally, swinging fights in an instant. Extremely fragile — protect at all costs.*
+*Support unit. Charms an enemy unit and turns it against its allies. Very fragile.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -357,7 +397,19 @@ No active ability.
 **Biomes**: Desert, Jungle
 **Strength**: Low unit production cost, high defense, many passive abilities
 **Weakness**: No flying unit, low mobility, little healing, longer unit build time
-**Building**: Great Stone (2x2)
+**Building**: Great Stone
+
+#### Building
+
+**Great Stone**
+
+*An ancient carved monolith. Produces all Wild Fangs combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -365,7 +417,7 @@ No active ability.
 
 **Description**:
 
-*A tough desert fighter covered in razor-sharp spines. Cheap to produce and hard to kill, the Cactus Warrior punishes anyone who dares attack it in close combat.*
+*Melee tank. Returns damage to melee attackers. Cheap and durable.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -391,7 +443,7 @@ No active ability.
 
 **Description**:
 
-*A carnivorous plant that spits corrosive acid from a distance. Its shots slow enemies down, making them easy prey for the Venus Assassin to finish off.*
+*Ranged DPS. Slows enemy movement speed on hit — synergizes with Venus Assassin.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -417,7 +469,7 @@ No active ability.
 
 **Description**:
 
-*A lightning-fast carnivorous plant that strikes from the shadows. Its deadly bite deals massive damage to slowed targets, making it the perfect follow-up to the Nepenthes' acid shots.*
+*Melee assassin. Deals bonus damage to slowed targets — pairs well with Nepenthes Shooter.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -443,7 +495,7 @@ No active ability.
 
 **Description**:
 
-*An ancient desert plant of immense resilience. It regenerates constantly, making it almost impossible to wear down. Slow but nearly unkillable in prolonged fights.*
+*Melee tank. Regenerates HP passively — extremely hard to wear down in prolonged fights.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -472,7 +524,19 @@ No active ability.
 **Biomes**: Scorched Lands, Volcano
 **Strength**: Very high mobility, high damage, flying unit
 **Weakness**: Low defense, no healing
-**Building**: Great Furnace (2x2)
+**Building**: Great Furnace
+
+#### Building
+
+**Great Furnace**
+
+*A roaring forge of scorched wood and ember. Produces all Scorched combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -480,7 +544,7 @@ No active ability.
 
 **Description**:
 
-*A fast and reckless burned warrior. Cheap and expendable, it rushes into enemy lines and can detonate itself in a devastating explosion, taking everyone nearby with it.*
+*Melee DPS. Fast and cheap — can self-destruct to deal area damage.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -506,7 +570,7 @@ No active ability.
 
 **Description**:
 
-*A howling ball of fire that hurls flaming projectiles at high speed. The Scorched's main ranged damage dealer — fast, deadly, but paper-thin.*
+*Ranged DPS. High damage output, high speed. Very low defense.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -530,7 +594,7 @@ No active ability.
 
 **Description**:
 
-*A suicidal flying flame that locks onto a single target and won't stop until it's dead — or it is. If it succeeds, a Rootborn rises from its ashes. The ultimate kamikaze unit.*
+*Flying assassin. Targets a single enemy and fights to the death. Spawns a Rootborn on kill.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -557,7 +621,7 @@ No active ability.
 
 **Description**:
 
-*A smoldering tree trunk that radiates intense heat. Its Incandescent Nova terrifies and burns nearby enemies, making it a fearsome area-denial bruiser.*
+*Melee bruiser. Burns and frightens nearby enemies with an area nova.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -586,7 +650,19 @@ No active ability.
 **Biomes**: Beach, Swamp
 **Strength**: Low spell costs, many spells
 **Weakness**: No flying unit, low mobility
-**Building**: Great Shell (2x2)
+**Building**: Great Shell
+
+#### Building
+
+**Great Shell**
+
+*A colossal shell risen from the deep. Produces all Abyss combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -594,7 +670,7 @@ No active ability.
 
 **Description**:
 
-*A broad-leafed aquatic warrior with a built-in shield. It can block incoming projectiles at minimal cost, making it the perfect bodyguard for the faction's fragile spellcasters.*
+*Melee tank. Blocks incoming projectiles to protect allied spellcasters.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -620,7 +696,7 @@ No active ability.
 
 **Description**:
 
-*A sacred water flower that channels healing tides and offensive water bolts. With the cheapest heal in the game, it's the backbone of any Abyss army — versatile, efficient, indispensable.*
+*Ranged support unit. Heals allies and deals ranged damage. Cheapest heal in the game.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -646,7 +722,7 @@ No active ability.
 
 **Description**:
 
-*A sinister deep-sea kelp that drags units toward it with crushing tentacles. It can pull allies to safety or yank enemies into kill zones — a master of battlefield positioning.*
+*Melee control unit. Pulls allies or enemies to its position. Deals damage to pulled enemies.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -672,7 +748,7 @@ No active ability.
 
 **Description**:
 
-*An imposing coral fortress that moves at a glacier's pace but hits like a tidal wave. Its Abyssal Wave clears entire lines of enemies, making it devastating in narrow passages.*
+*Melee tank. Sends a damaging wave across a line of tiles. Slow but powerful.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -758,7 +834,7 @@ Aggressive creatures not affiliated with any faction. One per biome.
 | ---------------------- | ----------------------------------------------------------------------------- |
 | Mycelian Champions     | Immune to Forest/Swamp penalties. +1 Defense in Forest.                       |
 | Golden Garden Charmers | +1 Move Speed on Grass. Immune to Grass/Path/Brambles penalties.              |
-| Wild Fangs             | Immune to Sand/Rocky penalties. +1 Defense on Rocky.                          |
+| Wild Fangs             | Immune to Sand/Rocky penalties. +1 Defense on Rocky.                         |
 | The Scorched           | Immune to Scorched damage. +1 Attack on Scorched tiles.                       |
 | Chosen of the Abyss    | Can walk on Water (cost 1.0). Immune to Swamp penalties. +1 Defense in Water. |
 
@@ -827,7 +903,7 @@ This section provides detailed mechanics for abilities that go beyond the unit t
 | Building      | Faction             | HP  | Defense      | Size | Construction             |
 | ------------- | ------------------- | --- | ------------ | ---- | ------------------------ |
 | Nexus         | All                 | 1   | Invulnerable | 1x1  | Starting building        |
-| Great Oak     | Mycelian Champions  | 100 | 3            | 2x2  | 4 Rootborn on foundation |
+| Shroomhaven   | Mycelian Champions  | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Solar Crystal | Golden Garden       | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Great Stone   | Wild Fangs          | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Great Furnace | The Scorched        | 100 | 3            | 2x2  | 4 Rootborn on foundation |

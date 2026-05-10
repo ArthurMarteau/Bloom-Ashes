@@ -46,6 +46,7 @@ public class UnitPanelUI : MonoBehaviour
 
     [Header("Portrait")]
     [SerializeField] private Image portraitImage; // Image enfant dans le Mask — reçoit le sprite du portrait
+    [SerializeField] private Sprite groupPortraitSprite;
 
     [Header("HP")]
     [SerializeField] private GameObject hpContainer;          // GameObject parent contenant HPBarFill + HPText
@@ -71,6 +72,7 @@ public class UnitPanelUI : MonoBehaviour
 
     [Header("Boutons d'action")]
     [SerializeField] private GameObject abilityButton;         // Ability_Button — affiché si ability disponible
+    [SerializeField] private TooltipTrigger abilityTooltipTrigger;
     [SerializeField] private GameObject sacrificeCancelButton; // Sacrifice/Cancel_Button — affiché si unité ou bud
     [SerializeField] private GameObject sacrificeIcon;         // Sacrifice_Icon — enfant de sacrificeCancelButton
     [SerializeField] private GameObject cancelIcon;            // Cancel_Icon — enfant de sacrificeCancelButton
@@ -80,6 +82,8 @@ public class UnitPanelUI : MonoBehaviour
 
     // Entité actuellement sélectionnée — utilisée par les callbacks boutons
     private GameObject currentSelectedEntity;
+    private Button cachedAbilityButton;
+    private CanvasGroup cachedAbilityCanvasGroup;
 
     // Couleurs HP selon le pourcentage de vie
     private static readonly Color ColorHPFull   = new Color(0.20f, 0.80f, 0.20f); // vert     > 75%
@@ -93,6 +97,10 @@ public class UnitPanelUI : MonoBehaviour
 
     // Référence à l'unité actuellement trackée pour les mises à jour HP temps réel
     private UnitStatsComponent trackedUnit;
+    private MovementController trackedMovementController;
+    private AttackController trackedAttackController;
+    private RootbornStockComponent trackedStockComponent;
+    private RootbornStockComponent trackedRootbornStock;
 
     // Référence au BudComponent tracké pour la mise à jour de la barre de progression
     private BudComponent trackedBud;
@@ -108,6 +116,25 @@ public class UnitPanelUI : MonoBehaviour
     {
         if (trackedBud != null && budProgressBarFill != null)
             budProgressBarFill.fillAmount = trackedBud.Progress;
+
+        if (currentSelectedEntity == null || cachedAbilityButton == null)
+            return;
+
+        if (trackedRootbornStock == null)
+            return;
+
+        MovementController.MovementState state = trackedMovementController != null
+            ? trackedMovementController.GetCurrentState()
+            : MovementController.MovementState.Idle;
+        bool hasStock = trackedStockComponent == null || trackedStockComponent.CurrentStock >= 1;
+        bool canUseAbility = trackedMovementController != null
+            && state == MovementController.MovementState.Idle
+            && (trackedAttackController == null || !trackedAttackController.IsAttacking())
+            && hasStock;
+
+        cachedAbilityButton.interactable = canUseAbility;
+        if (cachedAbilityCanvasGroup != null)
+            cachedAbilityCanvasGroup.alpha = canUseAbility ? 1f : 0.4f;
     }
 
     // Trouve le SelectionManager et s'abonne à ses events UI
@@ -130,6 +157,8 @@ public class UnitPanelUI : MonoBehaviour
 
         // Initialise les callbacks des boutons d'action
         Button abilityBtn = abilityButton?.GetComponent<Button>();
+        cachedAbilityButton = abilityBtn;
+        cachedAbilityCanvasGroup = abilityButton?.GetComponent<CanvasGroup>();
         if (abilityBtn != null) abilityBtn.onClick.AddListener(OnAbilityButtonClicked);
         Button btn = sacrificeCancelButton?.GetComponent<Button>();
         if (btn != null) btn.onClick.AddListener(OnSacrificeOrCancelButtonClicked);
@@ -375,6 +404,10 @@ public class UnitPanelUI : MonoBehaviour
 
         // Watersap stock UI : visible uniquement pour les Rootborn
         RootbornStockComponent stockComponent = unitObject.GetComponent<RootbornStockComponent>();
+        trackedRootbornStock = stockComponent;
+        trackedMovementController = stockComponent != null ? unitObject.GetComponent<MovementController>() : null;
+        trackedAttackController = currentSelectedEntity.GetComponent<AttackController>();
+        trackedStockComponent = currentSelectedEntity.GetComponent<RootbornStockComponent>();
         if (watersapStockUI != null)
         {
             if (stockComponent != null)
@@ -386,6 +419,13 @@ public class UnitPanelUI : MonoBehaviour
         // Slot ability : conditionnel sur la présence d'une AbilityData
         bool showAbility = statsData != null && statsData.abilityData != null;
         SetActive(abilityButton, showAbility);
+        if (abilityTooltipTrigger != null && statsData?.abilityData != null)
+        {
+            string body = $"{statsData.abilityData.description}\n\n<color=#007A8A>Coût : {statsData.abilityData.watersapCost} Watersap</color>";
+            abilityTooltipTrigger.SetContent(statsData.abilityData.abilityName, body);
+        }
+        if (stockComponent == null)
+            ResetAbilityButtonState();
     }
 
     // Mode groupe (2+ unités) : placeholder ×N, nom, tout le reste masqué
@@ -398,11 +438,10 @@ public class UnitPanelUI : MonoBehaviour
 
         ConfigureVisibility(EntityType.UnitGroup);
 
-        // Portrait : placeholder coloré avec indicateur de groupe
         if (portraitImage != null)
         {
-            portraitImage.sprite = null;
-            portraitImage.color  = new Color(0.45f, 0.35f, 0.15f); // Doré-brun
+            portraitImage.sprite = groupPortraitSprite;
+            portraitImage.color  = groupPortraitSprite != null ? Color.white : new Color(0.45f, 0.35f, 0.15f);
         }
 
         SetText(unitNameText, $"{count} unités sélectionnées");
@@ -526,6 +565,12 @@ public class UnitPanelUI : MonoBehaviour
         TrackBuilding(stats);
         RefreshBuildingHPDisplay(stats);
 
+        if (abilityTooltipTrigger != null && statsData?.abilityData != null)
+        {
+            string body = $"{statsData.abilityData.description}\n<color=#007A8A>Coût : {statsData.abilityData.watersapCost} Watersap</color>";
+            abilityTooltipTrigger.SetContent(statsData.abilityData.abilityName, body);
+        }
+
         // DEF
         SetText(statTextDEF, stats.GetDefense().ToString());
         SetTextColor(statTextDEF, Color.white);
@@ -541,14 +586,20 @@ public class UnitPanelUI : MonoBehaviour
 
         ConfigureVisibility(EntityType.Obstacle);
 
-        // Portrait : placeholder brun/gris
+        // Utilise les données d'environnement si elles existent, sinon conserve le fallback obstacle.
+        EnvironmentStatsComponent envStats = obstacle?.GetComponent<EnvironmentStatsComponent>();
+        EnvironmentStatsData envData = envStats?.GetBaseStats();
+
         if (portraitImage != null)
         {
-            portraitImage.sprite = null;
-            portraitImage.color  = new Color(0.40f, 0.35f, 0.30f); // Brun-gris
+            portraitImage.sprite = envData?.portrait ?? null;
+            portraitImage.color  = (envData?.portrait != null) ? Color.white : new Color(0.40f, 0.35f, 0.30f);
         }
 
-        SetText(unitNameText, obstacle != null ? obstacle.name : "Obstacle");
+        string displayName = (envData != null && !string.IsNullOrEmpty(envData.entityName))
+            ? envData.entityName
+            : (obstacle != null ? obstacle.name : "Obstacle");
+        SetText(unitNameText, displayName);
     }
 
     // Mode Bud : portrait de l'unité en cours, nom, HP bâtiment, DEF, barre de progression
@@ -645,6 +696,12 @@ public class UnitPanelUI : MonoBehaviour
             trackedUnit.OnDeath.RemoveListener(OnTrackedUnitChanged);
             trackedUnit = null;
         }
+
+        trackedMovementController = null;
+        trackedAttackController = null;
+        trackedStockComponent = null;
+        trackedRootbornStock = null;
+        ResetAbilityButtonState();
     }
 
     // Callback déclenché quand l'unité trackée prend des dégâts, est soignée, ou meurt
@@ -822,6 +879,15 @@ public class UnitPanelUI : MonoBehaviour
         {
             obj.SetActive(active);
         }
+    }
+
+    private void ResetAbilityButtonState()
+    {
+        if (cachedAbilityButton != null)
+            cachedAbilityButton.interactable = true;
+
+        if (cachedAbilityCanvasGroup != null)
+            cachedAbilityCanvasGroup.alpha = 1f;
     }
 
     // Définit le texte d'un TMP en sécurité (null-safe)

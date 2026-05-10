@@ -17,4 +17,4 @@ MonoBehaviour:
   watersapCost: 40
   cooldownDuration: 0
   vfxOnExecute: {fileID: 11400000, guid: 7ee8a5f9e238db5499b7ee43400a33d7, type: 2}
-  description: Spawn a Rootborn for 40 Watersap.
+  description: Spawn a Rootborn.

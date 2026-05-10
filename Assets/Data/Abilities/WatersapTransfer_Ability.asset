@@ -17,4 +17,5 @@ MonoBehaviour:
   watersapCost: 0
   cooldownDuration: 0
   vfxOnExecute: {fileID: 11400000, guid: aa4ff96568a6cd84e9e4652f4a400647, type: 2}
-  description: 
+  description: Collects and stores Watersap individually, then transfers it to the
+    player's pool.

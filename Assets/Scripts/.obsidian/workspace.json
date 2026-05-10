@@ -185,6 +185,10 @@
   },
   "active": "7811e402c7090024",
   "lastOpenFiles": [
+    "Components/Units/RevertToRootbornController.cs.meta",
+    "Components/Units/RevertToRootbornController.cs",
+    "NEW_FEATURES_IMPLEMENTATION.md",
+    "GDD.md",
     "Components/UI/ActionPanelUI.cs.meta",
     "Components/UI/ActionPanelUI.cs",
     "Tests/TestClick.cs.meta",
@@ -193,8 +197,6 @@
     "Components/UI/ProductionPanelUI.cs",
     "Components/UI/ProductionSlotUI.cs.meta",
     "Components/UI/ProductionSlotUI.cs",
-    "NEW_FEATURES_IMPLEMENTATION.md",
-    "GDD.md",
     "claude.md"
   ]
 }

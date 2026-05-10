@@ -48,6 +48,11 @@ public class TooltipUI : MonoBehaviour
         // Trouve le Canvas racine pour les conversions de coordonnées
         rootCanvas = GetComponentInParent<Canvas>();
 
+        if (bodyText != null)
+        {
+            bodyText.richText = true;
+        }
+
         // Masqué par défaut
         if (tooltipPanel != null)
         {

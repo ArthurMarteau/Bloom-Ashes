@@ -13,6 +13,7 @@ MonoBehaviour:
   m_Name: Nexus_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
   buildingName: Nexus
+  description: Spawns Rootborn units. Reverse battle unit in Rootborn for 10 Watersap.
   portrait: {fileID: 21300000, guid: 03a1fc1755799df40b9136655eeec95f, type: 3}
   maxHP: 100
   defense: 0
@@ -23,4 +24,5 @@ MonoBehaviour:
   producibleUnits:
   - {fileID: 11400000, guid: 4e864d1c8ba716c4980b12c563a810aa, type: 2}
   maxTier: 1
+  buildingPrefab: {fileID: 0}
   abilityData: {fileID: 11400000, guid: f64b960648fba2f4b8a83ffd55a3746f, type: 2}

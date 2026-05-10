@@ -12,6 +12,9 @@ public class BuildingStatsData : ScriptableObject
     [Tooltip("Nom du bâtiment affiché dans les logs et l'UI")]
     public string buildingName = "Bâtiment";
 
+    [TextArea(2, 4)]
+    public string description = "";
+
     [Header("Portrait")]
     [Tooltip("Sprite du portrait affiché dans le panneau de sélection")]
     public Sprite portrait = null;

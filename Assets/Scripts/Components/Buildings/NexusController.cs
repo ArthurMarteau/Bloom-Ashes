@@ -11,13 +11,17 @@ public class NexusController : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private bool debugNexus = true;
+    [SerializeField] private bool debugNexusInput = true;
 
     // Cache des données de base du Nexus
     private BuildingStatsData baseStats;
+    private Collider2D _collider;
 
     // Récupère et valide les données au démarrage
     private void Awake()
     {
+        _collider = GetComponent<Collider2D>();
+
         BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
         if (buildingStats == null)
         {
@@ -44,6 +48,34 @@ public class NexusController : MonoBehaviour
 
         if (debugNexus)
             Debug.Log($"🏛️ NexusController {gameObject.name} : initialisé ({baseStats.buildingName})");
+    }
+
+    // S'abonne aux clics droits du gameplay pour déclencher le spawn sur le Nexus ciblé
+    private void Start()
+    {
+        if (InputManager.Instance != null)
+            InputManager.Instance.OnRightClickDown.AddListener(OnRightClickHandler);
+    }
+
+    // Désabonne les clics droits pour éviter les callbacks après destruction du Nexus
+    private void OnDestroy()
+    {
+        if (InputManager.Instance != null)
+            InputManager.Instance.OnRightClickDown.RemoveListener(OnRightClickHandler);
+    }
+
+    // Déclenche le spawn Rootborn si le clic droit tombe sur le collider du Nexus
+    private void OnRightClickHandler(Vector3 worldPosition)
+    {
+        if (_collider == null) return;
+
+        if (_collider.OverlapPoint(worldPosition))
+        {
+            if (debugNexusInput)
+                Debug.Log($"🏛️ NexusController {gameObject.name} : clic droit détecté sur Nexus");
+
+            TrySpawnRootborn();
+        }
     }
 
     // Tente de spawner un Rootborn sur la tile du Nexus
@@ -78,6 +110,18 @@ public class NexusController : MonoBehaviour
         {
             Debug.LogWarning($"🏛️ NexusController {gameObject.name} : unitPrefab manquant sur {rootbornData.unitName}");
             return false;
+        }
+
+        if (GridManager.Instance != null)
+        {
+            Vector2Int nexusTile = GridManager.Instance.WorldToGrid(transform.position);
+            GameObject occupant = GridManager.Instance.GetUnitAt(nexusTile);
+            if (occupant != null)
+            {
+                if (debugNexus)
+                    Debug.LogWarning($"️ NexusController {gameObject.name} : case {nexusTile} occupée par {occupant.name} — spawn bloqué");
+                return false;
+            }
         }
 
         // Tente de dépenser le Watersap

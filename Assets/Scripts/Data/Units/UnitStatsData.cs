@@ -11,6 +11,9 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("Nom affiché dans l'UI (ex: Rootborn, Luminescent Mycena)")]
     public string unitName = "Unit";
 
+    [TextArea(2, 4)]
+    public string description = "";
+
     [Header("Portrait")]
     [Tooltip("Sprite du portrait affiché dans le panneau de sélection")]
     public Sprite portrait = null;

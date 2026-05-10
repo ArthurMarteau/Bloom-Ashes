@@ -13,12 +13,16 @@ MonoBehaviour:
   m_Name: Bud_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
   buildingName: Bud
+  description: Transitional state. Keeps the Rootborn's current HP but gains defense.
+    Immobile until transformation is complete.
   portrait: {fileID: 0}
   maxHP: 20
-  defense: 3
+  defense: 4
   isInvulnerable: 0
   sizeX: 1
   sizeY: 1
   isNexus: 0
   producibleUnits: []
   maxTier: 1
+  buildingPrefab: {fileID: 0}
+  abilityData: {fileID: 0}

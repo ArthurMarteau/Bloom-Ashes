@@ -47,6 +47,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\AbilityInputHandler.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipUI.cs" />
@@ -68,6 +69,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapStockUI.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\RevertToRootbornController.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
@@ -86,6 +88,7 @@
     <Compile Include="Assets\Scripts\Components\Visual\WatersapFillController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
+    <Compile Include="Assets\Scripts\Components\UI\TooltipTrigger.cs" />
     <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SpawnRootbornAbility.cs" />
@@ -104,6 +107,7 @@
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Players\PlayerData.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SpriteFlashController.cs" />
+    <Compile Include="Assets\Scripts\Data\Environment\EnvironmentStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Units\UnitStatsLogic.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\AbilityData.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\ScaleUpController.cs" />
@@ -124,6 +128,7 @@
     <Compile Include="Assets\Scripts\Tests\TestClick.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapBarUI.cs" />
     <Compile Include="Assets\Scripts\Systems\VFX\FlashCurveSystem.cs" />
+    <Compile Include="Assets\Scripts\Components\Environment\EnvironmentStatsComponent.cs" />
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile Overlay.shader" />
     <None Include="Assets\TextMesh Pro\Shaders\TMP_SDF-Mobile-2-Pass.shader" />

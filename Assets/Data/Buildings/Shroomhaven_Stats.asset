@@ -13,6 +13,8 @@ MonoBehaviour:
   m_Name: Shroomhaven_Stats
   m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
   buildingName: Shroom Haven
+  description: Fungal stronghold rooted deep into the earth. Produces all Mycelian
+    combat units.
   portrait: {fileID: 21300000, guid: fd3c781c53524fd4497b6e3e57a67aaa, type: 3}
   maxHP: 400
   defense: 3
@@ -24,3 +26,5 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 67952215cc941ac4e875ec4347e2451b, type: 2}
   - {fileID: 11400000, guid: 48e2283247d0a5d46865952762e64be0, type: 2}
   maxTier: 1
+  buildingPrefab: {fileID: 5758338455721873252, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
+  abilityData: {fileID: 0}

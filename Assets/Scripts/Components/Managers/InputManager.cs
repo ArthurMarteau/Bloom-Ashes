@@ -24,6 +24,9 @@ public class InputManager : MonoBehaviour
     [Header("Events — Clic droit")]
     public UnityEvent<Vector3> OnRightClickDown = new UnityEvent<Vector3>(); // Position monde
 
+    [Header("Events — Clavier")]
+    public UnityEvent OnAbilityKeyPressed = new UnityEvent();
+
     [Header("Debug")]
     [SerializeField] private bool debugInput = false;
 
@@ -32,6 +35,7 @@ public class InputManager : MonoBehaviour
     private InputAction rightClickAction;
     private InputAction mousePositionAction;
     private InputAction shiftAction;
+    private InputAction abilityKeyAction;
 
     // État interne du drag
     private bool isDragging = false;
@@ -81,6 +85,7 @@ public class InputManager : MonoBehaviour
         rightClickAction     = gameplayMap.FindAction("RightClick",    throwIfNotFound: true);
         mousePositionAction  = gameplayMap.FindAction("MousePosition", throwIfNotFound: true);
         shiftAction          = gameplayMap.FindAction("Shift",         throwIfNotFound: true);
+        abilityKeyAction     = gameplayMap.FindAction("AbilityKey",    throwIfNotFound: true);
 
         if (debugInput)
         {
@@ -103,6 +108,9 @@ public class InputManager : MonoBehaviour
         // Abonnements : MousePosition (mis à jour en continu)
         mousePositionAction.performed += OnMousePositionPerformed;
 
+        // Abonnements : clavier
+        abilityKeyAction.started += OnAbilityKeyStarted;
+
         // Active le map entier
         inputActions.FindActionMap("Gameplay").Enable();
     }
@@ -116,6 +124,7 @@ public class InputManager : MonoBehaviour
         leftClickAction.canceled -= OnLeftClickCanceled;
         rightClickAction.started -= OnRightClickStarted;
         mousePositionAction.performed -= OnMousePositionPerformed;
+        abilityKeyAction.started -= OnAbilityKeyStarted;
 
         inputActions.FindActionMap("Gameplay").Disable();
     }
@@ -191,6 +200,17 @@ public class InputManager : MonoBehaviour
     private void OnMousePositionPerformed(InputAction.CallbackContext ctx)
     {
         currentMousePosition = ctx.ReadValue<Vector2>();
+    }
+
+    // Callback : touche d'ability enfoncée — émet l'event découplé pour les handlers gameplay
+    private void OnAbilityKeyStarted(InputAction.CallbackContext ctx)
+    {
+        OnAbilityKeyPressed.Invoke();
+
+        if (debugInput)
+        {
+            Debug.Log("⌨️ InputManager: AbilityKey pressée");
+        }
     }
 
     // Gère la détection et la mise à jour du drag chaque frame

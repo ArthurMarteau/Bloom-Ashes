@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 // Panneau d'actions affiché selon la sélection courante — deux contextes mutuellement exclusifs :
@@ -36,7 +37,7 @@ public class ActionPanelUI : MonoBehaviour
     private int trackedTeamID;
 
     // Enum interne pour savoir quel contexte est actif
-    private enum PanelContext { None, Production, Upgrade }
+    private enum PanelContext { None, Production, Revert, Upgrade }
     private PanelContext currentContext = PanelContext.None;
 
     // Trouve le SelectionManager et s'abonne à ses events
@@ -89,24 +90,28 @@ public class ActionPanelUI : MonoBehaviour
         GameObject unit = units[0];
         RootbornProductionController pc = unit.GetComponent<RootbornProductionController>();
 
-        if (pc == null)
+        if (pc != null)
+        {
+            currentRootborn = unit;
+            currentContext = PanelContext.Production;
+
+            SubscribeMovementEvents(currentRootborn);
+
+            RefreshPanel();
+            return;
+        }
+
+        RevertToRootbornController rc = unit.GetComponent<RevertToRootbornController>();
+        if (rc == null || rc.FindAdjacentNexus() == null)
         {
             HidePanel();
             return;
         }
 
         currentRootborn = unit;
-        currentContext = PanelContext.Production;
+        currentContext = PanelContext.Revert;
 
-        // Désabonne l'ancien Rootborn puis s'abonne au nouveau
-        UnsubscribeMovementEvents();
-        MovementController movementController = currentRootborn.GetComponent<MovementController>();
-        if (movementController != null)
-        {
-            trackedMovementController = movementController;
-            trackedMovementController.OnMovementStarted.AddListener(HidePanel);
-            trackedMovementController.OnArrived.AddListener(RefreshPanel);
-        }
+        SubscribeMovementEvents(currentRootborn);
 
         RefreshPanel();
     }
@@ -149,6 +154,41 @@ public class ActionPanelUI : MonoBehaviour
         }
 
         Debug.Log($"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}");
+    }
+
+    // === CONTEXTE REVERT ===
+
+    // Met à jour l'unique slot de re-transformation vers Rootborn
+    private void RefreshRevert()
+    {
+        RevertToRootbornController rc = currentRootborn.GetComponent<RevertToRootbornController>();
+        if (rc == null) { HidePanel(); return; }
+        if (rc.FindAdjacentNexus() == null) { HidePanel(); return; }
+
+        UnitStatsData rootbornData = GetRootbornData(rc);
+        if (rootbornData == null) { HidePanel(); return; }
+
+        int revertWatersapCost = GetRevertWatersapCost(rc);
+        ProductionSlotUI.SlotState state = rc.CanRevert()
+            ? ProductionSlotUI.SlotState.Available
+            : ProductionSlotUI.SlotState.NotEnoughWatersap;
+
+        ShowPanel();
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            if (slots[i] == null) continue;
+
+            if (i > 0)
+            {
+                slots[i].gameObject.SetActive(false);
+                continue;
+            }
+
+            slots[i].Setup(rootbornData, state, (_) => { rc.ExecuteRevert(); HidePanel(); }, revertWatersapCost);
+        }
+
+        Debug.Log($"🌿 ActionPanelUI : revert — slot Rootborn ({state}, coût {revertWatersapCost})");
     }
 
     // === CONTEXTE UPGRADE ===
@@ -215,7 +255,7 @@ public class ActionPanelUI : MonoBehaviour
                 state = ProductionSlotUI.SlotState.Available;
 
             int capturedCost = costs[i];
-            slots[i].Setup(unitData, state, (_) => { trackedBuilding.UpgradeTier(trackedTeamID, capturedCost); });
+            slots[i].Setup(unitData, state, (_) => { trackedBuilding.UpgradeTier(trackedTeamID, capturedCost); }, capturedCost);
         }
 
         Debug.Log($"🌿 ActionPanelUI : upgrade — tier {trackedBuilding.GetCurrentTier()}/{trackedBuilding.GetMaxTier()} pour {trackedBuilding.GetBuildingName()}");
@@ -230,6 +270,10 @@ public class ActionPanelUI : MonoBehaviour
         {
             case PanelContext.Production:
                 if (currentRootborn != null) RefreshProduction();
+                else HidePanel();
+                break;
+            case PanelContext.Revert:
+                if (currentRootborn != null) RefreshRevert();
                 else HidePanel();
                 break;
             case PanelContext.Upgrade:
@@ -274,12 +318,50 @@ public class ActionPanelUI : MonoBehaviour
         trackedMovementController = null;
     }
 
+    // Abonne le panneau au mouvement de l'unité courante pour masquer au départ et refresh à l'arrivée
+    private void SubscribeMovementEvents(GameObject unit)
+    {
+        UnsubscribeMovementEvents();
+
+        MovementController movementController = unit.GetComponent<MovementController>();
+        if (movementController != null)
+        {
+            trackedMovementController = movementController;
+            trackedMovementController.OnMovementStarted.AddListener(HidePanel);
+            trackedMovementController.OnArrived.AddListener(RefreshPanel);
+        }
+    }
+
     // Désabonne OnTierUpgraded du bâtiment tracké et efface la référence
     private void UnsubscribeUpgradeEvents()
     {
         if (trackedBuilding == null) return;
         trackedBuilding.OnTierUpgraded.RemoveListener(RefreshPanel);
         trackedBuilding = null;
+    }
+
+    private UnitStatsData GetRootbornData(RevertToRootbornController rc)
+    {
+        PropertyInfo rootbornDataProperty = typeof(RevertToRootbornController).GetProperty("RootbornData", BindingFlags.Instance | BindingFlags.Public);
+        if (rootbornDataProperty != null)
+            return rootbornDataProperty.GetValue(rc) as UnitStatsData;
+
+        FieldInfo rootbornPrefabField = typeof(RevertToRootbornController).GetField("rootbornPrefab", BindingFlags.Instance | BindingFlags.NonPublic);
+        GameObject rootbornPrefab = rootbornPrefabField?.GetValue(rc) as GameObject;
+        return rootbornPrefab?.GetComponent<UnitStatsComponent>()?.GetBaseStats();
+    }
+
+    private int GetRevertWatersapCost(RevertToRootbornController rc)
+    {
+        PropertyInfo costProperty = typeof(RevertToRootbornController).GetProperty("RevertWatersapCost", BindingFlags.Instance | BindingFlags.Public);
+        if (costProperty != null && costProperty.GetValue(rc) is int cost)
+            return cost;
+
+        FieldInfo costField = typeof(RevertToRootbornController).GetField("revertWatersapCost", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (costField != null && costField.GetValue(rc) is int fieldCost)
+            return fieldCost;
+
+        return 10;
     }
 
     // === SHOW / HIDE / ANIMATION ===

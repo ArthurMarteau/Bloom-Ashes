@@ -19,6 +19,7 @@ GameObject:
   - component: {fileID: 5287361853722055822}
   - component: {fileID: 2694821521384234998}
   - component: {fileID: 1250078506834736326}
+  - component: {fileID: 1826780472243906342}
   m_Layer: 9
   m_Name: Lionsmane_Priest
   m_TagString: GroundUnit
@@ -159,7 +160,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 2.0485003, y: 2.048}
+    oldSize: {x: 2.0485, y: 2.048}
     newSize: {x: 2.0485003, y: 2.048}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -223,7 +224,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 31b749492dc6a794680897282be337dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MovementController
+  retryInterval: 0.5
   debugMovement: 1
+  OnMovementStarted:
+    m_PersistentCalls:
+      m_Calls: []
+  OnArrived:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!114 &5287361853722055822
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -275,3 +283,19 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HighlightTarget
   outlineMaterial: {fileID: 0}
   outlineSize: 2
+--- !u!114 &1826780472243906342
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6748851485159956997}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d8900877775e6c349aa341b54bbbc825, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::RevertToRootbornController
+  rootbornPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+  revertWatersapCost: 10
+  revertAnimDuration: 1
+  debugRevert: 1

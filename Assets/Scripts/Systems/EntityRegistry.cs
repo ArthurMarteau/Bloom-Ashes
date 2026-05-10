@@ -117,6 +117,30 @@ public class EntityRegistry : MonoBehaviour
     }
 
     // Enregistre qu'une unité est en train de quitter une case (Lerp pas encore terminé)
+    // Tente de reserver une position de maniere atomique. Arbitre par InstanceID si conflit meme frame.
+    // Le plus petit InstanceID gagne. Retourne true si la reservation est acquise.
+    public bool TryClaimPosition(GameObject go, Vector2Int cell)
+    {
+        if (go == null) return false;
+        if (positionToUnit.TryGetValue(cell, out var existing) && existing != null && existing != go)
+        {
+            if (go.GetInstanceID() < existing.GetInstanceID())
+            {
+                if (logicalPositions.TryGetValue(existing, out var existingPos) && existingPos == cell)
+                    logicalPositions.Remove(existing);
+                if (logicalPositions.TryGetValue(go, out var oldPos) && oldPos != cell
+                    && positionToUnit.TryGetValue(oldPos, out var rl) && rl == go)
+                    positionToUnit.Remove(oldPos);
+                logicalPositions[go] = cell;
+                positionToUnit[cell] = go;
+                return true;
+            }
+            return false;
+        }
+        UpdateLogicalPosition(go, cell);
+        return true;
+    }
+
     public void SetLeaving(GameObject go, Vector2Int position)
     {
         if (go == null) return;

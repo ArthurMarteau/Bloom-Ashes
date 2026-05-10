@@ -224,7 +224,6 @@ public class GridManager : MonoBehaviour
     // Appelé par IsWalkableFor() pour bloquer le passage à travers les bâtiments de faction
     public GameObject GetBuildingAt(Vector2Int gridPosition)
     {
-        // Aucun layer configuré → pas de bâtiments à détecter
         if (buildingLayer.value == 0)
         {
             return null;
@@ -233,6 +232,20 @@ public class GridManager : MonoBehaviour
         Vector3 worldPosition = GridToWorld(gridPosition);
         Collider2D buildingCollider = Physics2D.OverlapPoint(worldPosition, buildingLayer);
         return buildingCollider?.gameObject;
+    }
+
+    // Retourne le Nexus présent sur une position de grille (null si aucun)
+    // Utilise le layer Environment_Walkable car le Nexus n'est pas sur le layer Buildings
+    public GameObject GetNexusAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D col = Physics2D.OverlapPoint(worldPosition, LayerMask.GetMask("Environment_Walkable"));
+        if (col == null) return null;
+
+        BuildingStatsComponent stats = col.GetComponent<BuildingStatsComponent>();
+        if (stats == null || !stats.GetBaseStats().isNexus) return null;
+
+        return col.gameObject;
     }
 
     // Getter pour les dimensions de la grille
