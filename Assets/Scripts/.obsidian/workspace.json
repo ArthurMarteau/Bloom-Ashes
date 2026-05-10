@@ -185,6 +185,8 @@
   },
   "active": "7811e402c7090024",
   "lastOpenFiles": [
+    "Rootborn.prefab.meta",
+    "Rootborn.prefab",
     "Components/Units/RevertToRootbornController.cs.meta",
     "Components/Units/RevertToRootbornController.cs",
     "NEW_FEATURES_IMPLEMENTATION.md",
@@ -196,7 +198,6 @@
     "Components/UI/ProductionPanelUI.cs.meta",
     "Components/UI/ProductionPanelUI.cs",
     "Components/UI/ProductionSlotUI.cs.meta",
-    "Components/UI/ProductionSlotUI.cs",
     "claude.md"
   ]
 }

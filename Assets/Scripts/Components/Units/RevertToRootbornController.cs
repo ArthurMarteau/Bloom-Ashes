@@ -4,12 +4,16 @@ using UnityEngine;
 public class RevertToRootbornController : MonoBehaviour
 {
     [Header("Revert")]
-    [SerializeField] private GameObject rootbornPrefab;
+    [SerializeField] private GameObject budPrefab;
+    [SerializeField] private GameObject selfPrefab;
     [SerializeField] private int revertWatersapCost = 10;
     [SerializeField] private float revertAnimDuration = 1f;
 
     [Header("Debug")]
     [SerializeField] private bool debugRevert = true;
+
+    public UnitStatsData RootbornData => budPrefab?.GetComponent<BudComponent>()?.RootbornData;
+    public int RevertWatersapCost => revertWatersapCost;
 
     public BuildingStatsComponent FindAdjacentNexus()
     {
@@ -87,9 +91,15 @@ public class RevertToRootbornController : MonoBehaviour
 
         int teamID = teamComponent.GetTeamID();
 
-        if (rootbornPrefab == null)
+        if (budPrefab == null)
         {
-            LogError("ExecuteRevert - rootbornPrefab non assigne");
+            LogError("ExecuteRevert - budPrefab non assigne");
+            yield break;
+        }
+
+        if (selfPrefab == null)
+        {
+            LogError("ExecuteRevert - selfPrefab non assigne");
             yield break;
         }
 
@@ -132,20 +142,25 @@ public class RevertToRootbornController : MonoBehaviour
         if (unitStatsComponent != null)
             currentHP = unitStatsComponent.GetCurrentHP();
 
-        GameObject rootborn = Instantiate(rootbornPrefab, transform.position, Quaternion.identity);
+        Collider2D col = GetComponent<Collider2D>();
+        if (col != null)
+            col.enabled = false;
 
-        TeamComponent rootbornTeam = rootborn.GetComponent<TeamComponent>();
-        if (rootbornTeam != null)
-            rootbornTeam.SetTeamID(teamID);
+        GameObject budGO = Instantiate(budPrefab, transform.position, Quaternion.identity);
+        BudComponent bud = budGO.GetComponent<BudComponent>();
+        if (bud == null)
+        {
+            LogError("ExecuteRevert - budPrefab sans BudComponent");
+            Destroy(budGO);
+            yield break;
+        }
 
-        UnitStatsComponent rootbornStats = rootborn.GetComponent<UnitStatsComponent>();
-        if (rootbornStats != null)
-            rootbornStats.SetCurrentHP(currentHP);
+        bud.InitializeRevert(selfPrefab, currentHP, teamID);
 
-        Log($"ExecuteRevert - Rootborn restitue equipe {teamID}, cout {revertWatersapCost}, HP herites {currentHP}");
+        Log($"ExecuteRevert - Bud de revert cree equipe {teamID}, cout {revertWatersapCost}, HP herites {currentHP}");
 
         if (EntitySpawnManager.Instance != null)
-            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, rootborn);
+            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, budGO);
 
         Destroy(gameObject);
     }

@@ -7,6 +7,8 @@ using UnityEngine.Events;
 // Ne se déplace pas — reste sur sa tile jusqu'à l'éclosion ou l'annulation
 public class BudComponent : MonoBehaviour
 {
+    private const float RevertFallbackBuildTime = 10f;
+
     [Header("Prefabs")]
     [Tooltip("Prefab du Rootborn restitué si la production est annulée")]
     [SerializeField] private GameObject rootbornPrefab;
@@ -17,6 +19,9 @@ public class BudComponent : MonoBehaviour
 
     // Unité en cours de production — assignée via Initialize
     private UnitStatsData unitInProduction;
+
+    private GameObject sourcePrefab;
+    private float productionBuildTime;
 
     // Équipe propriétaire — propagée à l'unité finale et au Rootborn de repli
     private int teamID;
@@ -36,15 +41,16 @@ public class BudComponent : MonoBehaviour
     {
         get
         {
-            if (unitInProduction == null || unitInProduction.buildTime <= 0f)
+            if (productionBuildTime <= 0f)
                 return 1f;
 
-            return Mathf.Clamp01(elapsedTime / unitInProduction.buildTime);
+            return Mathf.Clamp01(elapsedTime / productionBuildTime);
         }
     }
 
     // Retourne le ScriptableObject de l'unité en production, pour l'affichage du portrait UI
     public UnitStatsData UnitInProduction => unitInProduction;
+    public UnitStatsData RootbornData => rootbornPrefab?.GetComponent<UnitStatsComponent>()?.GetBaseStats();
 
     // Durée de l'animation Hatching — exposée pour synchronisation des VFX
     public float HatchingDuration => hatchingDuration;
@@ -54,27 +60,26 @@ public class BudComponent : MonoBehaviour
     public void Initialize(UnitStatsData unitData, int currentHP, int team)
     {
         unitInProduction = unitData;
+        sourcePrefab = null;
+        productionBuildTime = GetBuildTime(unitInProduction);
         teamID = team;
         elapsedTime = 0f;
         isCancelled = false;
 
-        // Propagation des HP du Rootborn au BuildingStatsComponent du Bud si présent
-        // Permet au Bud d'être damageable avec les HP restants du Rootborn
-        BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
-        if (buildingStats != null)
-            buildingStats.SetCurrentHP(currentHP);
+        PrepareBud(currentHP);
+        StartCoroutine(ProductionRoutine());
+    }
 
-        // Correction 3 : enregistrement dans GridManager — active le Collider2D pour que GetBuildingAt détecte le Bud
-        // Le Bud doit être sur le layer Buildings (8) dans le prefab pour être visible par GridManager
-        Collider2D budCollider = GetComponent<Collider2D>();
-        if (budCollider != null)
-            budCollider.enabled = true;
+    public void InitializeRevert(GameObject sourcePrefab, int currentHP, int team)
+    {
+        this.sourcePrefab = sourcePrefab;
+        teamID = team;
+        elapsedTime = 0f;
+        isCancelled = false;
+        unitInProduction = RootbornData;
+        productionBuildTime = GetBuildTime(unitInProduction);
 
-        // Animation d'attente pendant le buildTime
-        Animator animator = GetComponent<Animator>();
-        if (animator != null)
-            animator.Play("Idle");
-
+        PrepareBud(currentHP);
         StartCoroutine(ProductionRoutine());
     }
 
@@ -82,7 +87,7 @@ public class BudComponent : MonoBehaviour
     private IEnumerator ProductionRoutine()
     {
         // Attente active — incrémentation manuelle pour exposer Progress à l'UI
-        while (elapsedTime < unitInProduction.buildTime)
+        while (elapsedTime < productionBuildTime)
         {
             if (isCancelled) yield break;
 
@@ -104,6 +109,13 @@ public class BudComponent : MonoBehaviour
         yield return new WaitForSeconds(hatchingDuration);
 
         if (isCancelled) yield break;
+
+        if (unitInProduction == null)
+        {
+            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : ProductionRoutine — unitInProduction null, spawn final impossible");
+            Destroy(gameObject);
+            yield break;
+        }
 
         SpawnFinalUnit();
     }
@@ -158,35 +170,59 @@ public class BudComponent : MonoBehaviour
         if (budCollider != null)
             budCollider.enabled = false;
 
-        // Étape 3 : Validation prefab Rootborn
-        if (rootbornPrefab == null)
+        GameObject respawnPrefab = sourcePrefab != null ? sourcePrefab : rootbornPrefab;
+        if (respawnPrefab == null)
         {
-            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : Cancel — rootbornPrefab non assigné");
+            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : Cancel — prefab de respawn non assigné");
             Destroy(gameObject);
             return;
         }
 
-        // Étape 4 : Spawn Rootborn
-        GameObject rootborn = Instantiate(rootbornPrefab, transform.position, Quaternion.identity);
+        GameObject respawned = Instantiate(respawnPrefab, transform.position, Quaternion.identity);
 
-        // Étape 5 : Propagation équipe
-        TeamComponent rootbornTeam = rootborn.GetComponent<TeamComponent>();
-        if (rootbornTeam != null)
-            rootbornTeam.SetTeamID(teamID);
+        TeamComponent t = respawned.GetComponent<TeamComponent>();
+        if (t != null)
+            t.SetTeamID(teamID);
 
-        // Étape 6 : Propagation HP du Bud au Rootborn
-        UnitStatsComponent rootbornStats = rootborn.GetComponent<UnitStatsComponent>();
-        if (rootbornStats != null && budCurrentHP > 0)
-            rootbornStats.SetCurrentHP(budCurrentHP);
+        if (sourcePrefab != null)
+        {
+            UnitStatsComponent stats = respawned.GetComponent<UnitStatsComponent>();
+            if (stats != null && budCurrentHP > 0)
+                stats.SetCurrentHP(budCurrentHP);
+        }
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — Rootborn restitué ({budCurrentHP} HP)");
+        Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)");
 
         // Étape 7 : Notifie le système de remplacement
         if (EntitySpawnManager.Instance != null)
-            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, rootborn);
+            EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, respawned);
 
         // Étape 8 : Destruction Bud
         Destroy(gameObject);
+    }
+
+    private void PrepareBud(int currentHP)
+    {
+        // Propagation des HP au BuildingStatsComponent du Bud si présent
+        BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
+        if (buildingStats != null)
+            buildingStats.SetCurrentHP(currentHP);
+
+        Collider2D budCollider = GetComponent<Collider2D>();
+        if (budCollider != null)
+            budCollider.enabled = true;
+
+        Animator animator = GetComponent<Animator>();
+        if (animator != null)
+            animator.Play("Idle");
+    }
+
+    private float GetBuildTime(UnitStatsData unitData)
+    {
+        if (unitData == null || unitData.buildTime <= 0f)
+            return RevertFallbackBuildTime;
+
+        return unitData.buildTime;
     }
 
     // Affiche l'état courant de la production depuis l'éditeur
@@ -199,6 +235,6 @@ public class BudComponent : MonoBehaviour
             return;
         }
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedTime:F1}s / {unitInProduction.buildTime:F1}s) | Annulé : {isCancelled}");
+        Debug.Log($"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedTime:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}");
     }
 }

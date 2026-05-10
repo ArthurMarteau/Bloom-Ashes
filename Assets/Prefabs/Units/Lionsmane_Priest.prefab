@@ -295,7 +295,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d8900877775e6c349aa341b54bbbc825, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::RevertToRootbornController
-  rootbornPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+  budPrefab: {fileID: 1139703711428364788, guid: a8caf4a22cb770c4bb7735c35d3ceba5, type: 3}
+  selfPrefab: {fileID: 6748851485159956997}
   revertWatersapCost: 10
   revertAnimDuration: 1
   debugRevert: 1
