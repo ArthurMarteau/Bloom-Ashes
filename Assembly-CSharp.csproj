@@ -69,7 +69,6 @@
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapStockUI.cs" />
-    <Compile Include="Assets\Scripts\Components\Units\RevertToRootbornController.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
@@ -89,6 +88,7 @@
     <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipTrigger.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\TransformationController.cs" />
     <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SpawnRootbornAbility.cs" />
@@ -103,7 +103,6 @@
     <Compile Include="Assets\Scripts\Systems\WatersapSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />
     <Compile Include="Assets\Scripts\Components\Units\MovementController.cs" />
-    <Compile Include="Assets\Scripts\Components\Units\RootbornProductionController.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Players\PlayerData.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SpriteFlashController.cs" />

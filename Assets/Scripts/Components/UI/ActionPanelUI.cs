@@ -1,6 +1,5 @@
 using System.Collections;
 using System.Collections.Generic;
-using System.Reflection;
 using UnityEngine;
 
 // Panneau d'actions affiché selon la sélection courante — deux contextes mutuellement exclusifs :
@@ -33,11 +32,11 @@ public class ActionPanelUI : MonoBehaviour
     private Coroutine showAnimationCoroutine;
     private MovementController trackedMovementController;
     private BuildingStatsComponent trackedBuilding;
-    private GameObject currentRootborn;
+    private GameObject currentTransformUnit;
     private int trackedTeamID;
 
     // Enum interne pour savoir quel contexte est actif
-    private enum PanelContext { None, Production, Revert, Upgrade }
+    private enum PanelContext { None, Production, Upgrade }
     private PanelContext currentContext = PanelContext.None;
 
     // Trouve le SelectionManager et s'abonne à ses events
@@ -78,7 +77,7 @@ public class ActionPanelUI : MonoBehaviour
     // === CONTEXTE PRODUCTION ===
 
     // Reçoit la liste des unités sélectionnées
-    // Affiche le panneau uniquement si 1 Rootborn avec RootbornProductionController est sélectionné
+    // Affiche le panneau uniquement si 1 unité avec TransformationController et un bâtiment compatible est sélectionnée
     private void HandleUnitsSelected(List<GameObject> units)
     {
         if (units == null || units.Count != 1)
@@ -88,45 +87,31 @@ public class ActionPanelUI : MonoBehaviour
         }
 
         GameObject unit = units[0];
-        RootbornProductionController pc = unit.GetComponent<RootbornProductionController>();
-
-        if (pc != null)
-        {
-            currentRootborn = unit;
-            currentContext = PanelContext.Production;
-
-            SubscribeMovementEvents(currentRootborn);
-
-            RefreshPanel();
-            return;
-        }
-
-        RevertToRootbornController rc = unit.GetComponent<RevertToRootbornController>();
-        if (rc == null || rc.FindAdjacentNexus() == null)
+        TransformationController tc = unit.GetComponent<TransformationController>();
+        if (tc == null || tc.FindAdjacentCompatibleBuilding() == null)
         {
             HidePanel();
             return;
         }
 
-        currentRootborn = unit;
-        currentContext = PanelContext.Revert;
+        currentTransformUnit = unit;
+        currentContext = PanelContext.Production;
 
-        SubscribeMovementEvents(currentRootborn);
+        SubscribeMovementEvents(currentTransformUnit);
 
         RefreshPanel();
     }
 
-    // Met à jour les slots de production selon le bâtiment adjacent au Rootborn
+    // Met à jour les slots de transformation selon le bâtiment compatible adjacent
     private void RefreshProduction()
     {
-        RootbornProductionController pc = currentRootborn.GetComponent<RootbornProductionController>();
-        if (pc == null) { HidePanel(); return; }
+        TransformationController tc = currentTransformUnit.GetComponent<TransformationController>();
+        if (tc == null) { HidePanel(); return; }
 
-        BuildingStatsComponent building = pc.FindAdjacentFactionBuilding();
+        BuildingStatsComponent building = tc.FindAdjacentCompatibleBuilding();
         if (building == null) { HidePanel(); return; }
 
         List<UnitStatsData> allUnits = building.GetBaseStats().producibleUnits;
-        int teamID = currentRootborn.GetComponent<TeamComponent>()?.GetTeamID() ?? 0;
 
         ShowPanel();
 
@@ -145,50 +130,15 @@ public class ActionPanelUI : MonoBehaviour
 
             if (unitData.tierRequired > building.GetCurrentTier())
                 state = ProductionSlotUI.SlotState.Locked;
-            else if (WatersapManager.Instance != null && !WatersapManager.Instance.CanSpend(teamID, unitData.watersapCost))
+            else if (!tc.CanTransform(unitData))
                 state = ProductionSlotUI.SlotState.NotEnoughWatersap;
             else
                 state = ProductionSlotUI.SlotState.Available;
 
-            slots[i].Setup(unitData, state, (ud) => { pc.ExecuteTransform(ud); HidePanel(); });
+            slots[i].Setup(unitData, state, (ud) => { tc.ExecuteTransform(ud); HidePanel(); });
         }
 
         Debug.Log($"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}");
-    }
-
-    // === CONTEXTE REVERT ===
-
-    // Met à jour l'unique slot de re-transformation vers Rootborn
-    private void RefreshRevert()
-    {
-        RevertToRootbornController rc = currentRootborn.GetComponent<RevertToRootbornController>();
-        if (rc == null) { HidePanel(); return; }
-        if (rc.FindAdjacentNexus() == null) { HidePanel(); return; }
-
-        UnitStatsData rootbornData = GetRootbornData(rc);
-        if (rootbornData == null) { HidePanel(); return; }
-
-        int revertWatersapCost = GetRevertWatersapCost(rc);
-        ProductionSlotUI.SlotState state = rc.CanRevert()
-            ? ProductionSlotUI.SlotState.Available
-            : ProductionSlotUI.SlotState.NotEnoughWatersap;
-
-        ShowPanel();
-
-        for (int i = 0; i < slots.Count; i++)
-        {
-            if (slots[i] == null) continue;
-
-            if (i > 0)
-            {
-                slots[i].gameObject.SetActive(false);
-                continue;
-            }
-
-            slots[i].Setup(rootbornData, state, (_) => { rc.ExecuteRevert(); HidePanel(); }, revertWatersapCost);
-        }
-
-        Debug.Log($"🌿 ActionPanelUI : revert — slot Rootborn ({state}, coût {revertWatersapCost})");
     }
 
     // === CONTEXTE UPGRADE ===
@@ -269,11 +219,7 @@ public class ActionPanelUI : MonoBehaviour
         switch (currentContext)
         {
             case PanelContext.Production:
-                if (currentRootborn != null) RefreshProduction();
-                else HidePanel();
-                break;
-            case PanelContext.Revert:
-                if (currentRootborn != null) RefreshRevert();
+                if (currentTransformUnit != null) RefreshProduction();
                 else HidePanel();
                 break;
             case PanelContext.Upgrade:
@@ -293,7 +239,7 @@ public class ActionPanelUI : MonoBehaviour
     {
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
-        currentRootborn = null;
+        currentTransformUnit = null;
         trackedBuilding = null;
         currentContext = PanelContext.None;
         HidePanel();
@@ -338,30 +284,6 @@ public class ActionPanelUI : MonoBehaviour
         if (trackedBuilding == null) return;
         trackedBuilding.OnTierUpgraded.RemoveListener(RefreshPanel);
         trackedBuilding = null;
-    }
-
-    private UnitStatsData GetRootbornData(RevertToRootbornController rc)
-    {
-        PropertyInfo rootbornDataProperty = typeof(RevertToRootbornController).GetProperty("RootbornData", BindingFlags.Instance | BindingFlags.Public);
-        if (rootbornDataProperty != null)
-            return rootbornDataProperty.GetValue(rc) as UnitStatsData;
-
-        FieldInfo rootbornPrefabField = typeof(RevertToRootbornController).GetField("rootbornPrefab", BindingFlags.Instance | BindingFlags.NonPublic);
-        GameObject rootbornPrefab = rootbornPrefabField?.GetValue(rc) as GameObject;
-        return rootbornPrefab?.GetComponent<UnitStatsComponent>()?.GetBaseStats();
-    }
-
-    private int GetRevertWatersapCost(RevertToRootbornController rc)
-    {
-        PropertyInfo costProperty = typeof(RevertToRootbornController).GetProperty("RevertWatersapCost", BindingFlags.Instance | BindingFlags.Public);
-        if (costProperty != null && costProperty.GetValue(rc) is int cost)
-            return cost;
-
-        FieldInfo costField = typeof(RevertToRootbornController).GetField("revertWatersapCost", BindingFlags.Instance | BindingFlags.NonPublic);
-        if (costField != null && costField.GetValue(rc) is int fieldCost)
-            return fieldCost;
-
-        return 10;
     }
 
     // === SHOW / HIDE / ANIMATION ===

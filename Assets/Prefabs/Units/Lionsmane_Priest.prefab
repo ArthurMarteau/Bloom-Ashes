@@ -19,7 +19,7 @@ GameObject:
   - component: {fileID: 5287361853722055822}
   - component: {fileID: 2694821521384234998}
   - component: {fileID: 1250078506834736326}
-  - component: {fileID: 1826780472243906342}
+  - component: {fileID: -4566789274353546013}
   m_Layer: 9
   m_Name: Lionsmane_Priest
   m_TagString: GroundUnit
@@ -283,7 +283,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HighlightTarget
   outlineMaterial: {fileID: 0}
   outlineSize: 2
---- !u!114 &1826780472243906342
+--- !u!114 &-4566789274353546013
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -292,11 +292,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 6748851485159956997}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: d8900877775e6c349aa341b54bbbc825, type: 3}
+  m_Script: {fileID: 11500000, guid: 0ba5f88d1b88f2245ae551938c1cd430, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::RevertToRootbornController
+  m_EditorClassIdentifier: Assembly-CSharp::TransformationController
   budPrefab: {fileID: 1139703711428364788, guid: a8caf4a22cb770c4bb7735c35d3ceba5, type: 3}
   selfPrefab: {fileID: 6748851485159956997}
-  revertWatersapCost: 10
-  revertAnimDuration: 1
-  debugRevert: 1
+  transformAnimDuration: 1
+  debugTransform: 1

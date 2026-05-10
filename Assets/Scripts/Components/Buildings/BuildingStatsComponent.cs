@@ -25,6 +25,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
 
     // État runtime
     private int currentHP;
+    private int runtimeMaxHP;
     private bool isDestroyed = false;
     private int currentTier = 1;
 
@@ -38,7 +39,8 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
             return;
         }
 
-        currentHP = baseStats.maxHP;
+        runtimeMaxHP = baseStats.maxHP;
+        currentHP = runtimeMaxHP;
         teamComponent = GetComponent<TeamComponent>();
 
         if (teamComponent == null)
@@ -99,7 +101,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"💥 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): {damage} dégâts (effectif: {effectiveDamage}) → HP: {currentHP}/{baseStats.maxHP}");
+            Debug.Log($"💥 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): {damage} dégâts (effectif: {effectiveDamage}) → HP: {currentHP}/{GetMaxHP()}");
         }
 
         OnDamaged?.Invoke();
@@ -120,14 +122,14 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
 
         int previousHP = currentHP;
-        currentHP = Mathf.Min(currentHP + amount, baseStats.maxHP);
+        currentHP = Mathf.Min(currentHP + amount, GetMaxHP());
         int actualHealing = currentHP - previousHP;
 
         if (actualHealing > 0)
         {
             if (debugStats)
             {
-                Debug.Log($"💚 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Soigné de {actualHealing} → HP: {currentHP}/{baseStats.maxHP}");
+                Debug.Log($"💚 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Soigné de {actualHealing} → HP: {currentHP}/{GetMaxHP()}");
             }
             OnHealed?.Invoke();
         }
@@ -143,14 +145,15 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     public int GetMaxHP()
     {
         if (baseStats == null) return 1;
-        return baseStats.maxHP;
+        return Mathf.Max(1, runtimeMaxHP);
     }
 
     // Retourne le pourcentage de vie (0.0 à 1.0)
     public float GetHealthPercentage()
     {
-        if (baseStats == null || baseStats.maxHP <= 0) return 0f;
-        return (float)currentHP / baseStats.maxHP;
+        int maxHP = GetMaxHP();
+        if (maxHP <= 0) return 0f;
+        return (float)currentHP / maxHP;
     }
 
     // Vérifie si le bâtiment est détruit
@@ -310,7 +313,14 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     public void SetCurrentHP(int hp)
     {
         if (baseStats == null) return;
-        currentHP = Mathf.Clamp(hp, 0, baseStats.maxHP);
+        currentHP = Mathf.Clamp(hp, 0, GetMaxHP());
+    }
+
+    public void SetMaxHP(int maxHP)
+    {
+        if (baseStats == null) return;
+        runtimeMaxHP = Mathf.Max(1, maxHP);
+        currentHP = Mathf.Clamp(currentHP, 0, runtimeMaxHP);
     }
 
     // Retourne la taille du bâtiment en tiles (X, Y)
@@ -336,7 +346,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
 
         Debug.Log($"=== BuildingStatsComponent Debug - {gameObject.name} ===");
         Debug.Log($"Nom: {baseStats.buildingName}");
-        Debug.Log($"HP: {currentHP}/{baseStats.maxHP} ({GetHealthPercentage() * 100:F1}%)");
+        Debug.Log($"HP: {currentHP}/{GetMaxHP()} ({GetHealthPercentage() * 100:F1}%)");
         Debug.Log($"Défense: {baseStats.defense}");
         Debug.Log($"Invulnérable: {baseStats.isInvulnerable}");
         Debug.Log($"Équipe: {(teamComponent != null ? teamComponent.GetTeamID() : 0)}");

@@ -14,6 +14,9 @@ public class VFXManager : MonoBehaviour
     [Tooltip("Données VFX jouées lors du spawn d'un Rootborn par un Nexus")]
     [SerializeField] private VFXData rootbornSpawnVFX;
 
+    [Tooltip("VFX joué sur l'unité de combat qui se transforme en Bud (revert vers Rootborn)")]
+    [SerializeField] private VFXData unitRevertVFX;
+
     // Initialisation du singleton
     private void Awake()
     {
@@ -62,6 +65,19 @@ public class VFXManager : MonoBehaviour
     {
         if (oldEntity == null || newEntity == null) return;
 
+        // Unité combat → Bud : flash fade-out sur l'unité source avant destruction
+        bool oldIsUnit = oldEntity.GetComponent<UnitStatsComponent>() != null
+                      && oldEntity.GetComponent<BudComponent>() == null
+                      && oldEntity.GetComponent<RootbornStockComponent>() == null;
+        bool newIsBud = newEntity.GetComponent<BudComponent>() != null;
+
+        if (oldIsUnit && newIsBud && unitRevertVFX != null)
+        {
+            VFXPlayer.PlayAt(unitRevertVFX, oldEntity.transform.position);
+            if (unitRevertVFX.useSpriteFlash) ApplySpawnFlash(newEntity, unitRevertVFX);
+            if (unitRevertVFX.useScaleUp) ApplyScaleUp(newEntity, unitRevertVFX);
+        }
+
         // Cas Rootborn → Bud : abonnement à l'event de Hatching pour déclencher le flash fade-in
         BudComponent newBud = newEntity.GetComponent<BudComponent>();
         if (newBud != null)
@@ -75,7 +91,7 @@ public class VFXManager : MonoBehaviour
         if (!oldEntityIsBud) return;
 
         // Cas annulation Bud → Rootborn : applique le même VFX que le spawn Nexus → Rootborn
-        bool newEntityIsRootborn = newEntity.GetComponent<RootbornProductionController>() != null;
+        bool newEntityIsRootborn = newEntity.GetComponent<RootbornStockComponent>() != null;
         if (newEntityIsRootborn)
         {
             PlayRootbornSpawnVFX(newEntity);
@@ -223,6 +239,19 @@ public class VFXManager : MonoBehaviour
     }
 
     // Méthode publique pour jouer un VFX arbitraire depuis d'autres systèmes
+    public void PlayUnitRevertStartVFX(GameObject unit)
+    {
+        if (unitRevertVFX == null || unit == null) return;
+
+        if (unitRevertVFX.useSpriteFlash)
+        {
+            SpriteFlashController flash = unit.GetComponent<SpriteFlashController>()
+                ?? unit.AddComponent<SpriteFlashController>();
+            flash.SetFlashAmount(0f);
+            flash.FadeIn(unitRevertVFX.flashFadeDuration, unitRevertVFX.flashFadeCurve);
+        }
+    }
+
     public void PlayVFX(VFXData data, Vector3 position, Transform attach = null)
     {
         if (data == null)

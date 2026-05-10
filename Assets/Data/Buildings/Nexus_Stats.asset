@@ -24,5 +24,5 @@ MonoBehaviour:
   producibleUnits:
   - {fileID: 11400000, guid: 4e864d1c8ba716c4980b12c563a810aa, type: 2}
   maxTier: 1
-  buildingPrefab: {fileID: 0}
+  buildingPrefab: {fileID: 4508941942871767497, guid: 4290549b7a8414f48b8f0fbf71cfa873, type: 3}
   abilityData: {fileID: 11400000, guid: f64b960648fba2f4b8a83ffd55a3746f, type: 2}
