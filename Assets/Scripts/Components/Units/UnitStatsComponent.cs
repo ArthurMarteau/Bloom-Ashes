@@ -5,7 +5,7 @@ using UnityEngine.Events;
 // Pont entre ScriptableObject (données) et Systems (logique)
 // Responsable du cycle de vie Unity (events, intégration composants)
 // Interface principale pour le système de combat
-public class UnitStatsComponent : MonoBehaviour
+public class UnitStatsComponent : MonoBehaviour, IDamageable
 {
     [Header("Stats Data")]
     [SerializeField] private UnitStatsData baseStats; // ScriptableObject avec stats de base
@@ -51,6 +51,25 @@ public class UnitStatsComponent : MonoBehaviour
         if (movementController != null)
         {
             movementController.SetMovementSpeed(baseStats.moveSpeed);
+        }
+
+        // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.RegisterEntity(this, gameObject);
+        }
+        else if (debugStats)
+        {
+            Debug.LogWarning($"⚠️ UnitStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré");
+        }
+    }
+
+    // Désenregistre l'unité de l'EntityRegistry lors de la destruction
+    private void OnDestroy()
+    {
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.UnregisterEntity(gameObject);
         }
     }
 
@@ -101,6 +120,58 @@ public class UnitStatsComponent : MonoBehaviour
                 animatorController.PlayHitAnimation(attackerPos, victimPos);
             }
         }
+
+        // Déclenche une riposte automatique si l'attaquant est une cible ennemie valide
+        if (attacker == null)
+        {
+            return;
+        }
+
+        IDamageable attackerDamageable = attacker.GetComponent<IDamageable>();
+        if (attackerDamageable == null || attackerDamageable.IsDead() || attackerDamageable.IsInvulnerable())
+        {
+            return;
+        }
+
+        ITeamMember localTeamMember = GetComponent<ITeamMember>();
+        ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
+        if (localTeamMember == null || attackerTeamMember == null || !localTeamMember.IsEnemy(attackerTeamMember))
+        {
+            return;
+        }
+
+        AttackController attackController = GetComponent<AttackController>();
+        if (attackController == null || !attackController.enabled)
+        {
+            return;
+        }
+
+        if (attackController.IsAttacking())
+        {
+            return;
+        }
+
+        if (attackController.HasManualOrder())
+        {
+            return;
+        }
+
+        ChaseController chaseController = GetComponent<ChaseController>();
+        bool isChasing = chaseController != null && chaseController.IsChasing();
+        MovementController movementController = GetComponent<MovementController>();
+        if (movementController != null &&
+            movementController.GetCurrentState() == MovementController.MovementState.Moving &&
+            !isChasing)
+        {
+            return;
+        }
+
+        attackController.InterruptChaseAndAttack(attacker);
+
+        if (debugStats)
+        {
+            Debug.Log($"⚔️ Riposte auto sur {attacker.name}");
+        }
     }
 
     // Soigne l'unité d'un certain montant
@@ -128,6 +199,20 @@ public class UnitStatsComponent : MonoBehaviour
         }
     }
 
+    // Définit directement les HP actuels (utilisé pour propagation HP Bud→Rootborn, etc.)
+    // Clampe automatiquement entre 0 et maxHP
+    public void SetCurrentHP(int hp)
+    {
+        if (isDead) return;
+
+        currentHP = Mathf.Clamp(hp, 0, baseStats.maxHP);
+
+        if (debugStats)
+        {
+            Debug.Log($"UnitStatsComponent {gameObject.name}: HP définis à {currentHP}/{baseStats.maxHP}");
+        }
+    }
+
     // Gère la mort de l'unité
     // Déclenche l'événement OnDeath et désactive les composants
     private void Die()
@@ -149,6 +234,12 @@ public class UnitStatsComponent : MonoBehaviour
 
         // Désactive les composants de gameplay
         DisableGameplayComponents();
+
+        // Libère la case logique immédiatement — autres unités peuvent traverser le cadavre
+        if (EntityRegistry.Instance != null)
+        {
+            EntityRegistry.Instance.ReleaseLogicalPosition(gameObject);
+        }
 
         // Abaisse le sprite pour qu'il soit derrière les unités vivantes
         SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
@@ -242,7 +333,6 @@ public class UnitStatsComponent : MonoBehaviour
     }
 
     // Retourne les dégâts d'attaque de base
-    // NOTE: Dans Phase 3, passera par StatsModifierSystem pour buffs/debuffs
     public int GetAttackDamage()
     {
         if (baseStats == null) return 0;
@@ -289,6 +379,13 @@ public class UnitStatsComponent : MonoBehaviour
         return !isDead;
     }
 
+    // Les unités ne sont jamais invulnérables — implémentation du contrat IDamageable
+    // Seuls certains bâtiments (ex: Nexus) peuvent l'être via BuildingStatsData.isInvulnerable
+    public bool IsInvulnerable()
+    {
+        return false;
+    }
+
     // Retourne si l'unité est un Rootborn (lu depuis le ScriptableObject)
     public bool IsRootborn()
     {
@@ -296,52 +393,10 @@ public class UnitStatsComponent : MonoBehaviour
         return baseStats.isRootborn;
     }
 
-    // === SETTERS PUBLICS (pour buffs/debuffs futurs via SO override temporaire) ===
-    // NOTE: Phase 3 remplacera ces setters par StatsModifierSystem
-
-    // Modifie les HP max temporairement
-    public void SetMaxHP(int newMaxHP)
+    // Retourne le ScriptableObject de stats (utilisé par UnitTypeHelper)
+    public UnitStatsData GetBaseStats()
     {
-        int clampedMaxHP = statsLogic.ClampStat(newMaxHP, 1, int.MaxValue);
-        
-        // Crée une copie runtime du SO pour modifier sans affecter l'asset
-        if (baseStats != null)
-        {
-            // TODO Phase 3: Utiliser StatsModifierSystem au lieu de modification directe
-            Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetMaxHP utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-        }
-    }
-
-    // Modifie l'attaque temporairement
-    public void SetAttackDamage(int newAttack)
-    {
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetAttackDamage utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-    }
-
-    // Modifie la défense temporairement
-    public void SetDefense(int newDefense)
-    {
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetDefense utilisé - sera remplacé par StatsModifierSystem en Phase 3");
-    }
-
-    // Modifie la vitesse de déplacement
-    public void SetMoveSpeed(float newSpeed)
-    {
-        float clampedSpeed = statsLogic.ClampStat(newSpeed, 0.1f, float.MaxValue);
-
-        // Met à jour MovementController
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
-        {
-            movementController.SetMovementSpeed(clampedSpeed);
-        }
-
-        if (debugStats)
-        {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: Vitesse modifiée -> {clampedSpeed}");
-        }
-
-        Debug.LogWarning($"UnitStatsComponent {gameObject.name}: SetMoveSpeed utilisé - sera remplacé par StatsModifierSystem en Phase 3");
+        return baseStats;
     }
 
     // === MÉTHODES DE DEBUG ===
@@ -387,19 +442,4 @@ public class UnitStatsComponent : MonoBehaviour
         TakeDamage(20);
     }
 
-    // Test de vitesse
-    [ContextMenu("Test: Double Speed")]
-    private void TestDoubleSpeed()
-    {
-        if (baseStats == null) return;
-        SetMoveSpeed(baseStats.moveSpeed * 2f);
-    }
-
-    // Reset vitesse
-    [ContextMenu("Test: Reset Speed")]
-    private void TestResetSpeed()
-    {
-        if (baseStats == null) return;
-        SetMoveSpeed(baseStats.moveSpeed);
-    }
 }

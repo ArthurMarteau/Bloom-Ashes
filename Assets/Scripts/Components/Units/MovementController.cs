@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -9,7 +9,9 @@ public class MovementController : MonoBehaviour
 {
     [Header("Movement Settings")]
     private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
-    private float centerTolerance = 1f;      // Distance pour considérer case "atteinte"
+    private float centerTolerance = 0.1f;      // Distance pour considérer case "atteinte"
+    [SerializeField] private float retryInterval = 0.5f;     // Intervalle entre tentatives de recalcul quand bloquée
+    [SerializeField] private float detourRatioThreshold = 3f; // Ratio chemin/Chebyshev au-delà duquel le chemin est considéré absurde
 
     // Modifie la vitesse de déplacement de l'unité
     // Appelé par UnitStats pour synchroniser les stats
@@ -35,18 +37,41 @@ public class MovementController : MonoBehaviour
         Arrived     // Destination finale atteinte
     }
 
+    private enum StepResult { Completed, CollisionReturned }
+    private StepResult lastStepResult;
+    private enum StepPhase { ToAnchor, ToCenter }
+    private StepPhase currentPhase;
+
     // ========== LOGIQUE (Source de vérité) ==========
     private Vector2Int logicalPosition;           // Case actuellement occupée (STABLE)
     private Queue<Vector2Int> logicalPath;        // Chemin logique à suivre
     private MovementState currentState = MovementState.Idle;
 
     // ========== VISUEL (Présentation uniquement) ==========
-    private Vector2Int visualTargetCell;          // Case cible du Lerp en cours
     private bool isInterpolating = false;         // Interpolation en cours
+    private Vector2Int currentCell;               // Cellule logique validée (= dernier centre atteint)
+    private Vector2Int targetCell;                // Cellule visée par step en cours
+    private Vector3 anchorWorldPos;               // Ancrage géométrique cible/franchi
+    private bool hasCrossedAnchor;                // false = phase ToAnchor, true = phase ToCenter
+    private bool isReceding = false;              // Retour en cours vers currentCell après collision/rebrousse
+    private bool recedeToCurrentRequested = false; // Rebrousse demandé après franchissement d'ancrage
+    private const float ANCHOR_EPSILON = 0.05f;
+    private const float CENTER_EPSILON = 0.05f;
 
     // ========== ÉTAT ==========
-    private bool isMoving = false;
     private Vector2Int? pendingDestination = null; // Ordre en attente pendant IdleReversed
+    private Vector2Int? finalDestination = null;  // Destination finale persistante — l'unité ne lâche jamais son ordre tant que ce champ est non-null
+    private int consecutiveCollisions = 0;     // Compteur collisions sur la même case
+    private Vector2Int lastCollisionCell;      // Dernière case ayant causé une collision
+
+    // Déclenché quand l'unité commence à se déplacer (premier step du chemin)
+    public UnityEngine.Events.UnityEvent OnMovementStarted = new();
+
+    // Déclenché quand l'unité atteint sa destination finale avec succès
+    public UnityEngine.Events.UnityEvent OnArrived = new();
+
+    // Vrai si l'unité est actuellement en mouvement
+    public bool IsMoving => currentState == MovementState.Moving;
 
     // Références cached pour performance
     private GameObject unitGameObject;
@@ -69,6 +94,8 @@ public class MovementController : MonoBehaviour
         if (GridManager.Instance != null)
         {
             logicalPosition = GridManager.Instance.WorldToGrid(transform.position);
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
+            currentCell = logicalPosition;
         }
         else
         {
@@ -87,237 +114,438 @@ public class MovementController : MonoBehaviour
     }
 
     // Interface publique principale pour demander un déplacement vers une destination
-    // Calcul TOUJOURS depuis logicalPosition (stable) pour PathFinding fiable
-    // Remplace la queue sans arrêt brutal si déjà en mouvement
+    // Calcule l'A* sur cellules et adapte le step en cours selon la phase ancrage/centre.
     public bool MoveTo(Vector2Int targetPosition)
     {
-        // Initialise logicalPosition si pas encore fait (fallback si Awake a échoué)
+        if (retryCoroutine != null)
+        {
+            StopCoroutine(retryCoroutine);
+            retryCoroutine = null;
+        }
+
         if (logicalPosition == Vector2Int.zero && GridManager.Instance != null)
         {
             logicalPosition = GridManager.Instance.WorldToGrid(transform.position);
+            currentCell = logicalPosition;
         }
 
-        // Valide que la destination est dans les limites
         if (!GridManager.Instance.IsInBounds(targetPosition))
         {
             Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} hors limites");
             return false;
         }
 
-        // Valide que la destination est accessible pour cette unité
-        if (!GridManager.Instance.IsWalkableFor(targetPosition, unitGameObject))
+        if (!IsReadyForMovement())
         {
-            Debug.LogWarning($"MovementController {gameObject.name}: Destination {targetPosition} inaccessible");
+            pendingDestination = targetPosition;
+            if (debugMovement) Debug.Log($"MovementController {gameObject.name}: ordre en attente IdleReversed");
+            return true;
+        }
+
+        if (debugMovement)
+            Debug.Log($"🔍 MoveTo {gameObject.name}: currentCell={currentCell}, target={targetPosition}, phase={(isInterpolating ? currentPhase.ToString() : "Idle")}, crossed={hasCrossedAnchor}");
+
+        pendingDestination = null;
+
+        // ===== EN COURS DE STEP =====
+        if (isInterpolating)
+        {
+            if (isReceding)
+            {
+                pendingDestination = targetPosition;
+                finalDestination = targetPosition;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/isReceding");
+                if (debugMovement) Debug.Log($"MovementController {gameObject.name}: ordre pendant recede → {targetPosition}");
+                return true;
+            }
+
+            // Phase ToAnchor : bifurcation libre dans currentCell.
+            if (!hasCrossedAnchor)
+            {
+                List<Vector2Int> path = PathFinding.FindPath(currentCell, targetPosition, unitGameObject);
+                if (path == null || path.Count == 0)
+                {
+                    if (debugMovement) Debug.LogWarning($"MovementController {gameObject.name}: pas de chemin, ordre ignoré");
+                    return false;
+                }
+
+                logicalPath.Clear();
+                foreach (var c in path) logicalPath.Enqueue(c);
+                finalDestination = targetPosition;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/ToAnchor");
+
+                Vector2Int newFirstCell = logicalPath.Peek();
+                logicalPath.Dequeue();
+                Vector2Int dir = GetDirection(currentCell, newFirstCell);
+                targetCell = newFirstCell;
+                anchorWorldPos = ComputeAnchor(currentCell, dir);
+
+                if (animatorController != null)
+                    animatorController.PlayWalkAnimation(currentCell, newFirstCell);
+
+                if (debugMovement) Debug.Log($"MovementController {gameObject.name}: bifurcation ToAnchor → {newFirstCell}");
+                return true;
+            }
+
+            // Phase ToCenter : ancrage franchi. Le centre cible est obligatoire avant nouvel ordre.
+            if (targetPosition == currentCell)
+            {
+                logicalPath.Clear();
+                pendingDestination = null;
+                finalDestination = currentCell;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/recedeToCurrent");
+                recedeToCurrentRequested = true;
+                if (debugMovement) Debug.Log($"MovementController {gameObject.name}: rebrousse vers {currentCell}");
+                return true;
+            }
+
+            pendingDestination = targetPosition;
+            finalDestination = targetPosition;
+            if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/queued");
+            if (debugMovement) Debug.Log($"MovementController {gameObject.name}: ordre en file → {targetPosition}");
+            return true;
+        }
+
+        // ===== HORS STEP =====
+        List<Vector2Int> initialPath = PathFinding.FindPath(currentCell, targetPosition, unitGameObject);
+        if (initialPath != null && initialPath.Count > 0 && IsPathAbsurd(initialPath, targetPosition))
+        {
+            if (debugMovement)
+                Debug.LogWarning($"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({initialPath.Count} steps / Chebyshev {Mathf.Max(Mathf.Abs(currentCell.x - targetPosition.x), Mathf.Abs(currentCell.y - targetPosition.y))}), ordre ignoré");
             return false;
         }
 
-        // Vérifie si l'unité est prête (pas en IdleReversed)
-        if (!IsReadyForMovement())
+        if (initialPath == null || initialPath.Count == 0)
         {
-            // Rootborn en train de sortir de terre, met l'ordre en attente
-            pendingDestination = targetPosition;
-            if (debugMovement)
-            {
-                Debug.Log($"MovementController {gameObject.name}: Ordre mis en attente pendant IdleReversed");
-            }
-            return true; // Ordre accepté mais différé
-        }
-
-        // Unité prête, exécute immédiatement
-        pendingDestination = null;
-
-        // ========== CLÉ: Calcul depuis POSITION LOGIQUE (stable) ==========
-        List<Vector2Int> path = PathFinding.FindPath(logicalPosition, targetPosition, unitGameObject);
-
-        if (path == null || path.Count == 0)
-        {
-            Debug.LogWarning($"MovementController {gameObject.name}: Pas de chemin trouvé vers {targetPosition}");
+            finalDestination = targetPosition;
+            if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep/noPath");
+            Debug.LogWarning($"MovementController {gameObject.name}: pas de chemin vers {targetPosition} — retry");
             StartRetryToDestination(targetPosition);
             return false;
         }
 
-        // Remplace la queue de chemin (pas de StopCoroutine brutal)
         logicalPath.Clear();
-        foreach (var cell in path)
-        {
-            logicalPath.Enqueue(cell);
-        }
+        finalDestination = targetPosition;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep");
+        foreach (var c in initialPath) logicalPath.Enqueue(c);
 
         if (debugMovement)
-        {
-            Debug.Log($"MovementController {gameObject.name}: Nouveau chemin de {path.Count} cases depuis {logicalPosition} vers {targetPosition}");
-        }
+            Debug.Log($"MovementController {gameObject.name}: nouveau chemin {initialPath.Count} cases depuis {currentCell} vers {targetPosition}");
 
-        // Si pas encore en interpolation, démarre la boucle
-        if (!isInterpolating)
-        {
-            isMoving = true;
-            currentState = MovementState.Moving;
-            interpolationCoroutine = StartCoroutine(InterpolationLoop());
-        }
-
+        OnMovementStarted.Invoke();
+        currentState = MovementState.Moving;
+        interpolationCoroutine = StartCoroutine(InterpolationLoop());
         return true;
     }
 
-    // Boucle principale d'interpolation
-    // Consomme la queue case par case, met à jour logicalPosition immédiatement
-    // Interpole le visuel de manière asynchrone
+    // Boucle principale d'interpolation en steps ancrage -> centre.
+    // Consomme le path cellule par cellule et ne commit la logique qu'au centre cible.
     private IEnumerator InterpolationLoop()
     {
         isInterpolating = true;
-
-        if (debugMovement)
-        {
-            Debug.Log($"MovementController {gameObject.name}: Début boucle interpolation");
-        }
+        if (debugMovement) Debug.Log($"MovementController {gameObject.name}: début boucle interpolation");
 
         while (logicalPath.Count > 0)
         {
-            // Consomme la prochaine case de la queue
             Vector2Int nextCell = logicalPath.Dequeue();
 
-            // Gestion spéciale Rootborn : IdleReversed avant PREMIER mouvement
             if (IsRootborn() && isFirstMoveOfSession)
             {
                 yield return StartCoroutine(PlayRootbornPreMovementAnimation());
                 isFirstMoveOfSession = false;
             }
 
-            // Vérifie que la case est toujours accessible
             if (!GridManager.Instance.IsWalkableFor(nextCell, unitGameObject))
             {
-                if (debugMovement)
-                {
-                    Debug.LogWarning($"MovementController {gameObject.name}: Case {nextCell} devient inaccessible");
-                }
+                if (debugMovement) Debug.LogWarning($"MovementController {gameObject.name}: case {nextCell} inaccessible");
                 HandlePathBlocked();
                 yield break;
             }
 
-            // ========== UPDATE LOGIQUE IMMÉDIATE ==========
-            Vector2Int previousLogicalPosition = logicalPosition;
-            logicalPosition = nextCell;
-            visualTargetCell = nextCell;
+            targetCell = nextCell;
+            Vector2Int direction = GetDirection(currentCell, targetCell);
+            anchorWorldPos = ComputeAnchor(currentCell, direction);
+            currentPhase = StepPhase.ToAnchor;
+            hasCrossedAnchor = false;
+
+            if (animatorController != null)
+                animatorController.PlayWalkAnimation(currentCell, targetCell);
 
             if (debugMovement)
-            {
-                Debug.Log($"MovementController {gameObject.name}: Logique {previousLogicalPosition} -> {logicalPosition}");
-            }
+                Debug.Log($"MovementController {gameObject.name}: step {currentCell} → {targetCell} via ancrage");
 
-            // Lance l'animation de marche
-            if (animatorController != null)
-            {
-                animatorController.PlayWalkAnimation(previousLogicalPosition, nextCell);
-            }
+            yield return StartCoroutine(ExecuteStep());
 
-            // Interpole le visuel (peut être interrompu par collision)
-            yield return StartCoroutine(InterpolateToCell(previousLogicalPosition, nextCell));
-
-            // Vérifie si le Lerp s'est terminé correctement
-            if (!IsAtCellCenter(nextCell))
+            if (lastStepResult == StepResult.CollisionReturned)
             {
-                if (debugMovement)
+                if (!finalDestination.HasValue) yield break;
+                Vector2Int dest = finalDestination.Value;
+                List<Vector2Int> retryPath = PathFinding.FindPath(currentCell, dest, unitGameObject);
+                if (retryPath != null && retryPath.Count > 0)
                 {
-                    Debug.LogWarning($"MovementController {gameObject.name}: Interpolation interrompue");
-                }
-                HandlePathBlocked();
-                yield break;
-            }
-        }
+                    // Reset compteur car A* propose un chemin (peut-être contournement implicite)
+                    if (targetCell == lastCollisionCell)
+                        consecutiveCollisions++;
+                    else
+                    {
+                        consecutiveCollisions = 1;
+                        lastCollisionCell = targetCell;
+                    }
 
-        // Mouvement terminé avec succès
-        OnMovementCompleted();
-        isInterpolating = false;
-    }
+                    // Si A* renvoie le MÊME premier step que la case bloquée et 2× collisions → détour
+                    if (consecutiveCollisions >= 2 && retryPath[0] == lastCollisionCell)
+                    {
+                        Vector2Int? detour = FindDetourCell(targetCell);
+                        if (detour.HasValue)
+                        {
+                            if (debugMovement)
+                                Debug.Log($"MovementController {gameObject.name}: boucle sur {targetCell} ({consecutiveCollisions}×), détour vers {detour.Value}");
+                            consecutiveCollisions = 0;
+                            List<Vector2Int> detourPath = PathFinding.FindPath(detour.Value, dest, unitGameObject);
+                            logicalPath.Clear();
+                            logicalPath.Enqueue(detour.Value);
+                            if (detourPath != null)
+                                foreach (var c in detourPath) logicalPath.Enqueue(c);
+                            continue;
+                        }
+                    }
 
-    // Interpole le visuel entre deux cases avec détection collision temps réel
-    // Gère le retour animé si case occupée pendant trajet
-    // Respecte la logique de collision existante
-    private IEnumerator InterpolateToCell(Vector2Int fromCell, Vector2Int toCell)
-    {
-        Vector3 startPosition = GridManager.Instance.GridToWorld(fromCell);
-        Vector3 targetPosition = GridManager.Instance.GridToWorld(toCell);
-
-        // Force position de départ exacte
-        transform.position = startPosition;
-
-        // Calcule la distance et le temps nécessaire
-        float distance = Vector3.Distance(startPosition, targetPosition);
-        float journeyTime = distance / movementSpeed;
-        float elapsedTime = 0f;
-
-        // Animation de déplacement par interpolation linéaire
-        while (elapsedTime < journeyTime)
-        {
-            // Vérifie qu'on n'a pas été arrêté pendant l'animation
-            if (!isMoving)
-            {
-                yield break;
-            }
-
-            // ========== DÉTECTION COLLISION TEMPS RÉEL ==========
-            if (GridManager.Instance.GetUnitAt(toCell) != null &&
-                GridManager.Instance.GetUnitAt(toCell) != unitGameObject)
-            {
-                // Case occupée → retour animé à la case précédente
-                Vector3 currentPosition = transform.position;
-
-                // Joue l'animation de marche dans la direction opposée
-                Vector2Int currentGridPos = GridManager.Instance.WorldToGrid(currentPosition);
-                if (animatorController != null)
-                {
-                    animatorController.PlayWalkAnimation(currentGridPos, fromCell);
+                    if (debugMovement) Debug.Log($"MovementController {gameObject.name}: recalcul après collision réussi vers {dest}");
+                    logicalPath.Clear();
+                    foreach (var c in retryPath) logicalPath.Enqueue(c);
+                    continue;
                 }
 
-                // Calcule le temps nécessaire pour retourner à startPosition
-                float distanceToReturn = Vector3.Distance(currentPosition, startPosition);
-                float totalDistance = Vector3.Distance(startPosition, targetPosition);
-                float returnTime = (distanceToReturn / totalDistance) * journeyTime;
-                float returnElapsed = 0f;
-
-                // Lerp de retour vers startPosition
-                while (returnElapsed < returnTime)
+                if (attackController != null)
                 {
-                    float returnProgress = returnElapsed / returnTime;
-                    transform.position = Vector3.Lerp(currentPosition, startPosition, returnProgress);
-                    returnElapsed += Time.deltaTime;
-                    yield return null;
+                    attackController.SetManualOrder(false);
+                    GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
+                    if (nearestEnemy != null)
+                    {
+                        if (debugMovement) Debug.Log($"MovementController {gameObject.name}: bloquée + ennemi à portée → auto-attaque");
+                        finalDestination = null;
+                        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = HandlePathBlocked/autoAttack");
+                        attackController.InterruptChaseAndAttack(nearestEnemy);
+                        isInterpolating = false;
+                        currentState = MovementState.Idle;
+                        yield break;
+                    }
                 }
 
-                // Force position finale exacte à startPosition
-                transform.position = startPosition;
-
-                // Restaure position logique à fromCell
-                logicalPosition = fromCell;
-
-                // Arrête l'animation de marche et retourne à Idle (sauf si en train d'attaquer)
+                isInterpolating = false;
+                currentState = MovementState.Blocked;
+                attackController?.SetManualOrder(false);
                 if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
                 {
                     animatorController.PlayIdleAnimation();
                 }
-
-                if (debugMovement)
-                {
-                    Debug.Log($"MovementController {gameObject.name}: Collision détectée, retour à {fromCell}");
-                }
-
-                HandlePathBlocked();
+                retryCoroutine = StartCoroutine(RetryPathPeriodically(dest));
                 yield break;
             }
 
-            // Calcule la progression (0 à 1)
-            float progression = elapsedTime / journeyTime;
+            // StepResult.Completed → currentCell mis à jour dans ExecuteStep.
+            consecutiveCollisions = 0;
 
-            // Interpole la position visuelle
-            transform.position = Vector3.Lerp(startPosition, targetPosition, progression);
+            // Consomme pendingDestination (rebrousse, file, ordre pendant recede, etc.).
+            if (pendingDestination.HasValue)
+            {
+                Vector2Int dest = pendingDestination.Value;
+                pendingDestination = null;
+                List<Vector2Int> newPath = PathFinding.FindPath(currentCell, dest, unitGameObject);
+                if (newPath != null && newPath.Count > 0)
+                {
+                    logicalPath.Clear();
+                    foreach (var c in newPath) logicalPath.Enqueue(c);
+                    finalDestination = dest;
+                    if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/pendingConsumed");
+                    if (debugMovement) Debug.Log($"MovementController {gameObject.name}: pending consommé → {dest}");
+                }
+            }
 
-            // Avance le temps
-            elapsedTime += Time.deltaTime;
+            if (logicalPath.Count > 0 && animatorController != null)
+                animatorController.PlayWalkAnimation(currentCell, logicalPath.Peek());
+        }
+
+        OnMovementCompleted();
+        isInterpolating = false;
+    }
+
+    // Calcule la position monde du point d'ancrage entre cell et la cellule voisine dans direction donnée.
+    private Vector3 ComputeAnchor(Vector2Int cell, Vector2Int direction)
+    {
+        Vector3 center = GridManager.Instance.GridToWorld(cell);
+        float halfSize = GridManager.Instance.GetCellSize() / 2f;
+        return center + new Vector3(direction.x * halfSize, direction.y * halfSize, 0f);
+    }
+
+    // Retourne la direction unitaire (-1/0/+1 par axe) de from vers to.
+    private Vector2Int GetDirection(Vector2Int from, Vector2Int to)
+    {
+        int dx = Mathf.Clamp(to.x - from.x, -1, 1);
+        int dy = Mathf.Clamp(to.y - from.y, -1, 1);
+        return new Vector2Int(dx, dy);
+    }
+
+    // Exécute un step en 2 phases : ToAnchor (centre courant -> ancrage), ToCenter (ancrage -> centre cible).
+    // Le commit logique se fait uniquement au passage du centre, via TryClaimPosition atomique.
+    private IEnumerator ExecuteStep()
+    {
+        Vector3 fromCenterWorld = GridManager.Instance.GridToWorld(currentCell);
+        transform.position = fromCenterWorld;
+
+        // Phase ToAnchor : déplacement libre tant que l'ancrage n'est pas franchi.
+        while (!hasCrossedAnchor)
+        {
+            if (currentState != MovementState.Moving) yield break;
+
+            Vector3 toAnchor = anchorWorldPos;
+            Vector3 dir = toAnchor - transform.position;
+            float dist = dir.magnitude;
+
+            if (dist < ANCHOR_EPSILON)
+            {
+                transform.position = toAnchor;
+                hasCrossedAnchor = true;
+                currentPhase = StepPhase.ToCenter;
+                break;
+            }
+
+            float step = movementSpeed * Time.deltaTime;
+            if (step >= dist)
+            {
+                transform.position = toAnchor;
+                hasCrossedAnchor = true;
+                currentPhase = StepPhase.ToCenter;
+                break;
+            }
+
+            transform.position += dir.normalized * step;
             yield return null;
         }
 
-        // Assure position finale exacte
-        transform.position = targetPosition;
+        // Phase ToCenter : une fois l'ancrage franchi, le centre cible est obligatoire.
+        Vector3 centerWorld = GridManager.Instance.GridToWorld(targetCell);
+        while (true)
+        {
+            if (currentState != MovementState.Moving) yield break;
+
+            if (recedeToCurrentRequested)
+            {
+                recedeToCurrentRequested = false;
+                yield return StartCoroutine(RecedeToCurrentCenter());
+                lastStepResult = StepResult.Completed;
+                yield break;
+            }
+
+            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(targetCell);
+            if (occupant != null && occupant != unitGameObject)
+            {
+                RegisterCollision(targetCell);
+                if (debugMovement) Debug.Log($"MovementController {gameObject.name}: collision targetCell {targetCell} occupée par {occupant.name}, recede");
+                yield return StartCoroutine(RecedeToCurrentCenter());
+                lastStepResult = StepResult.CollisionReturned;
+                yield break;
+            }
+
+            Vector3 toCenter = centerWorld - transform.position;
+            float dist = toCenter.magnitude;
+
+            if (dist < CENTER_EPSILON)
+            {
+                transform.position = centerWorld;
+                if (TryCommitTargetCell()) lastStepResult = StepResult.Completed;
+                else
+                {
+                    yield return StartCoroutine(RecedeToCurrentCenter());
+                    lastStepResult = StepResult.CollisionReturned;
+                }
+                yield break;
+            }
+
+            float step = movementSpeed * Time.deltaTime;
+            if (step >= dist)
+            {
+                transform.position = centerWorld;
+                if (TryCommitTargetCell()) lastStepResult = StepResult.Completed;
+                else
+                {
+                    yield return StartCoroutine(RecedeToCurrentCenter());
+                    lastStepResult = StepResult.CollisionReturned;
+                }
+                yield break;
+            }
+
+            transform.position += toCenter.normalized * step;
+            yield return null;
+        }
+    }
+
+    // Tente le commit atomique de targetCell. Met à jour currentCell et logicalPosition si succès.
+    private bool TryCommitTargetCell()
+    {
+        if (EntityRegistry.Instance == null) return false;
+        if (EntityRegistry.Instance.TryClaimPosition(unitGameObject, targetCell))
+        {
+            currentCell = targetCell;
+            logicalPosition = targetCell;
+            return true;
+        }
+        return false;
+    }
+
+    // Retour visuel position actuelle -> ancrage franchi -> centre currentCell, sans commit logique.
+    private IEnumerator RecedeToCurrentCenter()
+    {
+        isReceding = true;
+        Vector3 centerWorld = GridManager.Instance.GridToWorld(currentCell);
+
+        if (animatorController != null)
+            animatorController.PlayWalkAnimation(targetCell, currentCell);
+
+        if (hasCrossedAnchor)
+        {
+            Vector3 anchor = anchorWorldPos;
+            while (true)
+            {
+                if (currentState != MovementState.Moving) yield break;
+                Vector3 dir = anchor - transform.position;
+                float dist = dir.magnitude;
+                if (dist < ANCHOR_EPSILON) { transform.position = anchor; break; }
+                float step = movementSpeed * Time.deltaTime;
+                if (step >= dist) { transform.position = anchor; break; }
+                transform.position += dir.normalized * step;
+                yield return null;
+            }
+            hasCrossedAnchor = false;
+            currentPhase = StepPhase.ToAnchor;
+        }
+
+        while (true)
+        {
+            if (currentState != MovementState.Moving) yield break;
+            Vector3 dir = centerWorld - transform.position;
+            float dist = dir.magnitude;
+            if (dist < CENTER_EPSILON) { transform.position = centerWorld; break; }
+            float step = movementSpeed * Time.deltaTime;
+            if (step >= dist) { transform.position = centerWorld; break; }
+            transform.position += dir.normalized * step;
+            yield return null;
+        }
+        isReceding = false;
+    }
+
+    // Enregistre une collision sur targetCell pour conserver le comportement de retry progressif.
+    private void RegisterCollision(Vector2Int blockedCell)
+    {
+        if (blockedCell == lastCollisionCell)
+        {
+            consecutiveCollisions++;
+        }
+        else
+        {
+            consecutiveCollisions = 1;
+            lastCollisionCell = blockedCell;
+        }
     }
 
     // Gère la situation où le chemin devient inaccessible
@@ -325,37 +553,45 @@ public class MovementController : MonoBehaviour
     // Change l'état et démarre la coroutine de retry périodique
     private void HandlePathBlocked()
     {
-        currentState = MovementState.Blocked;
-        isMoving = false;
+        currentState = MovementState.Idle;
         isInterpolating = false;
-
-        // Vide la queue
         logicalPath.Clear();
 
         if (debugMovement)
         {
-            Debug.LogWarning($"MovementController {gameObject.name}: Chemin bloqué à {logicalPosition}");
+            Debug.LogWarning($"MovementController {gameObject.name}: Chemin bloqué à {currentCell}");
         }
 
-        // Arrête l'animation (sauf si en train d'attaquer)
         if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
         {
             animatorController.PlayIdleAnimation();
         }
 
-        // Note: Le retry est géré en externe ou peut être ajouté ici si besoin
+        if (!finalDestination.HasValue)
+        {
+            return;
+        }
+
+        // Lance retry persistant — la collision en cours de Lerp est gérée directement dans InterpolationLoop
+        currentState = MovementState.Blocked;
+        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
+        attackController?.SetManualOrder(false);
+        retryCoroutine = StartCoroutine(RetryPathPeriodically(finalDestination.Value));
     }
 
     // Appelé quand le mouvement se termine avec succès
     // Nettoie l'état et déclenche animations de fin
     private void OnMovementCompleted()
     {
-        isMoving = false;
+        finalDestination = null;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = OnMovementCompleted");
+        consecutiveCollisions = 0;
         currentState = MovementState.Arrived;
+        OnArrived.Invoke();
 
         if (debugMovement)
         {
-            Debug.Log($"MovementController {gameObject.name}: Destination {logicalPosition} atteinte");
+            Debug.Log($"MovementController {gameObject.name}: Destination {currentCell} atteinte");
         }
 
         // Vérifie si une attaque est en cours
@@ -367,7 +603,7 @@ public class MovementController : MonoBehaviour
             GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
             if (nearestEnemy != null)
             {
-                attackController.StartAttack(nearestEnemy);
+                attackController.InterruptChaseAndAttack(nearestEnemy);
                 return;
             }
         }
@@ -382,6 +618,12 @@ public class MovementController : MonoBehaviour
         currentState = MovementState.Idle;
         isFirstMoveOfSession = true;
 
+        // Lève le blocage auto-attaque — l'unité est arrivée, elle peut de nouveau auto-attaquer
+        if (attackController != null)
+        {
+            attackController.SetManualOrder(false);
+        }
+
         // Reset le flag IdleReversed dans AnimatorController pour prochain mouvement
         if (IsRootborn() && animatorController != null && !isAttacking)
         {
@@ -394,6 +636,13 @@ public class MovementController : MonoBehaviour
     // Nettoie l'état, arrête toutes les coroutines
     public void StopMovement()
     {
+        finalDestination = null;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = StopMovement");
+        pendingDestination = null;
+        recedeToCurrentRequested = false;
+        isReceding = false;
+        consecutiveCollisions = 0;
+
         // Arrête la coroutine d'interpolation
         if (interpolationCoroutine != null)
         {
@@ -411,11 +660,17 @@ public class MovementController : MonoBehaviour
         // Vide la queue
         logicalPath.Clear();
 
-        // Snap visuel à la position logique
-        transform.position = GridManager.Instance.GridToWorld(logicalPosition);
+        // Si un step est en cours, snap à currentCell (cellule logique validée).
+        if (isInterpolating)
+        {
+            logicalPosition = currentCell;
+            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, logicalPosition);
+        }
+
+        // Snap visuel à la cellule logique validée
+        transform.position = GridManager.Instance.GridToWorld(currentCell);
 
         // Remet à zéro les variables d'état
-        isMoving = false;
         isInterpolating = false;
         currentState = MovementState.Idle;
         isFirstMoveOfSession = true;
@@ -428,7 +683,7 @@ public class MovementController : MonoBehaviour
 
         if (debugMovement)
         {
-            Debug.Log($"MovementController {gameObject.name}: Mouvement arrêté à {logicalPosition}");
+            Debug.Log($"MovementController {gameObject.name}: Mouvement arrêté à {currentCell}");
         }
     }
 
@@ -458,7 +713,7 @@ public class MovementController : MonoBehaviour
     // Utilisé par AttackController et ChaseController pour calculs de distance/portée
     public Vector2Int GetCurrentGridPosition()
     {
-        return logicalPosition;
+        return currentCell;
     }
 
     // Vérifie si l'unité est prête à recevoir un nouvel ordre de mouvement
@@ -512,6 +767,8 @@ public class MovementController : MonoBehaviour
             Debug.Log($"MovementController {gameObject.name}: Retry vers {destination}");
         }
 
+        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
+        attackController?.SetManualOrder(false);
         retryCoroutine = StartCoroutine(RetryPathPeriodically(destination));
     }
 
@@ -520,40 +777,77 @@ public class MovementController : MonoBehaviour
     // Continue jusqu'à succès ou arrêt manuel
     private IEnumerator RetryPathPeriodically(Vector2Int destination)
     {
-        float retryInterval = 0.5f;
+        int emptyPathRetries = 0;
+        const int emptyPathThreshold = 2;
 
         while (true)
         {
             yield return new WaitForSeconds(retryInterval);
 
-            // Vérifie si la destination est toujours accessible
-            if (!GridManager.Instance.IsWalkableFor(destination, unitGameObject))
+            // Cherche une case accessible autour de la destination en rayon croissant (1→2→3)
+            Vector2Int? reachableTarget = FindReachableNearDestination(destination);
+            if (!reachableTarget.HasValue)
             {
                 if (debugMovement)
+                    Debug.Log($"MovementController {gameObject.name}: Aucune case accessible autour de {destination} — retry");
+                continue;
+            }
+
+            List<Vector2Int> newPath = PathFinding.FindPath(currentCell, reachableTarget.Value, unitGameObject);
+            if (newPath != null && newPath.Count > 0 && IsPathAbsurd(newPath, destination))
+            {
+                if (debugMovement)
+                    Debug.LogWarning($"MovementController {gameObject.name}: retry — chemin absurde vers {destination}, on attend");
+                continue;
+            }
+
+            if (newPath != null && newPath.Count == 0)
+            {
+                emptyPathRetries++;
+                if (emptyPathRetries >= emptyPathThreshold)
                 {
-                    Debug.Log($"MovementController {gameObject.name}: Destination {destination} toujours bloquée");
+                    Vector2Int? detour = FindDetourCell(currentCell);
+                    if (detour.HasValue)
+                    {
+                        if (debugMovement)
+                            Debug.Log($"MovementController {gameObject.name}: retry bloqué ({emptyPathRetries}× path vide), détour vers {detour.Value}");
+                        emptyPathRetries = 0;
+                        retryCoroutine = null;
+                        MoveTo(detour.Value);
+                        yield break;
+                    }
                 }
                 continue;
             }
 
-            // Tente de recalculer un chemin depuis position logique
-            List<Vector2Int> newPath = PathFinding.FindPath(logicalPosition, destination, unitGameObject);
+            if (newPath != null && newPath.Count > 0)
+                emptyPathRetries = 0;
 
             if (newPath != null && newPath.Count > 0)
             {
-                if (debugMovement)
-                {
-                    Debug.Log($"MovementController {gameObject.name}: Retry réussi, nouveau chemin trouvé");
-                }
-
-                // Arrête le retry
                 retryCoroutine = null;
-
-                // Lance le mouvement
-                MoveTo(destination);
+                Vector2Int target = pendingDestination ?? reachableTarget.Value;
+                if (debugMovement)
+                    Debug.Log($"MovementController {gameObject.name}: Retry réussi vers {target}");
+                MoveTo(target);
                 yield break;
             }
         }
+    }
+
+    // Vérifie si le chemin vers une destination est absurde (détour excessif)
+    // Retourne true si longueurChemin > distanceChebyshev * detourRatioThreshold
+    private bool IsPathAbsurd(List<Vector2Int> path, Vector2Int destination)
+    {
+        if (path == null || path.Count == 0) return false;
+
+        int chebyshev = Mathf.Max(
+            Mathf.Abs(currentCell.x - destination.x),
+            Mathf.Abs(currentCell.y - destination.y));
+
+        if (chebyshev == 0) return false;
+
+        return path.Count > chebyshev * detourRatioThreshold;
     }
 
     // Vérifie si le transform.position est au centre de la case cible
@@ -563,6 +857,123 @@ public class MovementController : MonoBehaviour
         Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(cell);
         float distance = Vector3.Distance(transform.position, cellWorldPosition);
         return distance < centerTolerance;
+    }
+
+    // Cherche une case walkable et accessible autour de destination en rayon croissant
+    // Retourne la case la plus proche de destination avec un chemin valide, null si rien trouvé
+    private Vector2Int? FindReachableNearDestination(Vector2Int destination)
+    {
+        // Rayon 0 : destination elle-même d'abord
+        if (GridManager.Instance.IsWalkableFor(destination, unitGameObject) &&
+            EntityRegistry.Instance?.GetUnitAtLogicalPosition(destination) == null)
+            return destination;
+
+        for (int radius = 1; radius <= 3; radius++)
+        {
+            Vector2Int? best = null;
+            int bestDist = int.MaxValue;
+
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius) continue; // bord du rayon uniquement
+
+                    Vector2Int cell = destination + new Vector2Int(dx, dy);
+                    if (!GridManager.Instance.IsInBounds(cell)) continue;
+                    if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject)) continue;
+
+                    GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
+                    if (occupant != null && occupant != unitGameObject) continue;
+
+                    int dist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                    if (dist < bestDist)
+                    {
+                        bestDist = dist;
+                        best = cell;
+                    }
+                }
+            }
+
+            if (best.HasValue) return best;
+        }
+
+        return null;
+    }
+
+    // Cherche une case adjacente libre pour détour, plus proche de finalDestination.
+    // Exclut la case bloquée et currentCell (on ne veut pas y revenir).
+    private Vector2Int? FindDetourCell(Vector2Int blockedCell)
+    {
+        if (!finalDestination.HasValue) return null;
+
+        Vector2Int target = finalDestination.Value;
+        Vector2Int[] offsets = {
+            new Vector2Int(-1, 0), new Vector2Int(1, 0),
+            new Vector2Int(0, 1),  new Vector2Int(0, -1),
+            new Vector2Int(-1, 1), new Vector2Int(1, 1),
+            new Vector2Int(-1,-1), new Vector2Int(1,-1)
+        };
+
+        Vector2Int? bestCell = null;
+        int bestDistance = int.MaxValue;
+
+        foreach (var off in offsets)
+        {
+            Vector2Int cell = currentCell + off;
+
+            if (cell == blockedCell) continue;
+            if (cell == currentCell) continue;
+
+            if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject)) continue;
+            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
+            if (occupant != null && occupant != unitGameObject) continue;
+
+            int dist = Mathf.Max(Mathf.Abs(cell.x - target.x), Mathf.Abs(cell.y - target.y));
+            if (dist < bestDistance)
+            {
+                bestDistance = dist;
+                bestCell = cell;
+            }
+        }
+
+        return bestCell;
+    }
+
+    // Lerp animé depuis position courante vers la case détour, met à jour logicalPosition à la fin.
+    private IEnumerator LerpToDetourCell(Vector2Int detourCell)
+    {
+        Vector3 currentPosition = transform.position;
+        Vector3 detourPosition = GridManager.Instance.GridToWorld(detourCell);
+
+        Vector2Int currentGridPos = GridManager.Instance.WorldToGrid(currentPosition);
+        if (animatorController != null)
+        {
+            animatorController.PlayWalkAnimation(currentGridPos, detourCell);
+        }
+
+        float distanceToDetour = Vector3.Distance(currentPosition, detourPosition);
+        float detourTime = distanceToDetour / movementSpeed;
+        float elapsed = 0f;
+
+        while (elapsed < detourTime)
+        {
+            if (currentState != MovementState.Moving) yield break;
+            transform.position = Vector3.Lerp(currentPosition, detourPosition, elapsed / detourTime);
+            elapsed += Time.deltaTime;
+            yield return null;
+        }
+
+        transform.position = detourPosition;
+
+        currentCell = detourCell;
+        logicalPosition = detourCell;
+        EntityRegistry.Instance?.TryClaimPosition(unitGameObject, detourCell);
+
+        if (debugMovement)
+        {
+            Debug.Log($"MovementController {gameObject.name}: Détour vers {detourCell} terminé");
+        }
     }
 
     // Callback appelé par AnimatorController quand IdleReversed se termine
@@ -585,11 +996,11 @@ public class MovementController : MonoBehaviour
     }
 
     // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
-    // Fallback sur string matching si UnitStatsComponent absent (rétrocompatibilité)
+    // Retourne false si UnitStatsComponent absent plutôt que de deviner via le nom de l'objet
     private bool IsRootborn()
     {
         if (_statsComponent != null) return _statsComponent.IsRootborn();
-        return gameObject.name.Contains("Rootborn");
+        return false;
     }
 
     // Méthode de debug pour afficher l'état du contrôleur
@@ -598,8 +1009,8 @@ public class MovementController : MonoBehaviour
     {
         Debug.Log($"=== MovementController Debug - {gameObject.name} ===");
         Debug.Log($"État: {currentState}");
-        Debug.Log($"En mouvement: {isMoving}");
-        Debug.Log($"Position LOGIQUE: {logicalPosition}");
+        Debug.Log($"En mouvement: {IsMoving}");
+        Debug.Log($"Position LOGIQUE: {currentCell}");
         Debug.Log($"Position VISUELLE: {transform.position} → {GridManager.Instance.WorldToGrid(transform.position)}");
         Debug.Log($"Queue: {logicalPath.Count} cases restantes");
         Debug.Log($"Interpolation active: {isInterpolating}");
@@ -613,7 +1024,7 @@ public class MovementController : MonoBehaviour
 
         // Dessine position logique
         Gizmos.color = Color.yellow;
-        Vector3 logicalPos = GridManager.Instance.GridToWorld(logicalPosition);
+        Vector3 logicalPos = GridManager.Instance.GridToWorld(currentCell);
         Gizmos.DrawWireCube(logicalPos, Vector3.one * 1.2f);
 
         // Dessine la queue restante
@@ -632,7 +1043,7 @@ public class MovementController : MonoBehaviour
         if (isInterpolating)
         {
             Gizmos.color = Color.red;
-            Vector3 targetPos = GridManager.Instance.GridToWorld(visualTargetCell);
+            Vector3 targetPos = GridManager.Instance.GridToWorld(targetCell);
             Gizmos.DrawWireCube(targetPos, Vector3.one * 0.8f);
         }
 
@@ -645,3 +1056,4 @@ public class MovementController : MonoBehaviour
         }
     }
 }
+

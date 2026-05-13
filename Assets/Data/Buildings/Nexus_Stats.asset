@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e3b82689d27d4f8086d8fc78a2663, type: 3}
+  m_Name: Nexus_Stats
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
+  buildingName: Nexus
+  description: Spawns Rootborn units. Reverse battle unit in Rootborn for 10 Watersap.
+  portrait: {fileID: 21300000, guid: 03a1fc1755799df40b9136655eeec95f, type: 3}
+  maxHP: 100
+  defense: 0
+  isInvulnerable: 1
+  sizeX: 1
+  sizeY: 1
+  isNexus: 1
+  producibleUnits:
+  - {fileID: 11400000, guid: 4e864d1c8ba716c4980b12c563a810aa, type: 2}
+  maxTier: 1
+  buildingPrefab: {fileID: 4508941942871767497, guid: 4290549b7a8414f48b8f0fbf71cfa873, type: 3}
+  abilityData: {fileID: 11400000, guid: f64b960648fba2f4b8a83ffd55a3746f, type: 2}

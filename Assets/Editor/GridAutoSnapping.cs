@@ -26,11 +26,30 @@ public static class GridAutoSnapping
         if (!snappingEnabled || gridManager == null)
             return;
 
+        Event e = Event.current;
+
+        if (e.type == EventType.DragPerform)
+        {
+            DragAndDrop.AcceptDrag();
+            EditorApplication.delayCall += () =>
+            {
+                if (!snappingEnabled)
+                    return;
+
+                GridManager delayedGridManager = Object.FindFirstObjectByType<GridManager>();
+                if (delayedGridManager == null)
+                    return;
+
+                foreach (Transform t in Selection.transforms)
+                {
+                    SnapTransform(t, delayedGridManager, "Snap Dropped Prefab");
+                }
+            };
+        }
+
         if (Selection.transforms.Length == 0 ||
            (Tools.current != Tool.Move && Tools.current != Tool.Rect))
             return;
-
-        Event e = Event.current;
 
         // Détecte si on est en train de drag (move)
         if (e.type == EventType.MouseDrag && e.button == 0)
@@ -43,20 +62,26 @@ public static class GridAutoSnapping
         {
             foreach (Transform t in Selection.transforms)
             {
-                Vector2Int gridPos = gridManager.WorldToGrid(t.position);
-                Vector3 snappedPos = gridManager.GridToWorld(gridPos); // Changé ici
-
-                if ((t.position - snappedPos).sqrMagnitude > 0.0001f)
-                {
-                    Undo.RecordObject(t, "Snap To Grid");
-                    t.position = snappedPos;
-                }
+                SnapTransform(t, gridManager);
             }
             wasDragging = false;
         }
     }
+
+    private static void SnapTransform(Transform t, GridManager gridManager)
+    {
+        SnapTransform(t, gridManager, "Snap To Grid");
+    }
+
+    private static void SnapTransform(Transform t, GridManager gridManager, string undoName)
+    {
+        Vector2Int gridPos = gridManager.WorldToGrid(t.position);
+        Vector3 snappedPos = gridManager.GridToWorld(gridPos);
+
+        if ((t.position - snappedPos).sqrMagnitude > 0.0001f)
+        {
+            Undo.RecordObject(t, undoName);
+            t.position = snappedPos;
+        }
+    }
 }
-
-
-
-

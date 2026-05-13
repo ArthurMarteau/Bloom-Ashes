@@ -19,15 +19,17 @@ public static class PathFinding
         public Vector2Int position;
         public int gCost; // Coût réel depuis le départ
         public int hCost; // Coût estimé vers la destination
+        public int unitTieBreakSeed;
         public int fCost => gCost + hCost; // Coût total pour priorisation
         public PathNode parent; // Nœud précédent pour reconstitution
 
-        public PathNode(Vector2Int pos)
+        public PathNode(Vector2Int pos, int seed)
         {
             position = pos;
             gCost = 0;
             hCost = 0;
             parent = null;
+            unitTieBreakSeed = seed;
         }
 
         // Compare par fCost d'abord, puis hCost en cas d'égalité (même logique que GetLowestFCostNode)
@@ -35,8 +37,12 @@ public static class PathFinding
         {
             int comparison = fCost.CompareTo(other.fCost);
             if (comparison == 0)
-            {
                 comparison = hCost.CompareTo(other.hCost);
+            if (comparison == 0)
+            {
+                int myTie = unchecked((position.x * 73856093) ^ (position.y * 19349663) ^ unitTieBreakSeed);
+                int otherTie = unchecked((other.position.x * 73856093) ^ (other.position.y * 19349663) ^ other.unitTieBreakSeed);
+                comparison = myTie.CompareTo(otherTie);
             }
             return comparison;
         }
@@ -66,6 +72,8 @@ public static class PathFinding
     // openDict (Dictionary) : lookup d'un nœud existant par position en O(1) au lieu de O(n)
     private static List<Vector2Int> ExecuteAStar(Vector2Int startPosition, Vector2Int endPosition, GameObject unit)
     {
+        int tieBreakSeed = unit != null ? unit.GetInstanceID() : 0;
+
         // MinHeap pour extraire le nœud de coût minimal en O(log n)
         MinHeap<PathNode> openList = new MinHeap<PathNode>();
         // Dictionnaire pour retrouver un nœud par position en O(1) (remplace openList.Find)
@@ -73,7 +81,7 @@ public static class PathFinding
         HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
 
         // Crée le nœud de départ et l'ajoute aux deux structures
-        PathNode startNode = CreateNode(startPosition);
+        PathNode startNode = CreateNode(startPosition, tieBreakSeed);
         startNode.hCost = CalculateHCost(startPosition, endPosition);
         openList.Insert(startNode);
         openDict[startNode.position] = startNode;
@@ -94,7 +102,7 @@ public static class PathFinding
             }
 
             // Explore tous les voisins accessibles du nœud actuel
-            List<PathNode> neighborNodes = GetNeighbors(currentNode, unit);
+            List<PathNode> neighborNodes = GetNeighbors(currentNode, unit, tieBreakSeed);
             foreach (PathNode neighborNode in neighborNodes)
             {
                 // Ignore les nœuds déjà traités définitivement
@@ -133,7 +141,7 @@ public static class PathFinding
     // Trouve tous les voisins accessibles dans les 8 directions
     // Détermine les mouvements possibles depuis la position actuelle
     // Utilise GridManager et système de tags pour vérifier l'accessibilité selon le type d'unité
-    private static List<PathNode> GetNeighbors(PathNode currentNode, GameObject unit)
+    private static List<PathNode> GetNeighbors(PathNode currentNode, GameObject unit, int seed)
     {
         List<PathNode> neighbors = new List<PathNode>();
         Vector2Int currentPosition = currentNode.position;
@@ -158,7 +166,7 @@ public static class PathFinding
             // Vérifie si la position est accessible pour cette unité via son tag
             if (GridManager.Instance.IsWalkableFor(neighborPosition, unit))
             {
-                PathNode neighborNode = CreateNode(neighborPosition);
+                PathNode neighborNode = CreateNode(neighborPosition, seed);
                 neighbors.Add(neighborNode);
             }
         }
@@ -218,15 +226,18 @@ public static class PathFinding
         // Inverse pour obtenir l'ordre départ -> arrivée
         path.Reverse();
 
+        // Supprime la case de départ — l'unité y est déjà, inutile de l'inclure
+        if (path.Count > 0) path.RemoveAt(0);
+
         Debug.Log($"Chemin reconstitué : {path.Count} étapes");
         return path;
     }
 
     // Crée un nouveau nœud temporaire pour ce calcul
     // Factory simple pour instancier des nœuds pendant l'exploration
-    private static PathNode CreateNode(Vector2Int position)
+    private static PathNode CreateNode(Vector2Int position, int seed)
     {
-        return new PathNode(position);
+        return new PathNode(position, seed);
     }
 
     // Vérifie la validité des paramètres avant de lancer le calcul
@@ -247,8 +258,10 @@ public static class PathFinding
             return false;
         }
 
-        // Vérifie que les positions sont dans les limites de la grille
-        if (!GridManager.Instance.IsInBounds(startPosition) || !GridManager.Instance.IsInBounds(endPosition))
+        // Vérifie que les positions sont dans les limites de la grille via GridSystem (calcul pur)
+        Vector2Int gridSize = GridManager.Instance.GetGridSize();
+        if (!GridSystem.IsInBounds(startPosition.x, startPosition.y, gridSize.x, gridSize.y) ||
+            !GridSystem.IsInBounds(endPosition.x, endPosition.y, gridSize.x, gridSize.y))
         {
             return false;
         }

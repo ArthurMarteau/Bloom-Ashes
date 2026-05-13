@@ -9,8 +9,10 @@ public class GridManager : MonoBehaviour
     private Vector3 gridOrigin;
 
     [Header("Layer Settings")]
-    [SerializeField] private LayerMask unitLayer = 1 << 8;      // Layer pour détecter les unités
+    [SerializeField] private LayerMask unitLayer = 1 << 9;      // Layer pour détecter les unités
     [SerializeField] private LayerMask obstacleLayer = 1 << 6;  // Layer pour détecter les obstacles
+    [SerializeField] private LayerMask buildingLayer = 1 << 8;           // Layer "Buildings" — bâtiments de faction qui bloquent le passage
+                                                                // Le Nexus reste sur Environment_Walkable et N'EST PAS dans ce mask
 
     [Header("Ground Type Configuration")]
     [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
@@ -69,49 +71,41 @@ public class GridManager : MonoBehaviour
         {
             for (int y = 0; y < gridHeight; y++)
             {
-                groundTypeGrid[x, y] = GroundType.Ground;
+                groundTypeGrid[x, y] = GroundType.Grass;
             }
         }
 
         Debug.Log("Grille de terrain initialisée avec terrain normal");
     }
 
-    // Recalcule l'origine de la grille pour centrer la grille
+    // Recalcule l'origine de la grille pour centrer la grille sur le monde
+    // Délègue le calcul à GridSystem — GridManager ne stocke que le résultat en Vector3
     private void CalculateGridOrigin()
     {
-        float originX = -gridWidth * cellSize * 0.5f;
-        float originY = -gridHeight * cellSize * 0.5f;
+        var (originX, originY) = GridSystem.CalculateOrigin(gridWidth, gridHeight, cellSize);
         gridOrigin = new Vector3(originX, originY, 0);
     }
 
     // Convertit une position Unity en coordonnées de grille
-    // Utilisé pour savoir dans quelle case se trouve un objet (unité, clic souris, bâtiment)
-    // Permet de passer du système de coordonnées Unity au système de cases du jeu
+    // Pont Unity → GridSystem : extrait les floats de Vector3, délègue le calcul pur
     public Vector2Int WorldToGrid(Vector3 worldPosition)
     {
-        Vector3 localPosition = worldPosition - gridOrigin;
-        int x = Mathf.FloorToInt(localPosition.x / cellSize);
-        int y = Mathf.FloorToInt(localPosition.y / cellSize);
-        return new Vector2Int(x, y);
+        return GridSystem.WorldToGrid(worldPosition.x, worldPosition.y, cellSize, gridOrigin.x, gridOrigin.y);
     }
 
     // Convertit des coordonnées de grille en position Unity centrée sur la case
-    // Utilisé pour placer visuellement les objets au centre exact d'une case
-    // Permet de passer du système de cases du jeu au système de coordonnées Unity
+    // Pont GridSystem → Unity : reçoit le tuple (float, float) et construit le Vector3
     public Vector3 GridToWorld(Vector2Int gridPosition)
     {
-        float x = gridPosition.x * cellSize + cellSize * 0.5f;
-        float y = gridPosition.y * cellSize + cellSize * 0.5f;
-        return gridOrigin + new Vector3(x, y, 0);
+        var (x, y) = GridSystem.GridToWorld(gridPosition.x, gridPosition.y, cellSize, gridOrigin.x, gridOrigin.y);
+        return new Vector3(x, y, 0);
     }
 
     // Vérifie si les coordonnées sont dans les limites de la grille
-    // Évite les crashes et comportements bizarres en validant chaque position avant utilisation
-    // (mouvements d'unités, clics joueur, calculs de pathfinding, placement d'objets)
+    // Pont Vector2Int → GridSystem : délègue la vérification entière pure
     public bool IsInBounds(Vector2Int coordinates)
     {
-        return coordinates.x >= 0 && coordinates.x < gridWidth &&
-               coordinates.y >= 0 && coordinates.y < gridHeight;
+        return GridSystem.IsInBounds(coordinates.x, coordinates.y, gridWidth, gridHeight);
     }
 
     // Méthode principale pour PathFinding - détermine si une case est accessible pour une unité
@@ -128,15 +122,36 @@ public class GridManager : MonoBehaviour
 
         // Règle absolue : aucune unité ne peut occuper la même case qu'une autre
         // EXCEPTION : ignore l'unité qui demande le mouvement (évite auto-blocage)
-        // IMPORTANT : Utilise GetUnitAtLogical au lieu de GetUnitAt pour détection fiable pendant Lerp
-        GameObject unitAtPosition = GetUnitAt(gridPosition);
+        // IMPORTANT : Utilise GetUnitAtLogicalPosition (EntityRegistry) pour détection fiable pendant Lerp
+        GameObject unitAtPosition = EntityRegistry.Instance != null
+            ? EntityRegistry.Instance.GetUnitAtLogicalPosition(gridPosition)
+            : GetUnitAt(gridPosition);
         if (unitAtPosition != null && unitAtPosition != unit)
         {
-            return false; // Case occupée par une AUTRE unité
+            // Si l'unité sur cette case est en train de la quitter, la case est contestable
+            if (EntityRegistry.Instance != null && EntityRegistry.Instance.IsBeingLeft(gridPosition))
+                return true;
+
+            // Si l'unité est en mouvement (elle lerpe vers cette case), la case est contestable
+            MovementController mc = unitAtPosition.GetComponent<MovementController>();
+            if (mc != null && mc.GetCurrentState() == MovementController.MovementState.Moving)
+                return true;
+
+            return false;
         }
 
         // Règle obstacles : bloquent selon les capacités de vol de l'unité
         if (GetObstacleAt(gridPosition))
+        {
+            if (!UnitTypeHelper.CanFlyOverObstacles(unit))
+            {
+                return false;
+            }
+        }
+
+        // Règle bâtiments de faction : bloquent le passage sauf pour les unités volantes
+        // Le Nexus (layer Environment_Walkable) n'est PAS détecté ici → les unités passent dessus
+        if (GetBuildingAt(gridPosition))
         {
             if (!UnitTypeHelper.CanFlyOverObstacles(unit))
             {
@@ -162,7 +177,7 @@ public class GridManager : MonoBehaviour
     {
         if (!IsInBounds(gridPosition))
         {
-            return GroundType.Ground; // Valeur par défaut pour positions invalides
+            return GroundType.Grass; // Valeur par défaut pour positions invalides
         }
 
         return groundTypeGrid[gridPosition.x, gridPosition.y];
@@ -202,6 +217,35 @@ public class GridManager : MonoBehaviour
         Vector3 worldPosition = GridToWorld(gridPosition);
         Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
         return obstacleCollider?.gameObject;
+    }
+
+    // Retourne le bâtiment de faction présent sur une position de grille (null si aucun)
+    // Utilise le layer Buildings — le Nexus (Environment_Walkable) n'est PAS détecté ici
+    // Appelé par IsWalkableFor() pour bloquer le passage à travers les bâtiments de faction
+    public GameObject GetBuildingAt(Vector2Int gridPosition)
+    {
+        if (buildingLayer.value == 0)
+        {
+            return null;
+        }
+
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D buildingCollider = Physics2D.OverlapPoint(worldPosition, buildingLayer);
+        return buildingCollider?.gameObject;
+    }
+
+    // Retourne le Nexus présent sur une position de grille (null si aucun)
+    // Utilise le layer Environment_Walkable car le Nexus n'est pas sur le layer Buildings
+    public GameObject GetNexusAt(Vector2Int gridPosition)
+    {
+        Vector3 worldPosition = GridToWorld(gridPosition);
+        Collider2D col = Physics2D.OverlapPoint(worldPosition, LayerMask.GetMask("Environment_Walkable"));
+        if (col == null) return null;
+
+        BuildingStatsComponent stats = col.GetComponent<BuildingStatsComponent>();
+        if (stats == null || !stats.GetBaseStats().isNexus) return null;
+
+        return col.gameObject;
     }
 
     // Getter pour les dimensions de la grille
@@ -322,6 +366,18 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Terrain de test créé : Eau en bas-gauche, Montagne en haut-droite");
+        // Crée une zone de ronces (centre gauche)
+        for (int x = 1; x < 4; x++)
+        {
+            SetGroundTypeAt(new Vector2Int(x, gridHeight / 2), GroundType.Brambles);
+        }
+
+        // Crée un chemin diagonal (centre)
+        for (int i = 0; i < 4; i++)
+        {
+            SetGroundTypeAt(new Vector2Int(gridWidth / 2 + i, gridHeight / 2 + i), GroundType.Path);
+        }
+
+        Debug.Log("🗺️ Terrain de test créé : Eau bas-gauche, Montagne haut-droite, Ronces centre, Chemin diagonal");
     }
 }

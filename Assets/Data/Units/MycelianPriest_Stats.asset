@@ -12,10 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: MycelianPriest_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
-  maxHP: 80
-  attackDamage: 10
-  attackRange: 2
-  defense: 1
+  unitName: Deathcap Assassin
+  description: Melee DPS and control unit. Sets paralyzing traps and hides in bushes
+    to ambush enemies.
+  portrait: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}
+  maxHP: 20
+  attackDamage: 5
+  attackRange: 1
+  defense: 3
   attackSpeed: 2
-  moveSpeed: 1
+  moveSpeed: 1.2
   isRootborn: 0
+  movementType: 0
+  abilityData: {fileID: 0}
+  unitPrefab: {fileID: 8916175094726974804, guid: fc6f68256b0cd6c44a907511801b836c, type: 3}
+  watersapCost: 25
+  buildTime: 5
+  tierRequired: 2
+  productionIcon: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}

@@ -1,0 +1,83 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3960d2690da7794ca22d2dc56f19981, type: 3}
+  m_Name: WatersapTransfer_VFX
+  m_EditorClassIdentifier: Assembly-CSharp::VFXData
+  particlesPrefab: {fileID: 8450520131109981464, guid: 3005090200d0bd748ae80b4b0e3c355d, type: 3}
+  particlesLifetime: 1.5
+  useLight2D: 1
+  lightColor: {r: 0.040643062, g: 0.8616352, b: 0.85640603, a: 1}
+  lightIntensity: 1.5
+  lightInnerRadius: 0.3
+  lightOuterRadius: 1.2
+  lightPulseDuration: 0.5
+  useSpriteFlash: 0
+  flashFadeDuration: 2
+  flashFadeCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  useScaleUp: 0
+  scaleUpStartScale: 0.3
+  scaleUpEndScale: 1
+  scaleUpUseFlashDuration: 0
+  scaleUpCustomDuration: 2
+  useWatersapFill: 1
+  watersapFillDuration: 1
+  watersapFillHoldDuration: 0.2
+  watersapFillColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+  watersapFillEdgeWidth: 0.1
+  watersapFillCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  soundEffect: {fileID: 0}

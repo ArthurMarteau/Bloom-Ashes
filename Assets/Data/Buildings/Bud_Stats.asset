@@ -1,0 +1,28 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 8f2e3b82689d27d4f8086d8fc78a2663, type: 3}
+  m_Name: Bud_Stats
+  m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsData
+  buildingName: Bud
+  description: Transitional state. Keeps the Rootborn's current HP but gains defense.
+    Immobile until transformation is complete.
+  portrait: {fileID: 0}
+  maxHP: 20
+  defense: 4
+  isInvulnerable: 0
+  sizeX: 1
+  sizeY: 1
+  isNexus: 0
+  producibleUnits: []
+  maxTier: 1
+  buildingPrefab: {fileID: 0}
+  abilityData: {fileID: 0}

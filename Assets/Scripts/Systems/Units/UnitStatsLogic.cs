@@ -7,11 +7,10 @@ using UnityEngine;
 public class UnitStatsLogic
 {
     // Calcule les dégâts effectifs après application de la défense
-    // Formule simple : dégâts - défense (minimum 0)
-    // Utilisé lors de TakeDamage pour déterminer les HP perdus
+    // Délègue à CombatSystem — source unique de vérité pour la formule de dégâts
     public int CalculateEffectiveDamage(int rawDamage, int defense)
     {
-        return Mathf.Max(0, rawDamage - defense);
+        return CombatSystem.CalculateDamage(rawDamage, defense);
     }
 
     // Calcule le pourcentage de vie restante (0.0 à 1.0)

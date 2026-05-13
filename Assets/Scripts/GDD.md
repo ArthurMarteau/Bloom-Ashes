@@ -10,7 +10,8 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Setting**: The Shifting Groves of Cirgus
 - **Visual style**: 3D Low Poly to 2D Line Art, old school 8-bit feel
 - **Audio**: 8-bit music per map, 8-bit sound effects
-- **Single resource**: "Watersap" — collected by Rootborn in static position (max 300 per player)
+- **Language**: English — all in-game content visible to the player is in English (unit names, ability names, tooltips, UI text, etc.)
+- **Single resource**: "Watersap" — collected and stored individually by each Rootborn, then transferred to the player's pool (max 300 per player)
 
 ## Core Mechanics
 
@@ -31,6 +32,38 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Biomes**: Meadows, Gardens, Dark Forest, Caves, Scorched Lands, Volcano, Desert, Jungle, Beach, Ocean Palace
 - One game object per tile
 
+## Foundations & Buildings
+
+### Foundations
+Foundations are strategic points scattered across the map, used to construct faction buildings.
+
+- **Count**: 3 foundations per player (scales with player count: 6 players = 18 foundations)
+- **Starting foundation**: Always placed near the player's Nexus
+- **Remaining foundations**: Scattered across the map — neutral and contestable
+- Foundations and Watersap sources are the primary **strategic objectives** on the map
+
+### Building Construction
+A foundation consists of **4 tiles**. To build:
+1. Place 1 idle Rootborn on each of the 4 foundation tiles
+2. Once all 4 are in position, a **faction selection UI** appears
+3. Choose a faction → the 4 Rootborn sacrifice themselves and the building is constructed
+
+### Unit Production
+Once a building exists:
+1. Move idle Rootborn to any walkable tile adjacent to the building
+2. A **unit selection UI** appears on the Rootborn
+3. Choose a unit type → Rootborn becomes a seed, then hatches into the chosen unit after build time
+
+### Tier & Research System
+- **T1 unit** is available immediately when the building is constructed
+- **T2, T3, T4 units** must be researched via the building UI (increasing Watersap cost)
+- Research is per-building and persistent for the rest of the game
+
+### Strategic Implications
+- A player can construct **different faction buildings** across their foundations
+- Controlling more foundations = access to more factions = more unit diversity
+- **Inter-faction synergies** open up when a player controls multiple buildings of different factions (to be detailed)
+
 ## Technical Implementation (Game Design)
 
 - **Grid**: 80x80 tiles, A* pathfinding with MinHeap
@@ -46,7 +79,7 @@ The base unit shared by all factions, created at the Nexus.
 
 **Description**:
 
-*A humble golem of mud and roots, the Rootborn is the backbone of every army. It gathers Watersap, builds structures, and sacrifices itself to birth combat units. Weak in battle but indispensable for economy.*
+*Worker unit. Collects Watersap, builds faction structures, and transforms into combat units.*
 
 | Stat          | Value     |
 | ------------- | --------- |
@@ -63,10 +96,30 @@ The base unit shared by all factions, created at the Nexus.
 | Train   | 40   | 10         |
 
 **Abilities**:
-- **Static Collection**: While stationary, collects 1 Watersap every 5 seconds
-- **Source Collection**: 3 Rootborn on a Watersap source collect faster/more
-- **Build**: 4 Rootborn on a foundation site sacrifice themselves to build a faction building
-- **Transform**: Adjacent to a building, transforms into a chosen combat unit (becomes a seed, then hatches)
+
+| Ability             | Type             | Cost | Cooldown | Description                                                                                  |
+| ------------------- | ---------------- | ---- | -------- | -------------------------------------------------------------------------------------------- |
+| Watersap Collection | Passive + Active | 0    | 0        | Collects and stores Watersap individually, then transfers it to the player's pool.           |
+| Source Collection   | Passive          | 0    | —        | Doubles the collection rate when standing on a Watersap source.                              |
+| Build               | Active           | 0    | —        | 4 Rootborn on a foundation site sacrifice themselves to build a faction building.            |
+| Transform           | Active           | —    | —        | Adjacent to a building, transforms into a chosen combat unit (becomes a seed, then hatches). |
+
+See the **Abilities** section below for detailed mechanics.
+
+---
+
+## Bud (Transitional State)
+
+When a Rootborn transforms into a combat unit adjacent to a building, it enters the **Bud** state — a dormant seed-pod that gestates the chosen unit.
+
+**Description**:
+
+*Transitional state. Keeps the Rootborn's current HP but gains defense. Immobile until transformation is complete.*
+
+- The Bud is **immobile** — it can be attacked and destroyed before hatching
+- A progress bar tracks the remaining build time
+- The Bud can be **cancelled** (Cancel button in UnitPanelUI) — the Rootborn is lost, no refund
+- On completion, the Bud is destroyed and the combat unit spawns on its tile
 
 ---
 
@@ -90,15 +143,27 @@ The base unit shared by all factions, created at the Nexus.
 **Biomes**: Dark Forest, Caves
 **Strength**: Very versatile — healing, control, defense, damage, flying unit
 **Weakness**: Doesn't excel at anything
-**Building**: Great Oak (2x2)
+**Building**: Shroomhaven
+
+#### Building
+
+**Shroomhaven**
+
+*Fungal stronghold rooted deep into the earth. Produces all Mycelian combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
-**Luminescent Mycena** — Melee / Support
+**Lionsmane Priest** — Melee / Support (T1)
 
 **Description**:
 
-*A small glowing mushroom that serves as the Mycelian Champions' frontline healer. Fragile but essential, it keeps allies alive with regenerating spores.*
+*Melee support unit. Heals adjacent allies with regenerating spores.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -118,22 +183,23 @@ The base unit shared by all factions, created at the Nexus.
 | Ability             | Type   | Cost | Cooldown | Area Effect | Heal | Time Effect | Description             |
 | ------------------- | ------ | ---- | -------- | ----------- | ---- | ----------- | ----------------------- |
 | Regenerating Spores | Active | 5    | 20       | 1x1         | 5hp  | Once        | Heals an ally for 5 HP. |
+|                     |        |      |          |             |      |             |                         |
 
 
-**Puffball Scout** — Ranged DPS / Control / Scout
+**Deathcap Assassin** — CAC DPS / Control / Scout (T2)
 
 **Description**:
 
-*A lightweight shroom unit that excels at reconnaissance and area denial. It lays paralyzing traps to control the battlefield from a distance. Can hide in bushes.*
+*Melee DPS and control unit. Sets paralyzing traps and hides in bushes to ambush enemies.*
 
 | Stat          | Value  |
 | ------------- | ------ |
 | HP            | 20     |
-| Attack Damage | 3      |
+| Attack Damage | 5      |
 | Attack Speed  | 2      |
-| Attack Range  | 3      |
-| Move Speed    | 2      |
-| Defense       | 1      |
+| Attack Range  | 1      |
+| Move Speed    | 1.2    |
+| Defense       | 3      |
 | Unit Type     | Ground |
 
 | Upgrade  | Cost | Build Time |
@@ -147,11 +213,11 @@ The base unit shared by all factions, created at the Nexus.
 | Hide          | Passive | 0    | 0        | 1x1         | 0      | 2s before effect | Can hide in bushes                                                     |
 
 
-**Bolete Golem** — Tank
+**Bolete Golem** — Tank (T3)
 
 **Description**:
 
-*A massive creature made of hardened mycelia and rock. Slow but nearly unbreakable, it absorbs punishment so its allies don't have to.*
+*Frontline tank. Slow but extremely durable — absorbs damage for the rest of the army.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -171,18 +237,18 @@ The base unit shared by all factions, created at the Nexus.
 No active ability.
 
 
-**Flying Death Cap** — Ranged DPS / Poison / Flying
+**Flying Enoki** — Ranged DPS / Poison / Flying (T4)
 
 **Description**:
 
-*A toxic airborne mushroom that spews venomous clouds from above. Its spore mist is devastating against paralyzed targets, making it a deadly combo partner for the Puffball Scout.*
+*Ranged flying DPS. Spits poison clouds that deal increased damage to paralyzed targets.*
 
 | Stat          | Value  |
 | ------------- | ------ |
 | HP            | 30     |
 | Attack Damage | 4      |
 | Attack Speed  | 2      |
-| Attack Range  | 1      |
+| Attack Range  | 2      |
 | Move Speed    | 2      |
 | Defense       | 2      |
 | Unit Type     | Flying |
@@ -205,7 +271,19 @@ No active ability.
 **Biomes**: Meadows, Gardens
 **Strength**: Control and defense, flying unit
 **Weakness**: No heavy damage, no tank
-**Building**: Great Solar Crystal (2x2)
+**Building**: Great Solar Crystal
+
+#### Building
+
+**Great Solar Crystal**
+
+*A towering crystal that channels sunlight into the battlefield. Produces all Charmer combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -213,7 +291,7 @@ No active ability.
 
 **Description**:
 
-*A sturdy thorn-covered fighter, the Thistle Warrior is the Charmers' reliable frontline. It hits hard for its cost and can take a beating thanks to its natural bark armor.*
+*Melee frontline unit. Solid damage and defense for its cost.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -237,7 +315,7 @@ No active ability.
 
 **Description**:
 
-*An elegant airborne flower that fires thorn projectiles piercing through everything in their path. Fragile but lethal in groups, it excels at harassing from angles enemies can't reach.*
+*Ranged flying DPS. Fires piercing projectiles that hit multiple targets in a line.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -264,7 +342,7 @@ No active ability.
 
 **Description**:
 
-*A radiant flower mage that channels sunlight into devastating beams. Its Blazing Mirror ability makes it a nightmare for ranged enemies, turning their own projectiles against them.*
+*Ranged mage. Reflects enemy projectiles back to their sender.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -290,7 +368,7 @@ No active ability.
 
 **Description**:
 
-*The most manipulative unit on the battlefield. The Dahlia's hypnotic pollen can turn the strongest enemy into a temporary ally, swinging fights in an instant. Extremely fragile — protect at all costs.*
+*Support unit. Charms an enemy unit and turns it against its allies. Very fragile.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -319,7 +397,19 @@ No active ability.
 **Biomes**: Desert, Jungle
 **Strength**: Low unit production cost, high defense, many passive abilities
 **Weakness**: No flying unit, low mobility, little healing, longer unit build time
-**Building**: Great Stone (2x2)
+**Building**: Great Stone
+
+#### Building
+
+**Great Stone**
+
+*An ancient carved monolith. Produces all Wild Fangs combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -327,7 +417,7 @@ No active ability.
 
 **Description**:
 
-*A tough desert fighter covered in razor-sharp spines. Cheap to produce and hard to kill, the Cactus Warrior punishes anyone who dares attack it in close combat.*
+*Melee tank. Returns damage to melee attackers. Cheap and durable.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -353,7 +443,7 @@ No active ability.
 
 **Description**:
 
-*A carnivorous plant that spits corrosive acid from a distance. Its shots slow enemies down, making them easy prey for the Venus Assassin to finish off.*
+*Ranged DPS. Slows enemy movement speed on hit — synergizes with Venus Assassin.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -379,7 +469,7 @@ No active ability.
 
 **Description**:
 
-*A lightning-fast carnivorous plant that strikes from the shadows. Its deadly bite deals massive damage to slowed targets, making it the perfect follow-up to the Nepenthes' acid shots.*
+*Melee assassin. Deals bonus damage to slowed targets — pairs well with Nepenthes Shooter.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -405,7 +495,7 @@ No active ability.
 
 **Description**:
 
-*An ancient desert plant of immense resilience. It regenerates constantly, making it almost impossible to wear down. Slow but nearly unkillable in prolonged fights.*
+*Melee tank. Regenerates HP passively — extremely hard to wear down in prolonged fights.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -434,7 +524,19 @@ No active ability.
 **Biomes**: Scorched Lands, Volcano
 **Strength**: Very high mobility, high damage, flying unit
 **Weakness**: Low defense, no healing
-**Building**: Great Furnace (2x2)
+**Building**: Great Furnace
+
+#### Building
+
+**Great Furnace**
+
+*A roaring forge of scorched wood and ember. Produces all Scorched combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -442,7 +544,7 @@ No active ability.
 
 **Description**:
 
-*A fast and reckless burned warrior. Cheap and expendable, it rushes into enemy lines and can detonate itself in a devastating explosion, taking everyone nearby with it.*
+*Melee DPS. Fast and cheap — can self-destruct to deal area damage.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -468,7 +570,7 @@ No active ability.
 
 **Description**:
 
-*A howling ball of fire that hurls flaming projectiles at high speed. The Scorched's main ranged damage dealer — fast, deadly, but paper-thin.*
+*Ranged DPS. High damage output, high speed. Very low defense.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -492,7 +594,7 @@ No active ability.
 
 **Description**:
 
-*A suicidal flying flame that locks onto a single target and won't stop until it's dead — or it is. If it succeeds, a Rootborn rises from its ashes. The ultimate kamikaze unit.*
+*Flying assassin. Targets a single enemy and fights to the death. Spawns a Rootborn on kill.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -519,7 +621,7 @@ No active ability.
 
 **Description**:
 
-*A smoldering tree trunk that radiates intense heat. Its Incandescent Nova terrifies and burns nearby enemies, making it a fearsome area-denial bruiser.*
+*Melee bruiser. Burns and frightens nearby enemies with an area nova.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -548,7 +650,19 @@ No active ability.
 **Biomes**: Beach, Swamp
 **Strength**: Low spell costs, many spells
 **Weakness**: No flying unit, low mobility
-**Building**: Great Shell (2x2)
+**Building**: Great Shell
+
+#### Building
+
+**Great Shell**
+
+*A colossal shell risen from the deep. Produces all Abyss combat units.*
+
+| Stat         | Value |
+| ------------ | ----- |
+| HP           | 100   |
+| Defense      | 3     |
+| Size         | 2x2   |
 
 #### Units
 
@@ -556,7 +670,7 @@ No active ability.
 
 **Description**:
 
-*A broad-leafed aquatic warrior with a built-in shield. It can block incoming projectiles at minimal cost, making it the perfect bodyguard for the faction's fragile spellcasters.*
+*Melee tank. Blocks incoming projectiles to protect allied spellcasters.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -582,7 +696,7 @@ No active ability.
 
 **Description**:
 
-*A sacred water flower that channels healing tides and offensive water bolts. With the cheapest heal in the game, it's the backbone of any Abyss army — versatile, efficient, indispensable.*
+*Ranged support unit. Heals allies and deals ranged damage. Cheapest heal in the game.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -608,7 +722,7 @@ No active ability.
 
 **Description**:
 
-*A sinister deep-sea kelp that drags units toward it with crushing tentacles. It can pull allies to safety or yank enemies into kill zones — a master of battlefield positioning.*
+*Melee control unit. Pulls allies or enemies to its position. Deals damage to pulled enemies.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -634,7 +748,7 @@ No active ability.
 
 **Description**:
 
-*An imposing coral fortress that moves at a glacier's pace but hits like a tidal wave. Its Abyssal Wave clears entire lines of enemies, making it devastating in narrow passages.*
+*Melee tank. Sends a damaging wave across a line of tiles. Slow but powerful.*
 
 | Stat          | Value  |
 | ------------- | ------ |
@@ -720,7 +834,7 @@ Aggressive creatures not affiliated with any faction. One per biome.
 | ---------------------- | ----------------------------------------------------------------------------- |
 | Mycelian Champions     | Immune to Forest/Swamp penalties. +1 Defense in Forest.                       |
 | Golden Garden Charmers | +1 Move Speed on Grass. Immune to Grass/Path/Brambles penalties.              |
-| Wild Fangs             | Immune to Sand/Rocky penalties. +1 Defense on Rocky.                          |
+| Wild Fangs             | Immune to Sand/Rocky penalties. +1 Defense on Rocky.                         |
 | The Scorched           | Immune to Scorched damage. +1 Attack on Scorched tiles.                       |
 | Chosen of the Abyss    | Can walk on Water (cost 1.0). Immune to Swamp penalties. +1 Defense in Water. |
 
@@ -738,12 +852,58 @@ Aggressive creatures not affiliated with any faction. One per biome.
 
 ---
 
+## Abilities
+
+This section provides detailed mechanics for abilities that go beyond the unit table descriptions.
+
+### Watersap Collection (Rootborn)
+
+**Type**: Passive (auto) + Active (manual trigger)
+
+**Passive collection**:
+- Each idle Rootborn collects **1 Watersap every 5 seconds** automatically.
+- Watersap is **stored inside the Rootborn**, up to a maximum of **10**.
+- The collection timer **resets to 0 whenever the Rootborn receives an order** (move, transform, build, etc.). This prevents timer-stacking exploits.
+
+**Auto-transfer**:
+- When the internal stock reaches **10**, the Rootborn automatically transfers all 10 Watersap to the player's pool.
+- A luminous wave VFX plays inside the Rootborn from roots to head.
+
+**Manual trigger (Active ability)**:
+- Cost: **0 Watersap**
+- Cooldown: **0**
+- Effect: instantly transfers the entire stored stock to the player's pool (same VFX as auto-transfer).
+- Does **not** reset the collection timer (the next 5s tick continues normally).
+
+**Manual trigger availability**:
+- Stock = 0 → ❌ disabled (nothing to transfer)
+- Stock between 1 and 9 → ✅ available
+- Stock = 10 → ❌ disabled (auto-transfer is about to fire — prevents double trigger)
+
+**Loss conditions**:
+- If the Rootborn dies, the stored Watersap is **lost** (not transferred, not dropped).
+
+**Visual feedback**:
+- On any transfer (auto or manual): a luminous wave propagates inside the Rootborn from the roots up the trunk and branches to the head, symbolizing the Watersap leaving the body toward the player's pool.
+
+### Source Collection (Rootborn)
+
+**Type**: Passive
+
+**Mechanics**:
+- A Rootborn standing on a Watersap source tile collects at **double rate** (2 Watersap every 5 seconds instead of 1).
+- All other rules of Watersap Collection still apply (storage cap, timer reset on order, etc.).
+
+**Implementation status**: Designed, not yet implemented.
+
+---
+
 ## Buildings
 
 | Building      | Faction             | HP  | Defense      | Size | Construction             |
 | ------------- | ------------------- | --- | ------------ | ---- | ------------------------ |
 | Nexus         | All                 | 1   | Invulnerable | 1x1  | Starting building        |
-| Great Oak     | Mycelian Champions  | 100 | 3            | 2x2  | 4 Rootborn on foundation |
+| Shroomhaven   | Mycelian Champions  | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Solar Crystal | Golden Garden       | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Great Stone   | Wild Fangs          | 100 | 3            | 2x2  | 4 Rootborn on foundation |
 | Great Furnace | The Scorched        | 100 | 3            | 2x2  | 4 Rootborn on foundation |
@@ -779,3 +939,16 @@ Units can equip one item dropped by destroying a point of interest (building, st
 Players accumulate Watersap to unlock stronger units. Constant trade-off between creating Rootborn, building combat units, casting spells, or unlocking new unit types.
 
 Nice-to-have: unit upgrades, research tree in nexus, score system, cosmetic skins.
+
+---
+
+## TODO Netcode
+
+### Filtre équipe dans SelectionManager
+Actuellement le SelectionManager sélectionne toutes les unités sans filtrer par équipe.
+En multijoueur, il faudra :
+- Empêcher de sélectionner les unités/bâtiments ennemis (ou les afficher en lecture seule)
+- Filtrer `SelectGameObject()` pour ne sélectionner que les entités du joueur local
+- S'appuyer sur `PlayerManager.Instance.IsLocalPlayer(teamID)` déjà utilisé dans OrderManager
+
+À implémenter quand le système netcode sera en place.

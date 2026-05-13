@@ -3,21 +3,21 @@ using UnityEngine;
 // Gère l'appartenance d'une unité à une équipe
 // Permet de déterminer les relations ennemi/allié entre unités
 // Prépare le système d'alliances pour multi-joueurs futur
-public class TeamComponent : MonoBehaviour
+public class TeamComponent : MonoBehaviour, ITeamMember
 {
     [Header("Team Settings")]
     [SerializeField] private int teamID = 1; // 0 = Neutre, 1-6 = Joueurs
 
-    [Header("Team Colors")]
-    private Color[] teamColors = new Color[]
+    // Couleurs de fallback utilisées si PlayerManager est absent ou si le PlayerData est null
+    private static readonly Color[] fallbackColors = new Color[]
     {
-        Color.white,                 // 0 = Neutre
-        new Color(0.2f, 0.4f, 1f),                  // 1 = Joueur 1
-        Color.red,                   // 2 = Joueur 2
-        Color.green,                 // 3 = Joueur 3
-        Color.yellow,                // 4 = Joueur 4
-        new Color(1f, 0.5f, 0f),     // 5 = Joueur 5 (orange)
-        Color.magenta                // 6 = Joueur 6
+        Color.white,                    // 0 = Neutre
+        new Color(0.2f, 0.4f, 1f),      // 1
+        Color.red,                      // 2
+        Color.green,                    // 3
+        Color.yellow,                   // 4
+        new Color(1f, 0.5f, 0f),        // 5 (orange)
+        Color.magenta                   // 6
     };
 
     [Header("Debug")]
@@ -59,72 +59,60 @@ public class TeamComponent : MonoBehaviour
     }
 
     // Retourne la couleur associée à l'équipe courante
+    // Priorité : PlayerData.teamColor → fallback par index → Color.white (neutre)
     public Color GetTeamColor()
     {
-        if (teamID >= 0 && teamID < teamColors.Length)
-            return teamColors[teamID];
+        if (teamID == 0)
+            return Color.white;
+
+        PlayerData data = PlayerManager.Instance?.GetPlayerData(teamID);
+        if (data != null)
+            return data.teamColor;
+
+        // Fallback si PlayerManager absent ou joueur non trouvé
+        if (teamID >= 0 && teamID < fallbackColors.Length)
+            return fallbackColors[teamID];
 
         return Color.white;
     }
 
-    // Vérifie si une autre unité est ennemie
-    // Retourne true si les équipes sont différentes et non-neutres
-    public bool IsEnemy(GameObject otherUnit)
+    // Vérifie si une entité est ennemie via interface ITeamMember
+    // Permet de comparer unités ET bâtiments sans GetComponent<TeamComponent>
+    public bool IsEnemy(ITeamMember other)
     {
-        if (otherUnit == null)
+        if (other == null)
             return false;
-
-        TeamComponent otherTeam = otherUnit.GetComponent<TeamComponent>();
-        if (otherTeam == null)
-        {
-            if (debugTeam)
-                Debug.LogWarning($"TeamComponent {gameObject.name}: {otherUnit.name} n'a pas de TeamComponent");
-            return false;
-        }
 
         // Neutres (teamID = 0) ne sont ennemis avec personne
-        if (teamID == 0 || otherTeam.teamID == 0)
+        if (teamID == 0 || other.GetTeamID() == 0)
             return false;
 
-        // TODO: Vérifier alliances ici quand implémenté
-        // Pour l'instant : équipes différentes = ennemis
-        bool isEnemy = teamID != otherTeam.teamID;
+        bool isEnemy = teamID != other.GetTeamID();
 
         if (debugTeam && isEnemy)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): {otherUnit.name} (Team {otherTeam.teamID}) est ENNEMI");
+            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ENNEMI");
 
         return isEnemy;
     }
 
-    // Vérifie si une autre unité est alliée
-    // Retourne true si même équipe ou alliance active
-    public bool IsAlly(GameObject otherUnit)
+    // Vérifie si une entité est alliée via interface ITeamMember
+    public bool IsAlly(ITeamMember other)
     {
-        if (otherUnit == null)
+        if (other == null)
             return false;
 
-        // Une unité est toujours alliée avec elle-même
-        if (otherUnit == gameObject)
+        // Soi-même est toujours allié
+        if (other == (ITeamMember)this)
             return true;
 
-        TeamComponent otherTeam = otherUnit.GetComponent<TeamComponent>();
-        if (otherTeam == null)
-        {
-            if (debugTeam)
-                Debug.LogWarning($"TeamComponent {gameObject.name}: {otherUnit.name} n'a pas de TeamComponent");
-            return false;
-        }
-
         // Neutres ne sont alliés avec personne (sauf eux-mêmes)
-        if (teamID == 0 || otherTeam.teamID == 0)
+        if (teamID == 0 || other.GetTeamID() == 0)
             return false;
 
-        // TODO: Vérifier alliances ici quand implémenté
-        // Pour l'instant : même équipe = alliés
-        bool isAlly = teamID == otherTeam.teamID;
+        bool isAlly = teamID == other.GetTeamID();
 
         if (debugTeam && isAlly)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): {otherUnit.name} (Team {otherTeam.teamID}) est ALLIÉ");
+            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ALLIÉ");
 
         return isAlly;
     }

@@ -12,10 +12,21 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: Rootborn_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
-  maxHP: 100
-  attackDamage: 10
+  unitName: Rootborn
+  description: Worker unit. Collects Watersap, builds faction structures, and transforms
+    into combat units.
+  portrait: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}
+  maxHP: 20
+  attackDamage: 3
   attackRange: 1
-  defense: 3
+  defense: 2
   attackSpeed: 2
   moveSpeed: 1
   isRootborn: 1
+  movementType: 0
+  abilityData: {fileID: 11400000, guid: 5d4634efcf338c24f88a75b7e00e1cfe, type: 2}
+  unitPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
+  watersapCost: 40
+  buildTime: 0
+  tierRequired: 1
+  productionIcon: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}
