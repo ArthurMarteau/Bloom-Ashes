@@ -152,12 +152,12 @@ public class OrderManager : MonoBehaviour
                 List<GameObject> unitsInGroup = kvp.Value;
 
                 List<Vector2Int> candidateCells = DispatchHelper.ComputeRangeApproachCells(
-                    targetGridPos, range, unitsInGroup.Count + 4, unitsInGroup[0]);
+                    targetGridPos, range, unitsInGroup.Count * 2 + 4, unitsInGroup[0]);
 
                 candidateCells.Remove(targetGridPos);
                 candidateCells.RemoveAll(c => globallyTaken.Contains(c));
 
-                Dictionary<GameObject, Vector2Int> groupAssignment = DispatchHelper.AssignCellsGreedy(unitsInGroup, candidateCells);
+                Dictionary<GameObject, Vector2Int> groupAssignment = DispatchHelper.AssignCellsGreedy(unitsInGroup, candidateCells, targetGridPos);
                 foreach (var pair in groupAssignment)
                 {
                     approachAssignment[pair.Key] = pair.Value;
@@ -317,8 +317,8 @@ public class OrderManager : MonoBehaviour
         // Multi-target dispatch : si plusieurs unités, chacune reçoit une case distincte en spirale autour de la cible
         if (selectedUnits.Count > 1)
         {
-            List<Vector2Int> dispatchCells = DispatchHelper.ComputeSpiral(targetGridPosition, selectedUnits.Count, selectedUnits[0]);
-            Dictionary<GameObject, Vector2Int> assignment = DispatchHelper.AssignCellsGreedy(selectedUnits, dispatchCells);
+            List<Vector2Int> dispatchCells = DispatchHelper.ComputeSpiral(targetGridPosition, selectedUnits.Count * 2 + 4, selectedUnits[0]);
+            Dictionary<GameObject, Vector2Int> assignment = DispatchHelper.AssignCellsGreedy(selectedUnits, dispatchCells, targetGridPosition);
 
             foreach (GameObject unit in selectedUnits)
             {

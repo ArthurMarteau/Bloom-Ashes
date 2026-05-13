@@ -35,6 +35,7 @@ public class AttackController : MonoBehaviour
     private ITeamMember teamMember;
     private GameObject unitGameObject;
     private Coroutine damageCoroutine;
+    private Coroutine approachRetryCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
     private AttackState currentState = AttackState.Idle;
 
@@ -382,6 +383,12 @@ public class AttackController : MonoBehaviour
         GameObject resumeTarget = pendingChaseTarget;
         pendingChaseTarget = null;
 
+        if (approachRetryCoroutine != null)
+        {
+            StopCoroutine(approachRetryCoroutine);
+            approachRetryCoroutine = null;
+        }
+
         currentState = AttackState.Idle;
         currentTarget = null;
 
@@ -653,7 +660,11 @@ public class AttackController : MonoBehaviour
         if (bestPosition == Vector2Int.zero)
         {
             if (debugAttack)
-                Debug.LogWarning($"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name}");
+                Debug.LogWarning($"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name} — retry dans 1s");
+
+            if (approachRetryCoroutine == null)
+                approachRetryCoroutine = StartCoroutine(RetryApproachPeriodically());
+
             return;
         }
 
@@ -664,10 +675,29 @@ public class AttackController : MonoBehaviour
             return;
         }
 
+        if (approachRetryCoroutine != null)
+        {
+            StopCoroutine(approachRetryCoroutine);
+            approachRetryCoroutine = null;
+        }
+
         movementController.MoveTo(bestPosition);
 
         if (debugAttack)
             Debug.Log($"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})");
+    }
+
+    // Relance périodiquement la logique d'approche tant que la cible reste valide, hors portée et sans position accessible
+    private IEnumerator RetryApproachPeriodically()
+    {
+        while (currentTarget != null && IsTargetValid() && !IsTargetInRange())
+        {
+            yield return new WaitForSeconds(1f);
+            if (currentTarget != null && IsTargetValid())
+                ProcessAttackLogic();
+        }
+
+        approachRetryCoroutine = null;
     }
 
     // Exécute l'attaque sur la cible

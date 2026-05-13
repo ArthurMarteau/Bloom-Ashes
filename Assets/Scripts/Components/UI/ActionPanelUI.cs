@@ -88,17 +88,22 @@ public class ActionPanelUI : MonoBehaviour
 
         GameObject unit = units[0];
         TransformationController tc = unit.GetComponent<TransformationController>();
-        if (tc == null || tc.FindAdjacentCompatibleBuilding() == null)
+        if (tc == null)
         {
             HidePanel();
             return;
         }
 
         currentTransformUnit = unit;
+        SubscribeMovementEvents(unit);
+
+        if (tc.FindAdjacentCompatibleBuilding() == null)
+        {
+            HidePanel();
+            return;
+        }
+
         currentContext = PanelContext.Production;
-
-        SubscribeMovementEvents(currentTransformUnit);
-
         RefreshPanel();
     }
 

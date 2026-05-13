@@ -11,6 +11,7 @@ public class MovementController : MonoBehaviour
     private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
     private float centerTolerance = 0.1f;      // Distance pour considérer case "atteinte"
     [SerializeField] private float retryInterval = 0.5f;     // Intervalle entre tentatives de recalcul quand bloquée
+    [SerializeField] private float detourRatioThreshold = 3f; // Ratio chemin/Chebyshev au-delà duquel le chemin est considéré absurde
 
     // Modifie la vitesse de déplacement de l'unité
     // Appelé par UnitStats pour synchroniser les stats
@@ -153,6 +154,7 @@ public class MovementController : MonoBehaviour
             {
                 pendingDestination = targetPosition;
                 finalDestination = targetPosition;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/isReceding");
                 if (debugMovement) Debug.Log($"MovementController {gameObject.name}: ordre pendant recede → {targetPosition}");
                 return true;
             }
@@ -170,6 +172,7 @@ public class MovementController : MonoBehaviour
                 logicalPath.Clear();
                 foreach (var c in path) logicalPath.Enqueue(c);
                 finalDestination = targetPosition;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/ToAnchor");
 
                 Vector2Int newFirstCell = logicalPath.Peek();
                 logicalPath.Dequeue();
@@ -190,6 +193,7 @@ public class MovementController : MonoBehaviour
                 logicalPath.Clear();
                 pendingDestination = null;
                 finalDestination = currentCell;
+                if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/recedeToCurrent");
                 recedeToCurrentRequested = true;
                 if (debugMovement) Debug.Log($"MovementController {gameObject.name}: rebrousse vers {currentCell}");
                 return true;
@@ -197,15 +201,24 @@ public class MovementController : MonoBehaviour
 
             pendingDestination = targetPosition;
             finalDestination = targetPosition;
+            if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/queued");
             if (debugMovement) Debug.Log($"MovementController {gameObject.name}: ordre en file → {targetPosition}");
             return true;
         }
 
         // ===== HORS STEP =====
         List<Vector2Int> initialPath = PathFinding.FindPath(currentCell, targetPosition, unitGameObject);
+        if (initialPath != null && initialPath.Count > 0 && IsPathAbsurd(initialPath, targetPosition))
+        {
+            if (debugMovement)
+                Debug.LogWarning($"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({initialPath.Count} steps / Chebyshev {Mathf.Max(Mathf.Abs(currentCell.x - targetPosition.x), Mathf.Abs(currentCell.y - targetPosition.y))}), ordre ignoré");
+            return false;
+        }
+
         if (initialPath == null || initialPath.Count == 0)
         {
             finalDestination = targetPosition;
+            if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep/noPath");
             Debug.LogWarning($"MovementController {gameObject.name}: pas de chemin vers {targetPosition} — retry");
             StartRetryToDestination(targetPosition);
             return false;
@@ -213,6 +226,7 @@ public class MovementController : MonoBehaviour
 
         logicalPath.Clear();
         finalDestination = targetPosition;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep");
         foreach (var c in initialPath) logicalPath.Enqueue(c);
 
         if (debugMovement)
@@ -310,6 +324,7 @@ public class MovementController : MonoBehaviour
                     {
                         if (debugMovement) Debug.Log($"MovementController {gameObject.name}: bloquée + ennemi à portée → auto-attaque");
                         finalDestination = null;
+                        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = HandlePathBlocked/autoAttack");
                         attackController.InterruptChaseAndAttack(nearestEnemy);
                         isInterpolating = false;
                         currentState = MovementState.Idle;
@@ -342,6 +357,7 @@ public class MovementController : MonoBehaviour
                     logicalPath.Clear();
                     foreach (var c in newPath) logicalPath.Enqueue(c);
                     finalDestination = dest;
+                    if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/pendingConsumed");
                     if (debugMovement) Debug.Log($"MovementController {gameObject.name}: pending consommé → {dest}");
                 }
             }
@@ -568,6 +584,7 @@ public class MovementController : MonoBehaviour
     private void OnMovementCompleted()
     {
         finalDestination = null;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = OnMovementCompleted");
         consecutiveCollisions = 0;
         currentState = MovementState.Arrived;
         OnArrived.Invoke();
@@ -620,6 +637,7 @@ public class MovementController : MonoBehaviour
     public void StopMovement()
     {
         finalDestination = null;
+        if (debugMovement) Debug.Log($"[FinalDest] {gameObject.name}: finalDestination = null | caller = StopMovement");
         pendingDestination = null;
         recedeToCurrentRequested = false;
         isReceding = false;
@@ -766,21 +784,23 @@ public class MovementController : MonoBehaviour
         {
             yield return new WaitForSeconds(retryInterval);
 
-            // Vérifie si la destination est toujours accessible
-            if (!GridManager.Instance.IsWalkableFor(destination, unitGameObject))
+            // Cherche une case accessible autour de la destination en rayon croissant (1→2→3)
+            Vector2Int? reachableTarget = FindReachableNearDestination(destination);
+            if (!reachableTarget.HasValue)
             {
                 if (debugMovement)
-                {
-                    Debug.Log($"MovementController {gameObject.name}: Destination {destination} toujours bloquée");
-                }
+                    Debug.Log($"MovementController {gameObject.name}: Aucune case accessible autour de {destination} — retry");
                 continue;
             }
 
-            // Tente de recalculer un chemin depuis position logique
-            List<Vector2Int> newPath = PathFinding.FindPath(currentCell, destination, unitGameObject);
+            List<Vector2Int> newPath = PathFinding.FindPath(currentCell, reachableTarget.Value, unitGameObject);
+            if (newPath != null && newPath.Count > 0 && IsPathAbsurd(newPath, destination))
+            {
+                if (debugMovement)
+                    Debug.LogWarning($"MovementController {gameObject.name}: retry — chemin absurde vers {destination}, on attend");
+                continue;
+            }
 
-            // Path vide non null = A* échoue à trouver un chemin (cases voisines occupées par groupe par ex)
-            // Au-delà du seuil, tenter un détour pour se déloger
             if (newPath != null && newPath.Count == 0)
             {
                 emptyPathRetries++;
@@ -796,28 +816,38 @@ public class MovementController : MonoBehaviour
                         MoveTo(detour.Value);
                         yield break;
                     }
-                    // Pas de détour libre → continue retry, peut-être qu'une case se libérera
                 }
                 continue;
             }
 
-            // Reset compteur si A* ne renvoie pas un path vide (null = blocage classique, on reset pas)
             if (newPath != null && newPath.Count > 0)
                 emptyPathRetries = 0;
 
             if (newPath != null && newPath.Count > 0)
             {
                 retryCoroutine = null;
-                // Si un nouvel ordre est arrivé pendant le blocage, il prime sur la destination originelle
-                Vector2Int target = pendingDestination ?? destination;
+                Vector2Int target = pendingDestination ?? reachableTarget.Value;
                 if (debugMovement)
-                {
-                    Debug.Log($"MovementController {gameObject.name}: Retry réussi, destination = {target} (pending={pendingDestination.HasValue})");
-                }
+                    Debug.Log($"MovementController {gameObject.name}: Retry réussi vers {target}");
                 MoveTo(target);
                 yield break;
             }
         }
+    }
+
+    // Vérifie si le chemin vers une destination est absurde (détour excessif)
+    // Retourne true si longueurChemin > distanceChebyshev * detourRatioThreshold
+    private bool IsPathAbsurd(List<Vector2Int> path, Vector2Int destination)
+    {
+        if (path == null || path.Count == 0) return false;
+
+        int chebyshev = Mathf.Max(
+            Mathf.Abs(currentCell.x - destination.x),
+            Mathf.Abs(currentCell.y - destination.y));
+
+        if (chebyshev == 0) return false;
+
+        return path.Count > chebyshev * detourRatioThreshold;
     }
 
     // Vérifie si le transform.position est au centre de la case cible
@@ -827,6 +857,48 @@ public class MovementController : MonoBehaviour
         Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(cell);
         float distance = Vector3.Distance(transform.position, cellWorldPosition);
         return distance < centerTolerance;
+    }
+
+    // Cherche une case walkable et accessible autour de destination en rayon croissant
+    // Retourne la case la plus proche de destination avec un chemin valide, null si rien trouvé
+    private Vector2Int? FindReachableNearDestination(Vector2Int destination)
+    {
+        // Rayon 0 : destination elle-même d'abord
+        if (GridManager.Instance.IsWalkableFor(destination, unitGameObject) &&
+            EntityRegistry.Instance?.GetUnitAtLogicalPosition(destination) == null)
+            return destination;
+
+        for (int radius = 1; radius <= 3; radius++)
+        {
+            Vector2Int? best = null;
+            int bestDist = int.MaxValue;
+
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    if (Mathf.Abs(dx) != radius && Mathf.Abs(dy) != radius) continue; // bord du rayon uniquement
+
+                    Vector2Int cell = destination + new Vector2Int(dx, dy);
+                    if (!GridManager.Instance.IsInBounds(cell)) continue;
+                    if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject)) continue;
+
+                    GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
+                    if (occupant != null && occupant != unitGameObject) continue;
+
+                    int dist = Mathf.Abs(dx) + Mathf.Abs(dy);
+                    if (dist < bestDist)
+                    {
+                        bestDist = dist;
+                        best = cell;
+                    }
+                }
+            }
+
+            if (best.HasValue) return best;
+        }
+
+        return null;
     }
 
     // Cherche une case adjacente libre pour détour, plus proche de finalDestination.

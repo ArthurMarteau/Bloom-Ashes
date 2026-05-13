@@ -1890,10 +1890,7 @@ MonoBehaviour:
     m_PersistentCalls:
       m_Calls: []
   m_text: Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed non risus.
-    Suspendisse lectus tortor, dignissim sit amet, adipiscing nec, ultricies sed,
-    dolor. Cras elementum ultrices diam. Maecenas ligula massa, varius a, semper
-    congue, euismod non, mi. Proin porttitor, orci nec nonummy molestie, enim est
-    eleifend mi, non fermentum diam nisl sit amet erat.
+    Suspendisse lectus tortor.
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -3546,6 +3543,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::VFXManager
   budHatchVFX: {fileID: 11400000, guid: 80267f3d829a2d74bad770c572834315, type: 2}
   rootbornSpawnVFX: {fileID: 11400000, guid: 7ee8a5f9e238db5499b7ee43400a33d7, type: 2}
+  unitRevertVFX: {fileID: 11400000, guid: 80267f3d829a2d74bad770c572834315, type: 2}
 --- !u!1 &728335731 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 271172713617413787, guid: 1378708c66f9da549920fc31d522b244, type: 3}
@@ -4367,6 +4365,7 @@ Transform:
   - {fileID: 2063149489}
   - {fileID: 277737906}
   - {fileID: 1345067685}
+  - {fileID: 1101906606}
   m_Father: {fileID: 1173849880}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!1001 &881066032
@@ -5160,6 +5159,51 @@ Transform:
   - {fileID: 1661629086}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &1101906605
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1101906606}
+  - component: {fileID: 1101906607}
+  m_Layer: 0
+  m_Name: CursorManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1101906606
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1101906605}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 875531320}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1101906607
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1101906605}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f49c193176d4c55469bd67250a638b64, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::CursorManager
+  cursorData: {fileID: 11400000, guid: c68c617bfcef8d044a495fe9ff55774e, type: 2}
 --- !u!4 &1140689932 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 224587866070118923, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}

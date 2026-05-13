@@ -100,47 +100,56 @@ public static class DispatchHelper
         return result;
     }
 
-    // Assignment greedy : pour chaque unitÃ© (dans l'ordre fourni), prend la case disponible la plus proche
-    // Retourne un dictionnaire unitÃ© â†’ case assignÃ©e.
-    // Si moins de cases que d'unitÃ©s, les unitÃ©s en surplus ne sont pas dans le dictionnaire (caller doit gÃ©rer le fallback).
-    public static Dictionary<GameObject, Vector2Int> AssignCellsGreedy(List<GameObject> units, List<Vector2Int> cells)
+    // Assignment spirale : les cases sont triées par proximité à la destination (centre en premier).
+    // Pour chaque case dans cet ordre, on assigne l'unité la plus proche de cette case.
+    // Garantit que la case cliquée et l'anneau 1 sont pris en priorité absolue.
+    public static Dictionary<GameObject, Vector2Int> AssignCellsGreedy(
+        List<GameObject> units, List<Vector2Int> cells, Vector2Int destination)
     {
         Dictionary<GameObject, Vector2Int> assignment = new Dictionary<GameObject, Vector2Int>();
         if (units == null || units.Count == 0 || cells == null || cells.Count == 0) return assignment;
 
-        HashSet<int> takenIndices = new HashSet<int>();
+        // Trie les cases par distance Chebyshev à la destination (spirale : centre d'abord)
+        List<Vector2Int> sortedCells = new List<Vector2Int>(cells);
+        sortedCells.Sort((a, b) =>
+            ChebyshevDistance(a, destination).CompareTo(ChebyshevDistance(b, destination)));
 
-        foreach (GameObject unit in units)
+        HashSet<GameObject> assignedUnits = new HashSet<GameObject>();
+
+        // Pour chaque case (du centre vers l'extérieur), prend l'unité la plus proche
+        foreach (Vector2Int cell in sortedCells)
         {
-            if (unit == null) continue;
+            if (assignedUnits.Count >= units.Count) break;
 
-            MovementController mc = unit.GetComponent<MovementController>();
-            Vector2Int unitPos = mc != null ? mc.GetCurrentGridPosition() : GridManager.Instance.WorldToGrid(unit.transform.position);
-
-            int bestIdx = -1;
+            GameObject bestUnit = null;
             int bestDist = int.MaxValue;
 
-            for (int i = 0; i < cells.Count; i++)
+            foreach (GameObject unit in units)
             {
-                if (takenIndices.Contains(i)) continue;
-                int dist = ChebyshevDistance(unitPos, cells[i]);
+                if (unit == null || assignedUnits.Contains(unit)) continue;
+
+                MovementController mc = unit.GetComponent<MovementController>();
+                Vector2Int unitPos = mc != null
+                    ? mc.GetCurrentGridPosition()
+                    : GridManager.Instance.WorldToGrid(unit.transform.position);
+
+                int dist = ChebyshevDistance(unitPos, cell);
                 if (dist < bestDist)
                 {
                     bestDist = dist;
-                    bestIdx = i;
+                    bestUnit = unit;
                 }
             }
 
-            if (bestIdx >= 0)
+            if (bestUnit != null)
             {
-                assignment[unit] = cells[bestIdx];
-                takenIndices.Add(bestIdx);
+                assignment[bestUnit] = cell;
+                assignedUnits.Add(bestUnit);
             }
         }
 
         return assignment;
     }
-
     // Distance Chebyshev (8-direction grid)
     private static int ChebyshevDistance(Vector2Int a, Vector2Int b)
     {

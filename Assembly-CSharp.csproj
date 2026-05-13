@@ -69,11 +69,13 @@
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapStockUI.cs" />
+    <Compile Include="Assets\Scripts\Data\UI\CursorData.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
     <Compile Include="Assets\Scripts\Data\VFX\VFXData.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\WatersapTransferExecutor.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\CursorManager.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\InputManager.cs" />
     <Compile Include="Assets\Scripts\Shared\UnitProductionStatus.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\ProjectileVisual.cs" />

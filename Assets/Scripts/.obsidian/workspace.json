@@ -185,19 +185,19 @@
   },
   "active": "7811e402c7090024",
   "lastOpenFiles": [
+    "Data/UI.meta",
+    "Data/UI/CursorData.cs.meta",
+    "Components/Managers/CursorManager.cs.meta",
+    "Components/Managers/CursorManager.cs",
+    "Data/UI/CursorData.cs",
+    "Data/UI",
     "Components/Units/TransformationController.cs.meta",
     "Components/Units/TransformationController.cs",
     "Rootborn.prefab.meta",
     "Rootborn.prefab",
     "Components/Units/RevertToRootbornController.cs.meta",
-    "Components/Units/RevertToRootbornController.cs",
     "NEW_FEATURES_IMPLEMENTATION.md",
     "GDD.md",
-    "Components/UI/ActionPanelUI.cs.meta",
-    "Components/UI/ActionPanelUI.cs",
-    "Tests/TestClick.cs.meta",
-    "Tests/TestClick.cs",
-    "Components/UI/ProductionPanelUI.cs.meta",
     "claude.md"
   ]
 }
