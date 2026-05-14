@@ -18,6 +18,10 @@ public class EntitySpawnManager : MonoBehaviour
     // Paramètres : (oldEntity, newEntity)
     public UnityEvent<GameObject, GameObject> OnEntityReplaced = new UnityEvent<GameObject, GameObject>();
 
+    // Event déclenché quand une entité est détruite (mort, sacrifice, destruction bâtiment)
+    // Paramètre : entité détruite (encore valide au moment de l'appel, Destroy() appelé juste après)
+    public UnityEvent<GameObject> OnEntityDestroyed = new UnityEvent<GameObject>();
+
     private void Awake()
     {
         if (Instance != null && Instance != this)
@@ -58,5 +62,12 @@ public class EntitySpawnManager : MonoBehaviour
 
         GameLogger.Log(GameLogger.Category.Spawn, $"🔄 EntitySpawnManager : {oldEntity.name} remplacé par {newEntity.name}", this);
         OnEntityReplaced.Invoke(oldEntity, newEntity);
+    }
+
+    public void NotifyEntityDestroyed(GameObject destroyedEntity)
+    {
+        if (destroyedEntity == null) return;
+        GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {destroyedEntity.name} détruit", this);
+        OnEntityDestroyed.Invoke(destroyedEntity);
     }
 }

@@ -16,6 +16,7 @@ public class NexusController : MonoBehaviour
     // Cache des données de base du Nexus
     private BuildingStatsData baseStats;
     private Collider2D _collider;
+    private SelectionManager selectionManager;
 
     // Récupère et valide les données au démarrage
     private void Awake()
@@ -55,6 +56,8 @@ public class NexusController : MonoBehaviour
     {
         if (InputManager.Instance != null)
             InputManager.Instance.OnRightClickDown.AddListener(OnRightClickHandler);
+
+        selectionManager = Object.FindFirstObjectByType<SelectionManager>();
     }
 
     // Désabonne les clics droits pour éviter les callbacks après destruction du Nexus
@@ -68,14 +71,19 @@ public class NexusController : MonoBehaviour
     private void OnRightClickHandler(Vector3 worldPosition)
     {
         if (_collider == null) return;
+        if (!_collider.OverlapPoint(worldPosition)) return;
+        if (selectionManager == null || !IsThisNexusSelected()) return;
 
-        if (_collider.OverlapPoint(worldPosition))
-        {
-            if (debugNexusInput)
-                GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : clic droit détecté sur Nexus", this);
+        if (debugNexusInput)
+            GameLogger.Log(GameLogger.Category.Spawn, $"️ NexusController {gameObject.name} : clic droit détecté sur Nexus sélectionné", this);
 
-            TrySpawnRootborn();
-        }
+        TrySpawnRootborn();
+    }
+
+    // Vérifie que le bâtiment sélectionné est bien ce Nexus
+    private bool IsThisNexusSelected()
+    {
+        return selectionManager.GetSelectedBuilding() == gameObject;
     }
 
     // Tente de spawner un Rootborn sur la tile du Nexus

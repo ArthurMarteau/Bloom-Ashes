@@ -8,9 +8,17 @@ public static class UnitFreezer
         if (unit == null)
             return;
 
+        // Freeze animator en premier — avant toute transition déclenchée par le freeze des contrôleurs.
+        if (freezeAnimator)
+        {
+            Animator animator = unit.GetComponent<Animator>();
+            if (animator != null)
+                animator.speed = 0f;
+        }
+
         MovementController movementController = unit.GetComponent<MovementController>();
         if (movementController != null && movementController.enabled)
-            movementController.StopMovement();
+            movementController.FreezeInPlace();
 
         AttackController attackController = unit.GetComponent<AttackController>();
         if (attackController != null && attackController.enabled)
@@ -36,11 +44,5 @@ public static class UnitFreezer
                 collider.enabled = false;
         }
 
-        if (freezeAnimator)
-        {
-            Animator animator = unit.GetComponent<Animator>();
-            if (animator != null)
-                animator.speed = 0f;
-        }
     }
 }

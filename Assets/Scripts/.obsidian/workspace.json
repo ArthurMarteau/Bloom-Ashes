@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "GDD.md",
+                "file": "UI_PLAN.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "GDD"
+              "title": "UI_PLAN"
             }
           }
         ]
@@ -185,6 +185,11 @@
   },
   "active": "7811e402c7090024",
   "lastOpenFiles": [
+    "PROMPT_UPGRADES_UI.md",
+    "PROMPT_UI_ETAPE1.md",
+    "PROMPT_INPUT_MIGRATION.md",
+    "NEW_FEATURES_IMPLEMENTATION.md",
+    "GDD.md",
     "Data/UI.meta",
     "Data/UI/CursorData.cs.meta",
     "Components/Managers/CursorManager.cs.meta",
@@ -195,9 +200,6 @@
     "Components/Units/TransformationController.cs",
     "Rootborn.prefab.meta",
     "Rootborn.prefab",
-    "Components/Units/RevertToRootbornController.cs.meta",
-    "NEW_FEATURES_IMPLEMENTATION.md",
-    "GDD.md",
     "claude.md"
   ]
 }

@@ -687,6 +687,46 @@ public class MovementController : MonoBehaviour
         }
     }
 
+    // Stoppe le mouvement en conservant la position visuelle actuelle (pas de snap au centre de case)
+    // Utilisé pour freeze en place : mort, sacrifice — l'unité reste là où elle est physiquement
+    public void FreezeInPlace()
+    {
+        finalDestination = null;
+        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = FreezeInPlace", this);
+        pendingDestination = null;
+        recedeToCurrentRequested = false;
+        isReceding = false;
+        consecutiveCollisions = 0;
+
+        // Arrête la coroutine d'interpolation
+        if (interpolationCoroutine != null)
+        {
+            StopCoroutine(interpolationCoroutine);
+            interpolationCoroutine = null;
+        }
+
+        // Arrête la coroutine de retry si active
+        if (retryCoroutine != null)
+        {
+            StopCoroutine(retryCoroutine);
+            retryCoroutine = null;
+        }
+
+        // Vide la queue
+        logicalPath.Clear();
+
+        // Remet à zéro les variables d'état sans modifier la position visuelle ni le registre logique
+        isInterpolating = false;
+        currentState = MovementState.Idle;
+        isFirstMoveOfSession = true;
+
+        // L'animator est géré par UnitFreezer avant cet appel — ne pas toucher ici
+        if (debugMovement)
+        {
+            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Mouvement figé en place à {transform.position}", this);
+        }
+    }
+
     // Vide la queue de chemin sans téléporter l'unité
     // L'unité termine son interpolation vers la case actuelle puis s'arrête
     public void ClearPathQueue()

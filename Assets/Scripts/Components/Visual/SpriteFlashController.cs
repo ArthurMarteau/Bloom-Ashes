@@ -15,6 +15,7 @@ public class SpriteFlashController : MonoBehaviour
     private Coroutine activeCoroutine;
 
     private static readonly int FlashAmountProperty = Shader.PropertyToID("_FlashAmount");
+    private static readonly int FlashColorProperty = Shader.PropertyToID("_FlashColor");
     private const string RequiredShaderName = "UnitShader";
 
     // Initialise le MaterialPropertyBlock et vérifie la présence du shader SpriteFlash
@@ -51,6 +52,16 @@ public class SpriteFlashController : MonoBehaviour
 
         targetRenderer.GetPropertyBlock(propertyBlock);
         propertyBlock.SetFloat(FlashAmountProperty, Mathf.Clamp01(value));
+        targetRenderer.SetPropertyBlock(propertyBlock);
+    }
+
+    // Définit la couleur du flash avant de lancer FadeIn/FadeOut
+    public void SetFlashColor(Color color)
+    {
+        if (targetRenderer == null) return;
+
+        targetRenderer.GetPropertyBlock(propertyBlock);
+        propertyBlock.SetColor(FlashColorProperty, color);
         targetRenderer.SetPropertyBlock(propertyBlock);
     }
 

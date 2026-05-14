@@ -7,6 +7,7 @@
         _HueThreshold ("Hue Threshold", Range(0.01, 0.5)) = 0.1
         _SaturationMin ("Saturation Minimum", Range(0, 1)) = 0.5
         _FlashAmount ("Flash Amount", Range(0, 1)) = 0
+        _FlashColor ("Flash Color", Color) = (1,1,1,1)
         _WatersapFill ("Watersap Fill", Range(0, 1)) = 0
         _WatersapColor ("Watersap Color", Color) = (0.2, 0.7, 1, 1)
         _WatersapEdgeWidth ("Watersap Edge Width", Range(0.01, 0.5)) = 0.1
@@ -37,6 +38,7 @@
                 float _HueThreshold;
                 float _SaturationMin;
                 float _FlashAmount;
+                float4 _FlashColor;
                 float _WatersapFill;
                 float4 _WatersapColor;
                 float _WatersapEdgeWidth;
@@ -132,7 +134,7 @@
                     float watersapMask = 1.0 - smoothstep(0, _WatersapEdgeWidth, dist);
                     teamResult.rgb = lerp(teamResult.rgb, _WatersapColor.rgb, watersapMask * _WatersapColor.a);
                     // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
-                    teamResult.rgb = lerp(teamResult.rgb, float3(1, 1, 1), _FlashAmount);
+                    teamResult.rgb = lerp(teamResult.rgb, _FlashColor.rgb, _FlashAmount);
                     return teamResult;
                 }
 
@@ -142,7 +144,7 @@
                 float watersapMask = 1.0 - smoothstep(0, _WatersapEdgeWidth, distNonTeam);
                 finalColor.rgb = lerp(finalColor.rgb, _WatersapColor.rgb, watersapMask * _WatersapColor.a);
                 // Applique le flash blanc par-dessus la couleur finale (pour VFX hit/spawn/etc.)
-                finalColor.rgb = lerp(finalColor.rgb, float3(1, 1, 1), _FlashAmount);
+                finalColor.rgb = lerp(finalColor.rgb, _FlashColor.rgb, _FlashAmount);
                 return finalColor;
             }
             ENDHLSL

@@ -20,7 +20,6 @@ public class SelectionManager : MonoBehaviour
 
     private readonly SelectionState state = new SelectionState();
     private readonly Dictionary<GameObject, SelectionSquare> squares = new Dictionary<GameObject, SelectionSquare>();
-    private readonly Dictionary<GameObject, UnityAction> deathHandlers = new Dictionary<GameObject, UnityAction>();
     private SelectionSquare groundSquare;
     private LayerMask combinedSelectableMask;
 
@@ -77,6 +76,7 @@ public class SelectionManager : MonoBehaviour
         {
             EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
             EntitySpawnManager.Instance.OnEntityReplaced.AddListener(HandleEntityReplaced);
+            EntitySpawnManager.Instance.OnEntityDestroyed.AddListener(HandleEntityDestroyed);
         }
     }
 
@@ -426,24 +426,7 @@ public class SelectionManager : MonoBehaviour
     // Synchronise les handlers de mort avec les entités sélectionnées
     private void SynchronizeDeathHandlers()
     {
-        List<GameObject> desiredTrackedEntities = GetTrackableSelectedEntities();
-        List<GameObject> trackedEntities = new List<GameObject>(deathHandlers.Keys);
-
-        foreach (GameObject trackedEntity in trackedEntities)
-        {
-            if (trackedEntity == null || !desiredTrackedEntities.Contains(trackedEntity))
-            {
-                UnsubscribeDeathHandler(trackedEntity);
-            }
-        }
-
-        foreach (GameObject desiredEntity in desiredTrackedEntities)
-        {
-            if (desiredEntity != null && !deathHandlers.ContainsKey(desiredEntity))
-            {
-                SubscribeDeathHandler(desiredEntity);
-            }
-        }
+        // No-op : la destruction est suivie centralement via EntitySpawnManager.OnEntityDestroyed.
     }
 
     // Retourne les entités sélectionnées qui exposent un event de destruction
@@ -472,47 +455,13 @@ public class SelectionManager : MonoBehaviour
     // Abonne un handler de destruction pour une entité sélectionnée
     private void SubscribeDeathHandler(GameObject entity)
     {
-        UnityAction handler = () => HandleTrackedEntityDestroyed(entity);
-        BuildingStatsComponent buildingStats = entity.GetComponent<BuildingStatsComponent>();
-        UnitStatsComponent unitStats = entity.GetComponent<UnitStatsComponent>();
-
-        if (buildingStats != null)
-        {
-            buildingStats.OnBuildingDestroyed.AddListener(handler);
-            deathHandlers[entity] = handler;
-            return;
-        }
-
-        if (unitStats != null)
-        {
-            unitStats.OnDeath.AddListener(handler);
-            deathHandlers[entity] = handler;
-        }
+        // No-op : conservé pour compatibilité interne avec l'ancien flux.
     }
 
     // Désabonne le handler de destruction stocké pour une entité
     private void UnsubscribeDeathHandler(GameObject entity)
     {
-        if (entity == null || !deathHandlers.TryGetValue(entity, out UnityAction handler))
-        {
-            deathHandlers.Remove(entity);
-            return;
-        }
-
-        BuildingStatsComponent buildingStats = entity.GetComponent<BuildingStatsComponent>();
-        UnitStatsComponent unitStats = entity.GetComponent<UnitStatsComponent>();
-
-        if (buildingStats != null)
-        {
-            buildingStats.OnBuildingDestroyed.RemoveListener(handler);
-        }
-
-        if (unitStats != null)
-        {
-            unitStats.OnDeath.RemoveListener(handler);
-        }
-
-        deathHandlers.Remove(entity);
+        // No-op : conservé pour compatibilité interne avec l'ancien flux.
     }
 
     // Réagit à la destruction d'une entité sélectionnée
@@ -544,24 +493,42 @@ public class SelectionManager : MonoBehaviour
             state.Clear();
         }
 
-        FallbackToGroundAfterDestruction(lastPosition);
+        FallbackToGroundAfterDestruction(lastPosition, destroyedEntity);
+    }
+
+    private void HandleEntityDestroyed(GameObject destroyedEntity)
+    {
+        if (destroyedEntity == null || !state.Contains(destroyedEntity)) return;
+        HandleTrackedEntityDestroyed(destroyedEntity);
     }
 
     // Fallback vers le terrain sous la dernière position connue
-    private void FallbackToGroundAfterDestruction(Vector3 lastPosition)
+    private void FallbackToGroundAfterDestruction(Vector3 lastPosition, GameObject excludeEntity = null)
     {
-        if (GridManager.Instance != null)
+        if (mainCamera == null) return;
+
+        // Raycast sur la position — sélectionne ce qui occupe réellement la tile
+        Collider2D[] hits = Physics2D.OverlapPointAll(lastPosition, combinedSelectableMask);
+
+        // Filtre l'entité détruite — son collider est encore actif au moment du raycast
+        List<Collider2D> filteredHits = new List<Collider2D>();
+        foreach (Collider2D hit in hits)
         {
-            Vector2Int gridPosition = GridManager.Instance.WorldToGrid(lastPosition);
-            if (GridManager.Instance.IsInBounds(gridPosition))
-            {
-                ApplySelection(SelectionType.Ground, null, gridPosition, lastPosition, false);
-                GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Fallback vers terrain {gridPosition} après destruction d'entité", this);
-                return;
-            }
+            if (hit.gameObject != excludeEntity)
+                filteredHits.Add(hit);
         }
 
-        ClearAllSelection();
+        GameObject bestHit = SelectionResolver.ResolveBestHit(filteredHits.ToArray());
+
+        if (bestHit != null)
+        {
+            SelectionType selectionType = SelectionResolver.Classify(bestHit, out GameObject entity);
+            ApplySelection(selectionType, entity, Vector2Int.zero, lastPosition, false);
+            GameLogger.Log(GameLogger.Category.Selection, $" SelectionManager : Fallback vers {bestHit.name} après destruction", this);
+            return;
+        }
+
+        HandleGroundSelection(lastPosition);
     }
 
     // Déclenche l'event public correspondant au type final de sélection
@@ -692,11 +659,7 @@ public class SelectionManager : MonoBehaviour
     // Désabonne tous les handlers de destruction trackés
     private void UnsubscribeAllDeathHandlers()
     {
-        List<GameObject> trackedEntities = new List<GameObject>(deathHandlers.Keys);
-        foreach (GameObject trackedEntity in trackedEntities)
-        {
-            UnsubscribeDeathHandler(trackedEntity);
-        }
+        // No-op : la destruction est suivie centralement via EntitySpawnManager.OnEntityDestroyed.
     }
 
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
@@ -715,6 +678,7 @@ public class SelectionManager : MonoBehaviour
         {
             EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
             EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
+            EntitySpawnManager.Instance.OnEntityDestroyed.RemoveListener(HandleEntityDestroyed);
         }
 
         UnsubscribeAllDeathHandlers();
@@ -738,6 +702,12 @@ public class SelectionManager : MonoBehaviour
     public GameObject GetSelectedObstacle()
     {
         return state.Type == SelectionType.Obstacle ? state.Single : null;
+    }
+
+    // Retourne le bâtiment actuellement sélectionné
+    public GameObject GetSelectedBuilding()
+    {
+        return state.Type == SelectionType.Building ? state.Single : null;
     }
 
     // Retourne les coordonnées du terrain sélectionné

@@ -41,6 +41,9 @@ public class VFXData : ScriptableObject
     [Tooltip("Courbe d'animation du fade-out (doit aller de 1 à 0)")]
     [SerializeField] public AnimationCurve flashFadeCurve = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
 
+    [Tooltip("Couleur du flash (blanc par défaut, rouge pour sacrifice, etc.)")]
+    [SerializeField] public Color flashColor = Color.white;
+
     [Header("Scale Up (effet pop sur unité spawnée)")]
     [Tooltip("Active l'effet de scale up sur l'unité au moment du spawn")]
     public bool useScaleUp = true;

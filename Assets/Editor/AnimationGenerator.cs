@@ -16,7 +16,7 @@ public class AnimationGenerator
     private const int FRAMES_CAST      = 6;  // frames 1-5 du spritesheet Cast
     private const int FRAMES_WALK      = 13; // frames 0-12
     private const int FRAMES_HIT       = 5;  // frames 0-4
-    private const int FRAMES_DEATH     = 13; // frames 0-12
+    private const int FRAMES_DEATH     = 5; // frames 0-4
 
     // Directions supportées pour les animations directionnelles
     private static readonly string[] DIRECTIONS = { "N", "NW", "W", "SW", "S" };

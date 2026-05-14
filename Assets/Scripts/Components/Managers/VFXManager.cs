@@ -173,6 +173,7 @@ public class VFXManager : MonoBehaviour
         if (flashController == null)
             flashController = entity.AddComponent<SpriteFlashController>();
 
+        flashController.SetFlashColor(data.flashColor);
         flashController.SetFlashAmount(1f);
         flashController.FadeOut(data.flashFadeDuration, data.flashFadeCurve);
 

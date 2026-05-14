@@ -261,6 +261,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         }
 
         // Détruit l'unité après l'animation
+        EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
         Destroy(gameObject, 10f);
     }
 

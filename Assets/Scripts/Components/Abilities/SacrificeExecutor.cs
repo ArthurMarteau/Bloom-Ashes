@@ -43,6 +43,9 @@ public class SacrificeExecutor : AbilityExecutor
         yield return new WaitForSeconds(1f);
 
         if (unit != null)
+        {
+            EntitySpawnManager.Instance?.NotifyEntityDestroyed(unit);
             Object.Destroy(unit);
+        }
     }
 }

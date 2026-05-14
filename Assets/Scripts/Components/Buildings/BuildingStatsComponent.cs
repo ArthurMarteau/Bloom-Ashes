@@ -192,6 +192,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
 
         // Détruit le GameObject après un délai (prépare les animations futures)
+        EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
         Destroy(gameObject, 10f);
     }
 
