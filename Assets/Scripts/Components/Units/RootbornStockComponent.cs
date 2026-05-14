@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 // Wrapper Unity autour de WatersapCollectionSystem pour le prefab Rootborn
@@ -73,7 +73,7 @@ public class RootbornStockComponent : MonoBehaviour
     private void HandleMovementStarted()
     {
         collectionSystem.ResetTimer();
-        Debug.Log($"💧 RootbornStockComponent {gameObject.name} : timer reset (ordre reçu)");
+        GameLogger.Log(GameLogger.Category.Watersap, $"💧 RootbornStockComponent {gameObject.name} : timer reset (ordre reçu)", this);
     }
 
     // Tentative de transfert — appelée par WatersapTransferExecutor (auto et manuel)
@@ -83,7 +83,7 @@ public class RootbornStockComponent : MonoBehaviour
         if (collectionSystem == null) return false;
         if (!collectionSystem.CanTransfer())
         {
-            Debug.Log($"💧 RootbornStockComponent {gameObject.name} : transfert rejeté (stock={collectionSystem.CurrentStock})");
+            GameLogger.Log(GameLogger.Category.Watersap, $"💧 RootbornStockComponent {gameObject.name} : transfert rejeté (stock={collectionSystem.CurrentStock})", this);
             return false;
         }
 
@@ -106,7 +106,7 @@ public class RootbornStockComponent : MonoBehaviour
         OnStockChanged.Invoke(collectionSystem.CurrentStock);
         OnTransferTriggered.Invoke(amount);
 
-        Debug.Log($"💧 RootbornStockComponent {gameObject.name} : {amount} Watersap transférés");
+        GameLogger.Log(GameLogger.Category.Watersap, $"💧 RootbornStockComponent {gameObject.name} : {amount} Watersap transférés", this);
     }
 
     // Route l'auto-transfer via AbilityManager pour déclencher les VFX de l'ability

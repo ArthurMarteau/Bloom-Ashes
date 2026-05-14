@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.InputSystem;
 
 // Contrôle la caméra 2D via clavier, edge scrolling et zoom molette
@@ -40,7 +40,7 @@ public class CameraController : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning($"CameraController: Instance dupliquée sur {gameObject.name}, destruction.");
+            GameLogger.Warn(GameLogger.Category.Movement, $"CameraController: Instance dupliquée sur {gameObject.name}, destruction.", this);
             Destroy(gameObject);
             return;
         }
@@ -50,7 +50,7 @@ public class CameraController : MonoBehaviour
         cam = GetComponent<Camera>();
         if (cam == null)
         {
-            Debug.LogError("CameraController: Camera introuvable sur ce GameObject.");
+            GameLogger.Error("CameraController: Camera introuvable sur ce GameObject.", this);
             return;
         }
 
@@ -124,7 +124,7 @@ public class CameraController : MonoBehaviour
 
         if (debugCamera)
         {
-            Debug.Log($"CameraController: MoveTo {worldPosition}");
+            GameLogger.Log(GameLogger.Category.Movement, $"CameraController: MoveTo {worldPosition}", this);
         }
     }
 
@@ -138,7 +138,7 @@ public class CameraController : MonoBehaviour
 
         if (debugCamera)
         {
-            Debug.Log($"CameraController: FocusOn {gridPosition} -> {world}");
+            GameLogger.Log(GameLogger.Category.Movement, $"CameraController: FocusOn {gridPosition} -> {world}", this);
         }
     }
 
@@ -149,14 +149,14 @@ public class CameraController : MonoBehaviour
     {
         if (inputActions == null)
         {
-            Debug.LogError("CameraController: InputActionAsset non assigné ! Assigner BloomAndAshesInputActions dans l'Inspector.");
+            GameLogger.Error("CameraController: InputActionAsset non assigné ! Assigner BloomAndAshesInputActions dans l'Inspector.", this);
             return;
         }
 
         InputActionMap gameplayMap = inputActions.FindActionMap("Gameplay", throwIfNotFound: false);
         if (gameplayMap == null)
         {
-            Debug.LogError("CameraController: Map Gameplay introuvable dans l'InputActionAsset.");
+            GameLogger.Error("CameraController: Map Gameplay introuvable dans l'InputActionAsset.", this);
             return;
         }
 
@@ -165,12 +165,12 @@ public class CameraController : MonoBehaviour
 
         if (cameraMoveAction == null)
         {
-            Debug.LogError("CameraController: Action CameraMove introuvable dans le map Gameplay.");
+            GameLogger.Error("CameraController: Action CameraMove introuvable dans le map Gameplay.", this);
         }
 
         if (cameraZoomAction == null)
         {
-            Debug.LogError("CameraController: Action CameraZoom introuvable dans le map Gameplay.");
+            GameLogger.Error("CameraController: Action CameraZoom introuvable dans le map Gameplay.", this);
         }
     }
 
@@ -251,12 +251,12 @@ public class CameraController : MonoBehaviour
     {
         if (GridManager.Instance == null)
         {
-            Debug.Log($"CameraController: Initialisé sans GridManager, position {transform.position}");
+            GameLogger.Log(GameLogger.Category.Movement, $"CameraController: Initialisé sans GridManager, position {transform.position}", this);
             return;
         }
 
         Vector2Int gridSize = GridManager.Instance.GetGridSize();
         float cellSize = GridManager.Instance.GetCellSize();
-        Debug.Log($"CameraController: Grille {gridSize.x}x{gridSize.y}, cellSize {cellSize}, position initiale {transform.position}");
+        GameLogger.Log(GameLogger.Category.Movement, $"CameraController: Grille {gridSize.x}x{gridSize.y}, cellSize {cellSize}, position initiale {transform.position}", this);
     }
 }

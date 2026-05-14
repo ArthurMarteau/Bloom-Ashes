@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 
 // Tooltip générique flottant affiché au survol d'éléments interactifs (ItemSlot, SacrificeButton)
@@ -32,7 +32,7 @@ public class TooltipUI : MonoBehaviour
     {
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning("TooltipUI: Instance dupliquée, destruction.");
+            GameLogger.Warn(GameLogger.Category.UI, "TooltipUI: Instance dupliquée, destruction.", this);
             Destroy(gameObject);
             return;
         }
@@ -91,7 +91,7 @@ public class TooltipUI : MonoBehaviour
         // Positionne immédiatement avant le premier Update pour éviter le flash
         UpdateTooltipPosition();
 
-        Debug.Log($"💬 TooltipUI: Affiché — \"{title}\"");
+        GameLogger.Log(GameLogger.Category.UI, $"💬 TooltipUI: Affiché — \"{title}\"", this);
     }
 
     // Masque le tooltip

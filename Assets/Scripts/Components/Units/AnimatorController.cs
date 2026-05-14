@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -43,13 +43,13 @@ public class AnimatorController : MonoBehaviour
         // Valide que les composants existent
         if (unitAnimator == null)
         {
-            Debug.LogError($"AnimatorController sur {gameObject.name}: Composant Animator manquant!");
+            GameLogger.Error($"AnimatorController sur {gameObject.name}: Composant Animator manquant!", this);
             return;
         }
 
         if (spriteRenderer == null)
         {
-            Debug.LogError($"AnimatorController sur {gameObject.name}: Composant SpriteRenderer manquant!");
+            GameLogger.Error($"AnimatorController sur {gameObject.name}: Composant SpriteRenderer manquant!", this);
             return;
         }
 
@@ -69,7 +69,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController initialisé pour {gameObject.name}, Rootborn: {IsRootborn()}");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController initialisé pour {gameObject.name}, Rootborn: {IsRootborn()}", this);
         }
     }
 
@@ -121,12 +121,12 @@ public class AnimatorController : MonoBehaviour
 
             if (debugAnimations)
             {
-                Debug.Log($"AnimatorController {gameObject.name}: Animation {animationName}, Direction {direction}, Miroir: {requiresMirror}");
+                GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Animation {animationName}, Direction {direction}, Miroir: {requiresMirror}", this);
             }
         }
         else
         {
-            Debug.LogWarning($"AnimatorController {gameObject.name}: Animation non trouvée pour direction {direction}");
+            GameLogger.Warn(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Animation non trouvée pour direction {direction}", this);
         }
     }
 
@@ -154,7 +154,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Attack {attackAnimationName} (durée {ATTACK_ANIMATION_DURATION}s)");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Attack {attackAnimationName} (durée {ATTACK_ANIMATION_DURATION}s)", this);
         }
     }
 
@@ -191,7 +191,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation {idleAttackAnimationName}, Direction {direction}, Miroir: {requiresMirror}");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Animation {idleAttackAnimationName}, Direction {direction}, Miroir: {requiresMirror}", this);
         }
     }
 
@@ -245,7 +245,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation Idle");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Animation Idle", this);
         }
     }
 
@@ -272,7 +272,7 @@ public class AnimatorController : MonoBehaviour
         {
             if (debugAnimations)
             {
-                Debug.Log($"AnimatorController {gameObject.name}: IdleReversed déjà joué cette session, skip");
+                GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: IdleReversed déjà joué cette session, skip", this);
             }
             onComplete?.Invoke();
             return;
@@ -296,7 +296,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Début IdleReversed Rootborn ({rootbornIdleReversedDuration}s)");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Début IdleReversed Rootborn ({rootbornIdleReversedDuration}s)", this);
         }
 
         // Marque comme joué pour cette session complète
@@ -326,7 +326,7 @@ public class AnimatorController : MonoBehaviour
             
             if (debugAnimations)
             {
-                Debug.Log($"Animation sync: durée originale {originalAnimationLength}s, vitesse ajustée à {requiredSpeed}");
+                GameLogger.Log(GameLogger.Category.UI, $"Animation sync: durée originale {originalAnimationLength}s, vitesse ajustée à {requiredSpeed}", this);
             }
         }
 
@@ -344,7 +344,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Fin IdleReversed Rootborn");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Fin IdleReversed Rootborn", this);
         }
 
         // Déclenche le callback pour autoriser le mouvement
@@ -359,7 +359,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Session IdleReversed resetée");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Session IdleReversed resetée", this);
         }
     }
 
@@ -475,7 +475,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Toutes animations arrêtées");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Toutes animations arrêtées", this);
         }
     }
 
@@ -504,7 +504,7 @@ public class AnimatorController : MonoBehaviour
 
         if (debugAnimations)
         {
-            Debug.Log($"AnimatorController {gameObject.name}: Animation Death");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Animation Death", this);
         }
     }
 
@@ -532,7 +532,7 @@ public class AnimatorController : MonoBehaviour
             SetMirror(false);
 
             if (debugAnimations)
-                Debug.Log($"AnimatorController {gameObject.name}: Hit_Idle (Rootborn en Idle)");
+                GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Hit_Idle (Rootborn en Idle)", this);
 
             unitAnimator.Play(AnimationNames.HitIdle);
             return;
@@ -549,7 +549,7 @@ public class AnimatorController : MonoBehaviour
         bool mirror  = (dx > 0); // NE, E, SE → miroir horizontal
 
         if (debugAnimations)
-            Debug.Log($"AnimatorController {gameObject.name}: Hit_{(isHitNW ? "NW" : "SW")} (attaquant {attackerPosition} -> victime {victimPosition}, miroir: {mirror})");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Hit_{(isHitNW ? "NW" : "SW")} (attaquant {attackerPosition} -> victime {victimPosition}, miroir: {mirror})", this);
 
         // Reset le cycle idle uniquement ici, APRÈS avoir calculé le miroir Hit
         // Évite d'écraser le flipX de l'AttackIdle en cours avant la transition
@@ -569,20 +569,20 @@ public class AnimatorController : MonoBehaviour
         SetMirror(isIdleMirrored);
 
         if (debugAnimations)
-            Debug.Log($"AnimatorController {gameObject.name}: Alternance idle miroir → {isIdleMirrored}");
+            GameLogger.Log(GameLogger.Category.UI, $"AnimatorController {gameObject.name}: Alternance idle miroir → {isIdleMirrored}", this);
     }
 
     // Méthode de debug pour afficher l'état de l'animator
     [ContextMenu("Debug Animator State")]
     private void DebugAnimatorState()
     {
-        Debug.Log($"=== AnimatorController Debug - {gameObject.name} ===");
-        Debug.Log($"Est Rootborn: {IsRootborn()}");
-        Debug.Log($"IdleReversed en cours: {idleReversedCoroutine != null}");
-        Debug.Log($"Cycle idle miroir actif: {isIdleMirrored}");
-        Debug.Log($"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}");
-        Debug.Log($"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName(AnimationNames.Idle) : "Animator null")}");
-        Debug.Log($"Miroir actif: {(spriteRenderer != null ? spriteRenderer.flipX : false)}");
+        GameLogger.Log(GameLogger.Category.UI, $"=== AnimatorController Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.UI, $"Est Rootborn: {IsRootborn()}", this);
+        GameLogger.Log(GameLogger.Category.UI, $"IdleReversed en cours: {idleReversedCoroutine != null}", this);
+        GameLogger.Log(GameLogger.Category.UI, $"Cycle idle miroir actif: {isIdleMirrored}", this);
+        GameLogger.Log(GameLogger.Category.UI, $"Vitesse animator: {(unitAnimator != null ? unitAnimator.speed : 0f)}", this);
+        GameLogger.Log(GameLogger.Category.UI, $"Animation actuelle: {(unitAnimator != null ? unitAnimator.GetCurrentAnimatorStateInfo(0).IsName(AnimationNames.Idle) : "Animator null")}", this);
+        GameLogger.Log(GameLogger.Category.UI, $"Miroir actif: {(spriteRenderer != null ? spriteRenderer.flipX : false)}", this);
     }
 }
 

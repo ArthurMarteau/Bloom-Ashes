@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Gère l'appartenance d'une unité à une équipe
 // Permet de déterminer les relations ennemi/allié entre unités
@@ -29,7 +29,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         ApplyTeamColor();
 
         if (debugTeam)
-            Debug.Log($"🎨 TeamComponent {gameObject.name}: Équipe {teamID}");
+            GameLogger.Log(GameLogger.Category.Combat, $"🎨 TeamComponent {gameObject.name}: Équipe {teamID}", this);
     }
 
     // Applique la couleur d'équipe au SpriteRenderer via le shader TeamColor
@@ -39,14 +39,14 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         if (spriteRenderer == null)
         {
             if (debugTeam)
-                Debug.LogWarning($"⚠️ TeamComponent {gameObject.name}: Pas de SpriteRenderer trouvé");
+                GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ TeamComponent {gameObject.name}: Pas de SpriteRenderer trouvé", this);
             return;
         }
 
         if (spriteRenderer.material == null)
         {
             if (debugTeam)
-                Debug.LogWarning($"⚠️ TeamComponent {gameObject.name}: Pas de material trouvé");
+                GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ TeamComponent {gameObject.name}: Pas de material trouvé", this);
             return;
         }
 
@@ -55,7 +55,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         spriteRenderer.material.SetColor("_TeamColor", GetTeamColor());
 
         if (debugTeam)
-            Debug.Log($"🎨 TeamComponent {gameObject.name}: Couleur équipe {teamID} appliquée → {GetTeamColor()}");
+            GameLogger.Log(GameLogger.Category.Combat, $"🎨 TeamComponent {gameObject.name}: Couleur équipe {teamID} appliquée → {GetTeamColor()}", this);
     }
 
     // Retourne la couleur associée à l'équipe courante
@@ -90,7 +90,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         bool isEnemy = teamID != other.GetTeamID();
 
         if (debugTeam && isEnemy)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ENNEMI");
+            GameLogger.Log(GameLogger.Category.Combat, $"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ENNEMI", this);
 
         return isEnemy;
     }
@@ -112,7 +112,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         bool isAlly = teamID == other.GetTeamID();
 
         if (debugTeam && isAlly)
-            Debug.Log($"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ALLIÉ");
+            GameLogger.Log(GameLogger.Category.Combat, $"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ALLIÉ", this);
 
         return isAlly;
     }
@@ -136,7 +136,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         ApplyTeamColor();
 
         if (debugTeam)
-            Debug.Log($"🎨 TeamComponent {gameObject.name}: Équipe changée vers {teamID}");
+            GameLogger.Log(GameLogger.Category.Combat, $"🎨 TeamComponent {gameObject.name}: Équipe changée vers {teamID}", this);
     }
 
     // Retourne une description textuelle de l'équipe
@@ -149,10 +149,10 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     [ContextMenu("Debug Team Info")]
     private void DebugTeamInfo()
     {
-        Debug.Log($"=== TeamComponent Debug - {gameObject.name} ===");
-        Debug.Log($"Team ID: {teamID}");
-        Debug.Log($"Team Name: {GetTeamName()}");
-        Debug.Log($"Est Neutre: {IsNeutral()}");
-        Debug.Log($"Team Color: {GetTeamColor()}");
+        GameLogger.Log(GameLogger.Category.Combat, $"=== TeamComponent Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Team ID: {teamID}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Team Name: {GetTeamName()}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Est Neutre: {IsNeutral()}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Team Color: {GetTeamColor()}", this);
     }
 }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 // Relie la touche d'ability du InputManager au système d'abilities pour l'unité sélectionnée.
@@ -19,7 +19,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.LogWarning("⌨️ AbilityInputHandler: InputManager introuvable, abonnement ignoré.");
+                GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: InputManager introuvable, abonnement ignoré.", this);
             }
             return;
         }
@@ -27,7 +27,7 @@ public class AbilityInputHandler : MonoBehaviour
         selectionManager = Object.FindFirstObjectByType<SelectionManager>();
         if (selectionManager == null && debugAbilityInput)
         {
-            Debug.LogWarning("⌨️ AbilityInputHandler: SelectionManager introuvable, ability clavier inactive.");
+            GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: SelectionManager introuvable, ability clavier inactive.", this);
         }
         else if (selectionManager != null)
         {
@@ -66,7 +66,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.LogWarning("⌨️ AbilityInputHandler: SelectionManager absent, ability ignorée.");
+                GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: SelectionManager absent, ability ignorée.", this);
             }
             return;
         }
@@ -80,7 +80,7 @@ public class AbilityInputHandler : MonoBehaviour
 
             if (debugAbilityInput)
             {
-                Debug.Log("⌨️ AbilityInputHandler: ability ignorée, aucune unité unique sélectionnée.");
+                GameLogger.Log(GameLogger.Category.UI, "⌨️ AbilityInputHandler: ability ignorée, aucune unité unique sélectionnée.", this);
             }
             return;
         }
@@ -89,7 +89,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.LogWarning("⌨️ AbilityInputHandler: AbilityManager absent, ability ignorée.");
+                GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: AbilityManager absent, ability ignorée.", this);
             }
             return;
         }
@@ -112,7 +112,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.Log("⌨️ AbilityInputHandler: ability ignorée, bâtiment sélectionné.");
+                GameLogger.Log(GameLogger.Category.UI, "⌨️ AbilityInputHandler: ability ignorée, bâtiment sélectionné.", this);
             }
             return;
         }
@@ -124,7 +124,7 @@ public class AbilityInputHandler : MonoBehaviour
 
             if (debugAbilityInput)
             {
-                Debug.Log($"⌨️ AbilityInputHandler: ability Nexus lancée pour {unit.name}.");
+                GameLogger.Log(GameLogger.Category.UI, $"⌨️ AbilityInputHandler: ability Nexus lancée pour {unit.name}.", this);
             }
             return;
         }
@@ -134,7 +134,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.Log("⌨️ AbilityInputHandler: ability ignorée, UnitStatsComponent manquant.");
+                GameLogger.Log(GameLogger.Category.UI, "⌨️ AbilityInputHandler: ability ignorée, UnitStatsComponent manquant.", this);
             }
             return;
         }
@@ -144,7 +144,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.Log("⌨️ AbilityInputHandler: ability ignorée, aucune AbilityData assignée.");
+                GameLogger.Log(GameLogger.Category.UI, "⌨️ AbilityInputHandler: ability ignorée, aucune AbilityData assignée.", this);
             }
             return;
         }
@@ -153,7 +153,7 @@ public class AbilityInputHandler : MonoBehaviour
 
         if (debugAbilityInput)
         {
-            Debug.Log($"⌨️ AbilityInputHandler: ability lancée pour {unit.name}.");
+            GameLogger.Log(GameLogger.Category.UI, $"⌨️ AbilityInputHandler: ability lancée pour {unit.name}.", this);
         }
     }
 
@@ -203,7 +203,7 @@ public class AbilityInputHandler : MonoBehaviour
         {
             if (debugAbilityInput)
             {
-                Debug.Log("⌨️ AbilityInputHandler: ability ignorée, bâtiment sélectionné.");
+                GameLogger.Log(GameLogger.Category.UI, "⌨️ AbilityInputHandler: ability ignorée, bâtiment sélectionné.", this);
             }
             return true;
         }
@@ -217,7 +217,7 @@ public class AbilityInputHandler : MonoBehaviour
 
         if (debugAbilityInput)
         {
-            Debug.Log($"⌨️ AbilityInputHandler: ability Nexus lancée pour {selectedBuilding.name}.");
+            GameLogger.Log(GameLogger.Category.UI, $"⌨️ AbilityInputHandler: ability Nexus lancée pour {selectedBuilding.name}.", this);
         }
         return true;
     }

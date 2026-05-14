@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.InputSystem;
 
@@ -57,7 +57,7 @@ public class InputManager : MonoBehaviour
         // Singleton MonoBehaviour (non-static, compatible netcode)
         if (Instance != null && Instance != this)
         {
-            Debug.LogWarning($"InputManager: Instance dupliquée sur {gameObject.name}, destruction.");
+            GameLogger.Warn(GameLogger.Category.Selection, $"InputManager: Instance dupliquée sur {gameObject.name}, destruction.", this);
             Destroy(gameObject);
             return;
         }
@@ -69,13 +69,13 @@ public class InputManager : MonoBehaviour
 
         if (mainCamera == null)
         {
-            Debug.LogError("InputManager: Camera.main introuvable !");
+            GameLogger.Error("InputManager: Camera.main introuvable !", this);
         }
 
         // Vérifie que l'asset d'actions est bien assigné
         if (inputActions == null)
         {
-            Debug.LogError("InputManager: InputActionAsset non assigné ! Assigner BloomAndAshesInputActions dans l'Inspector.");
+            GameLogger.Error("InputManager: InputActionAsset non assigné ! Assigner BloomAndAshesInputActions dans l'Inspector.", this);
             return;
         }
 
@@ -89,7 +89,7 @@ public class InputManager : MonoBehaviour
 
         if (debugInput)
         {
-            Debug.Log($"✅ InputManager: Initialisé sur {gameObject.name} avec New Input System");
+            GameLogger.Log(GameLogger.Category.Selection, $"✅ InputManager: Initialisé sur {gameObject.name} avec New Input System", this);
         }
     }
 
@@ -152,7 +152,7 @@ public class InputManager : MonoBehaviour
 
         if (debugInput)
         {
-            Debug.Log($"🖱️ InputManager: LeftClickDown — monde {worldPosition}, Shift: {IsShiftHeld}");
+            GameLogger.Log(GameLogger.Category.Selection, $"🖱️ InputManager: LeftClickDown — monde {worldPosition}, Shift: {IsShiftHeld}", this);
         }
     }
 
@@ -169,7 +169,7 @@ public class InputManager : MonoBehaviour
 
             if (debugInput)
             {
-                Debug.Log($"🖱️ InputManager: DragEnd");
+                GameLogger.Log(GameLogger.Category.Selection, $"🖱️ InputManager: DragEnd", this);
             }
         }
         else
@@ -179,7 +179,7 @@ public class InputManager : MonoBehaviour
 
             if (debugInput)
             {
-                Debug.Log($"🖱️ InputManager: LeftClickUp — écran {currentMousePosition}");
+                GameLogger.Log(GameLogger.Category.Selection, $"🖱️ InputManager: LeftClickUp — écran {currentMousePosition}", this);
             }
         }
     }
@@ -192,7 +192,7 @@ public class InputManager : MonoBehaviour
 
         if (debugInput)
         {
-            Debug.Log($"🖱️ InputManager: RightClickDown — monde {worldPosition}, Shift: {IsShiftHeld}");
+            GameLogger.Log(GameLogger.Category.Selection, $"🖱️ InputManager: RightClickDown — monde {worldPosition}, Shift: {IsShiftHeld}", this);
         }
     }
 
@@ -209,7 +209,7 @@ public class InputManager : MonoBehaviour
 
         if (debugInput)
         {
-            Debug.Log("⌨️ InputManager: AbilityKey pressée");
+            GameLogger.Log(GameLogger.Category.Selection, "⌨️ InputManager: AbilityKey pressée", this);
         }
     }
 
@@ -229,7 +229,7 @@ public class InputManager : MonoBehaviour
 
             if (debugInput)
             {
-                Debug.Log($"🖱️ InputManager: DragStart — écran {mouseDownScreenPosition}");
+                GameLogger.Log(GameLogger.Category.Selection, $"🖱️ InputManager: DragStart — écran {mouseDownScreenPosition}", this);
             }
         }
 

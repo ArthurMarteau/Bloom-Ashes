@@ -39,11 +39,11 @@ public class OrderManager : MonoBehaviour
             selectionManager = FindAnyObjectByType<SelectionManager>();
             if (selectionManager == null)
             {
-                Debug.LogError("OrderManager: SelectionManager non trouvé !");
+                GameLogger.Error("OrderManager: SelectionManager non trouvé !", this);
             }
         }
 
-        Debug.Log("OrderManager initialisé");
+        GameLogger.Log(GameLogger.Category.Selection, "OrderManager initialisé", this);
     }
 
     // S'abonne aux events de InputManager pour découpler la lecture d'input
@@ -52,7 +52,7 @@ public class OrderManager : MonoBehaviour
         inputManager = InputManager.Instance;
         if (inputManager == null)
         {
-            Debug.LogError("OrderManager: InputManager introuvable dans la scène !");
+            GameLogger.Error("OrderManager: InputManager introuvable dans la scène !", this);
             return;
         }
 
@@ -68,14 +68,14 @@ public class OrderManager : MonoBehaviour
         // Vérifie qu'il y a des unités sélectionnées
         if (selectionManager == null || !selectionManager.HasUnitsSelected())
         {
-            Debug.Log("OrderManager: Aucune unité sélectionnée pour ordre");
+            GameLogger.Log(GameLogger.Category.Selection, "OrderManager: Aucune unité sélectionnée pour ordre", this);
             return;
         }
 
         // Vérifie s'il y a une entité ciblable sous le curseur (unité ou bâtiment) via overlap 2D
         Collider2D targetCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), targetableLayer);
         Vector2Int debugCell = GridManager.Instance.WorldToGrid(worldPosition);
-        Debug.Log($"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}");
+        GameLogger.Log(GameLogger.Category.Selection, $"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}", this);
 
         if (targetCollider != null)
         {
@@ -181,7 +181,7 @@ public class OrderManager : MonoBehaviour
             ITeamMember unitTeamMember = unit.GetComponent<ITeamMember>();
             if (unitTeamMember == null)
             {
-                Debug.LogWarning($"OrderManager: {unit.name} n'a pas d'ITeamMember (TeamComponent manquant ?)");
+                GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: {unit.name} n'a pas d'ITeamMember (TeamComponent manquant ?)", this);
                 continue;
             }
 
@@ -227,7 +227,7 @@ public class OrderManager : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning($"OrderManager: {unit.name} n'a pas de AttackController");
+                    GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: {unit.name} n'a pas de AttackController", this);
                 }
             }
             else
@@ -270,18 +270,18 @@ public class OrderManager : MonoBehaviour
                 }
                 else
                 {
-                    Debug.LogWarning($"OrderManager: {unit.name} n'a pas de ChaseController");
+                    GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: {unit.name} n'a pas de ChaseController", this);
                 }
             }
         }
 
         if (attackOrders > 0)
         {
-            Debug.Log($"OrderManager: Ordre d'attaque sur {targetUnit.name} : {attackOrders}/{selectedUnits.Count} unités");
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre d'attaque sur {targetUnit.name} : {attackOrders}/{selectedUnits.Count} unités", this);
         }
         if (chaseOrders > 0)
         {
-            Debug.Log($"OrderManager: Ordre de chase sur {targetUnit.name} : {chaseOrders}/{selectedUnits.Count} unités");
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de chase sur {targetUnit.name} : {chaseOrders}/{selectedUnits.Count} unités", this);
         }
     }
 
@@ -295,7 +295,7 @@ public class OrderManager : MonoBehaviour
         // Vérifie que la destination est dans les limites
         if (!GridManager.Instance.IsInBounds(targetGridPosition))
         {
-            Debug.LogWarning($"OrderManager: Ordre de mouvement hors limites : {targetGridPosition}");
+            GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement hors limites : {targetGridPosition}", this);
             return;
         }
 
@@ -351,7 +351,7 @@ public class OrderManager : MonoBehaviour
                 }
             }
 
-            Debug.Log($"OrderManager: Ordre group� vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s dispatch�es sur {dispatchCells.Count} cases");
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre group� vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s dispatch�es sur {dispatchCells.Count} cases", this);
         }
         else
         {
@@ -380,7 +380,7 @@ public class OrderManager : MonoBehaviour
                 }
             }
 
-            Debug.Log($"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s");
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s", this);
         }
     }
 

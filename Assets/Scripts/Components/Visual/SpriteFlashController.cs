@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 
 // Applique le paramètre _FlashAmount du shader SpriteFlash sur un SpriteRenderer cible
@@ -34,13 +34,13 @@ public class SpriteFlashController : MonoBehaviour
     {
         if (targetRenderer == null || targetRenderer.sharedMaterial == null)
         {
-            Debug.LogWarning($"✨ SpriteFlashController {gameObject.name} : SpriteRenderer ou material absent");
+            GameLogger.Warn(GameLogger.Category.UI, $"✨ SpriteFlashController {gameObject.name} : SpriteRenderer ou material absent", this);
             return;
         }
 
         if (!targetRenderer.sharedMaterial.shader.name.Contains(RequiredShaderName))
         {
-            Debug.LogWarning($"✨ SpriteFlashController {gameObject.name} : le material '{targetRenderer.sharedMaterial.name}' n'utilise pas le shader SpriteFlash — les effets de flash ne seront pas visibles");
+            GameLogger.Warn(GameLogger.Category.UI, $"✨ SpriteFlashController {gameObject.name} : le material '{targetRenderer.sharedMaterial.name}' n'utilise pas le shader SpriteFlash — les effets de flash ne seront pas visibles", this);
         }
     }
 
@@ -106,14 +106,14 @@ public class SpriteFlashController : MonoBehaviour
     private void DebugFlashFull()
     {
         SetFlashAmount(1f);
-        Debug.Log($"✨ SpriteFlashController {gameObject.name} : Flash 100%");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ SpriteFlashController {gameObject.name} : Flash 100%", this);
     }
 
     [ContextMenu("Debug: Flash 0%")]
     private void DebugFlashZero()
     {
         SetFlashAmount(0f);
-        Debug.Log($"✨ SpriteFlashController {gameObject.name} : Flash 0%");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ SpriteFlashController {gameObject.name} : Flash 0%", this);
     }
 
     [ContextMenu("Debug: Test FadeOut 2s")]
@@ -122,6 +122,6 @@ public class SpriteFlashController : MonoBehaviour
         AnimationCurve easeOut = AnimationCurve.EaseInOut(0f, 1f, 1f, 0f);
         SetFlashAmount(1f);
         FadeOut(2f, easeOut);
-        Debug.Log($"✨ SpriteFlashController {gameObject.name} : FadeOut 2s lancé");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ SpriteFlashController {gameObject.name} : FadeOut 2s lancé", this);
     }
 }

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Logique d'exécution de l'ability de transfert de Watersap du Rootborn (auto et manuel)
 // Délègue à RootbornStockComponent.TryTransfer()
@@ -18,7 +18,7 @@ public class WatersapTransferExecutor : AbilityExecutor
         MovementController.MovementState state = movementController.GetCurrentState();
         if (state != MovementController.MovementState.Idle)
         {
-            Debug.Log($"⏳ WatersapTransfer bloqué : Rootborn non idle ({state})");
+            GameLogger.Log(GameLogger.Category.Watersap, $"⏳ WatersapTransfer bloqué : Rootborn non idle ({state})", null);
             return false;
         }
 
@@ -30,14 +30,14 @@ public class WatersapTransferExecutor : AbilityExecutor
         RootbornStockComponent stockComponent = caster.GetComponent<RootbornStockComponent>();
         if (stockComponent == null)
         {
-            Debug.LogWarning($"⚠️ WatersapTransferExecutor : RootbornStockComponent manquant sur {caster.name}");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"⚠️ WatersapTransferExecutor : RootbornStockComponent manquant sur {caster.name}", null);
             return false;
         }
 
         bool success = stockComponent.TryTransfer();
 
         if (success)
-            Debug.Log($"✅ {abilityData.abilityName} : Watersap transféré");
+            GameLogger.Log(GameLogger.Category.Watersap, $"✅ {abilityData.abilityName} : Watersap transféré", null);
         return success;
     }
 }

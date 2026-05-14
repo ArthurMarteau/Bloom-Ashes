@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Attaché à la caméra principale
 // Détecte le sprite sous le curseur via OverlapPoint et active son outline coloré selon les HP
@@ -17,7 +17,7 @@ public class OutlineController : MonoBehaviour
         mainCamera = Camera.main;
         if (mainCamera == null)
         {
-            Debug.LogError("OutlineController: Camera.main introuvable !");
+            GameLogger.Error("OutlineController: Camera.main introuvable !", this);
             enabled = false;
         }
     }

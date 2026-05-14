@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -131,20 +131,7 @@ public class TransformationController : MonoBehaviour
 
         WatersapManager.Instance.SpendWatersap(teamID, unitData.watersapCost);
 
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
-        {
-            movementController.StopMovement();
-            movementController.enabled = false;
-        }
-
-        AttackController attackController = GetComponent<AttackController>();
-        if (attackController != null)
-            attackController.enabled = false;
-
-        ChaseController chaseController = GetComponent<ChaseController>();
-        if (chaseController != null)
-            chaseController.enabled = false;
+        UnitFreezer.Freeze(gameObject, disableComponents: true, freezeAnimator: false);
 
         GetComponent<Animator>()?.Play("Idle_Transform");
 
@@ -200,17 +187,17 @@ public class TransformationController : MonoBehaviour
     private void Log(string message)
     {
         if (debugTransform)
-            Debug.Log($"TransformationController {gameObject.name} : {message}");
+            GameLogger.Log(GameLogger.Category.Combat, $"TransformationController {gameObject.name} : {message}", this);
     }
 
     private void LogWarning(string message)
     {
         if (debugTransform)
-            Debug.LogWarning($"TransformationController {gameObject.name} : {message}");
+            GameLogger.Warn(GameLogger.Category.Combat, $"TransformationController {gameObject.name} : {message}", this);
     }
 
     private void LogError(string message)
     {
-        Debug.LogError($"TransformationController {gameObject.name} : {message}");
+        GameLogger.Error($"TransformationController {gameObject.name} : {message}", this);
     }
 }

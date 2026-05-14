@@ -51,8 +51,8 @@ public class OutlineRendererFeature : ScriptableRendererFeature
 
         if (outlineShader == null)
         {
-            Debug.LogError("OutlineRendererFeature: Shader 'Custom/OutlineEffect' introuvable !\n" +
-                           "Vérifiez que Assets/Shaders/OutlineEffect.shader est présent dans le projet.");
+            GameLogger.Error("OutlineRendererFeature: Shader 'Custom/OutlineEffect' introuvable !\n" +
+                           "Vérifiez que Assets/Shaders/OutlineEffect.shader est présent dans le projet.", this);
             return;
         }
 

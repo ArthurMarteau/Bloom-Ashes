@@ -29,7 +29,7 @@ public class SelectionSquare : MonoBehaviour
         // Vérifie que le SpriteRenderer existe
         if (spriteRenderer == null)
         {
-            Debug.LogError("SelectionSquare nécessite un SpriteRenderer !");
+            GameLogger.Error("SelectionSquare nécessite un SpriteRenderer !", this);
         }
     }
 
@@ -54,7 +54,7 @@ public class SelectionSquare : MonoBehaviour
     {
         if (target == null)
         {
-            Debug.LogWarning("Tentative d'attacher SelectionSquare à un objet null !");
+            GameLogger.Warn(GameLogger.Category.Selection, "Tentative d'attacher SelectionSquare à un objet null !", this);
             return;
         }
 
@@ -65,7 +65,7 @@ public class SelectionSquare : MonoBehaviour
         // Place immédiatement le carré sur l'objet
         transform.position = target.transform.position;
 
-        Debug.Log($"SelectionSquare attaché à {target.name}");
+        GameLogger.Log(GameLogger.Category.Selection, $"SelectionSquare attaché à {target.name}", this);
     }
 
     // Attache le carré de sélection à une position fixe de grille
@@ -75,7 +75,7 @@ public class SelectionSquare : MonoBehaviour
         // Vérifie que la position est valide
         if (!GridManager.Instance.IsInBounds(gridPos))
         {
-            Debug.LogWarning($"Position de grille invalide : {gridPos}");
+            GameLogger.Warn(GameLogger.Category.Selection, $"Position de grille invalide : {gridPos}", this);
             return;
         }
 
@@ -88,7 +88,7 @@ public class SelectionSquare : MonoBehaviour
         Vector3 worldPosition = GridManager.Instance.GridToWorld(gridPos);
         transform.position = worldPosition;
 
-        Debug.Log($"SelectionSquare placé sur la cellule {gridPos}");
+        GameLogger.Log(GameLogger.Category.Selection, $"SelectionSquare placé sur la cellule {gridPos}", this);
     }
 
     // Suit automatiquement la position de l'objet cible
@@ -108,7 +108,7 @@ public class SelectionSquare : MonoBehaviour
     {
         if (targetObject == null)
         {
-            Debug.Log("Objet cible détruit, destruction du SelectionSquare");
+            GameLogger.Log(GameLogger.Category.Selection, "Objet cible détruit, destruction du SelectionSquare", this);
             DestroySelectionSquare();
             return true;
         }
@@ -120,7 +120,7 @@ public class SelectionSquare : MonoBehaviour
     // Méthode publique pour permettre la destruction externe
     public void DestroySelectionSquare()
     {
-        Debug.Log("Destruction du SelectionSquare");
+        GameLogger.Log(GameLogger.Category.Selection, "Destruction du SelectionSquare", this);
         Destroy(gameObject);
     }
 

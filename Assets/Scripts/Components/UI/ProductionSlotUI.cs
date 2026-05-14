@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 
 // Slot rond représentant une unité produisible dans le ProductionPanel
@@ -50,7 +50,7 @@ public class ProductionSlotUI : MonoBehaviour
         string body = $"{unitData.description}\n<color=#007A8A>Coût : {watersapCost} Watersap</color>";
         tooltipTrigger?.SetContent(title, body);
 
-        Debug.Log($"🌿 ProductionSlotUI Setup — état: {state} | slotButton null: {slotButton == null} | portraitImage null: {portraitImage == null}");
+        GameLogger.Log(GameLogger.Category.UI, $"🌿 ProductionSlotUI Setup — état: {state} | slotButton null: {slotButton == null} | portraitImage null: {portraitImage == null}", this);
 
         // Portrait
         if (portraitImage != null)
@@ -72,7 +72,7 @@ public class ProductionSlotUI : MonoBehaviour
                     slotButton.interactable = true;
                     if (onClick != null)
                     {
-                        Debug.Log($"🌿 ProductionSlotUI : listener ajouté pour {unitData.unitName}");
+                        GameLogger.Log(GameLogger.Category.UI, $"🌿 ProductionSlotUI : listener ajouté pour {unitData.unitName}", this);
                         slotButton.onClick.AddListener(() => onClick(unitData));
                     }
                 }

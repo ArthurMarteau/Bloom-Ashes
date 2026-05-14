@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 public class GridManager : MonoBehaviour
 {
@@ -30,7 +30,7 @@ public class GridManager : MonoBehaviour
         {
             Instance = this;
             InitializeGroundTypeGrid();
-            Debug.Log($"Grille créée : {gridWidth}x{gridHeight}");
+            GameLogger.Log(GameLogger.Category.Grid, $"Grille créée : {gridWidth}x{gridHeight}", this);
         }
         else
         {
@@ -75,7 +75,7 @@ public class GridManager : MonoBehaviour
             }
         }
 
-        Debug.Log("Grille de terrain initialisée avec terrain normal");
+        GameLogger.Log(GameLogger.Category.Grid, "Grille de terrain initialisée avec terrain normal", this);
     }
 
     // Recalcule l'origine de la grille pour centrer la grille sur le monde
@@ -190,12 +190,12 @@ public class GridManager : MonoBehaviour
     {
         if (!IsInBounds(gridPosition))
         {
-            Debug.LogWarning($"Tentative de définir terrain hors limites : {gridPosition}");
+            GameLogger.Warn(GameLogger.Category.Grid, $"Tentative de définir terrain hors limites : {gridPosition}", this);
             return;
         }
 
         groundTypeGrid[gridPosition.x, gridPosition.y] = groundType;
-        Debug.Log($"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}");
+        GameLogger.Log(GameLogger.Category.Grid, $"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}", this);
     }
 
     // Retourne l'unité présente sur une position de grille via Collider2D (null si aucune)
@@ -305,13 +305,13 @@ public class GridManager : MonoBehaviour
         Vector3 worldPos = GridToWorld(gridPos);
         Vector2Int backToGrid = WorldToGrid(worldPos);
 
-        Debug.Log($"Test conversion :");
-        Debug.Log($"Grille {gridPos} -> Monde {worldPos} -> Grille {backToGrid}");
+        GameLogger.Log(GameLogger.Category.Grid, $"Test conversion :", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"Grille {gridPos} -> Monde {worldPos} -> Grille {backToGrid}", this);
 
         // Test les limites
-        Debug.Log($"(0,0) dans les limites : {IsInBounds(new Vector2Int(0, 0))}");
-        Debug.Log($"({gridWidth - 1},{gridHeight - 1}) dans les limites : {IsInBounds(new Vector2Int(gridWidth - 1, gridHeight - 1))}");
-        Debug.Log($"({gridWidth},{gridHeight}) dans les limites : {IsInBounds(new Vector2Int(gridWidth, gridHeight))}");
+        GameLogger.Log(GameLogger.Category.Grid, $"(0,0) dans les limites : {IsInBounds(new Vector2Int(0, 0))}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"({gridWidth - 1},{gridHeight - 1}) dans les limites : {IsInBounds(new Vector2Int(gridWidth - 1, gridHeight - 1))}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"({gridWidth},{gridHeight}) dans les limites : {IsInBounds(new Vector2Int(gridWidth, gridHeight))}", this);
     }
 
     // Méthode de test pour la logique de PathFinding avec système de tags
@@ -320,22 +320,22 @@ public class GridManager : MonoBehaviour
     {
         Vector2Int testPosition = new Vector2Int(2, 2);
 
-        Debug.Log($"=== Test PathFinding Logic sur {testPosition} ===");
-        Debug.Log($"Position dans limites : {IsInBounds(testPosition)}");
-        Debug.Log($"Unité présente (Collider) : {GetUnitAt(testPosition)}");
-        Debug.Log($"Obstacle présent : {GetObstacleAt(testPosition)}");
-        Debug.Log($"Type terrain : {GetGroundTypeAt(testPosition).GetDisplayName()}");
+        GameLogger.Log(GameLogger.Category.Grid, $"=== Test PathFinding Logic sur {testPosition} ===", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"Position dans limites : {IsInBounds(testPosition)}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"Unité présente (Collider) : {GetUnitAt(testPosition)}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"Obstacle présent : {GetObstacleAt(testPosition)}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"Type terrain : {GetGroundTypeAt(testPosition).GetDisplayName()}", this);
 
         // Test avec des GameObjects fictifs (nécessite vraies unités dans la scène)
         GameObject unitAtPosition = GetUnitAt(testPosition);
         if (unitAtPosition != null)
         {
-            Debug.Log($"Unité détectée : {unitAtPosition.name} ({UnitTypeHelper.GetDisplayName(unitAtPosition)})");
-            Debug.Log($"Terrains accessibles : {UnitTypeHelper.GetAccessibleTerrains(unitAtPosition)}");
+            GameLogger.Log(GameLogger.Category.Grid, $"Unité détectée : {unitAtPosition.name} ({UnitTypeHelper.GetDisplayName(unitAtPosition)})", this);
+            GameLogger.Log(GameLogger.Category.Grid, $"Terrains accessibles : {UnitTypeHelper.GetAccessibleTerrains(unitAtPosition)}", this);
         }
         else
         {
-            Debug.Log("Aucune unité détectée sur cette position");
+            GameLogger.Log(GameLogger.Category.Grid, "Aucune unité détectée sur cette position", this);
         }
     }
 
@@ -378,6 +378,6 @@ public class GridManager : MonoBehaviour
             SetGroundTypeAt(new Vector2Int(gridWidth / 2 + i, gridHeight / 2 + i), GroundType.Path);
         }
 
-        Debug.Log("🗺️ Terrain de test créé : Eau bas-gauche, Montagne haut-droite, Ronces centre, Chemin diagonal");
+        GameLogger.Log(GameLogger.Category.Grid, "🗺️ Terrain de test créé : Eau bas-gauche, Montagne haut-droite, Ronces centre, Chemin diagonal", this);
     }
 }

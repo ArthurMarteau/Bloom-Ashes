@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 
 // Gère la liste des joueurs de la session et expose le joueur local
@@ -31,7 +31,7 @@ public class PlayerManager : MonoBehaviour
         Instance = this;
 
         if (players == null || players.Count == 0)
-            Debug.LogError("👥 PlayerManager : aucun joueur assigné dans l'inspecteur !");
+            GameLogger.Error("👥 PlayerManager : aucun joueur assigné dans l'inspecteur !", this);
     }
 
     // Enregistre chaque joueur auprès du WatersapManager
@@ -43,12 +43,12 @@ public class PlayerManager : MonoBehaviour
         {
             if (player == null)
             {
-                Debug.LogWarning("👥 PlayerManager : un slot joueur est null, ignoré.");
+                GameLogger.Warn(GameLogger.Category.Selection, "👥 PlayerManager : un slot joueur est null, ignoré.", this);
                 continue;
             }
 
             WatersapManager.Instance.RegisterTeam(player.teamID);
-            Debug.Log($"👥 PlayerManager : joueur '{player.displayName}' (équipe {player.teamID}) enregistré.");
+            GameLogger.Log(GameLogger.Category.Selection, $"👥 PlayerManager : joueur '{player.displayName}' (équipe {player.teamID}) enregistré.", this);
         }
     }
 
@@ -64,7 +64,7 @@ public class PlayerManager : MonoBehaviour
         PlayerData data = GetPlayerData(teamID);
         if (data == null)
         {
-            Debug.LogWarning($"👥 PlayerManager : IsHumanPlayer — équipe {teamID} non trouvée.");
+            GameLogger.Warn(GameLogger.Category.Selection, $"👥 PlayerManager : IsHumanPlayer — équipe {teamID} non trouvée.", this);
             return false;
         }
         return data.isHuman;
@@ -89,21 +89,21 @@ public class PlayerManager : MonoBehaviour
     {
         if (players == null || players.Count == 0)
         {
-            Debug.Log("👥 PlayerManager : aucun joueur dans la liste.");
+            GameLogger.Log(GameLogger.Category.Selection, "👥 PlayerManager : aucun joueur dans la liste.", this);
             return;
         }
 
-        Debug.Log($"👥 PlayerManager : {players.Count} joueur(s) dans la session :");
+        GameLogger.Log(GameLogger.Category.Selection, $"👥 PlayerManager : {players.Count} joueur(s) dans la session :", this);
         foreach (PlayerData player in players)
         {
             if (player == null)
             {
-                Debug.Log("  — slot null");
+                GameLogger.Log(GameLogger.Category.Selection, "  — slot null", this);
                 continue;
             }
             string type = player.isHuman ? "Humain" : "IA";
             string local = (players.IndexOf(player) == localPlayerIndex) ? " ← LOCAL" : "";
-            Debug.Log($"  — [{player.teamID}] {player.displayName} ({type}){local}");
+            GameLogger.Log(GameLogger.Category.Selection, $"  — [{player.teamID}] {player.displayName} ({type}){local}", this);
         }
     }
 }

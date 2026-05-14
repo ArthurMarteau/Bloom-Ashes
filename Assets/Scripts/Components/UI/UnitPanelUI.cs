@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -76,6 +76,7 @@ public class UnitPanelUI : MonoBehaviour
     [SerializeField] private GameObject sacrificeCancelButton; // Sacrifice/Cancel_Button — affiché si unité ou bud
     [SerializeField] private GameObject sacrificeIcon;         // Sacrifice_Icon — enfant de sacrificeCancelButton
     [SerializeField] private GameObject cancelIcon;            // Cancel_Icon — enfant de sacrificeCancelButton
+    [SerializeField] private SacrificeAbility sacrificeAbilityData;
 
     [Header("Watersap Stock (Rootborn)")]
     [SerializeField] private WatersapStockUI watersapStockUI;
@@ -144,7 +145,7 @@ public class UnitPanelUI : MonoBehaviour
         selectionManager = Object.FindFirstObjectByType<SelectionManager>();
         if (selectionManager == null)
         {
-            Debug.LogError("🖥️ UnitPanelUI: SelectionManager introuvable dans la scène !");
+            GameLogger.Error("🖥️ UnitPanelUI: SelectionManager introuvable dans la scène !", this);
             return;
         }
 
@@ -169,7 +170,7 @@ public class UnitPanelUI : MonoBehaviour
             panelRoot.SetActive(false);
         }
 
-        Debug.Log("🖥️ UnitPanelUI: Initialisé et abonné aux events SelectionManager");
+        GameLogger.Log(GameLogger.Category.UI, "🖥️ UnitPanelUI: Initialisé et abonné aux events SelectionManager", this);
     }
 
     // Désabonne les events et untrack l'unité lors de la destruction
@@ -218,7 +219,7 @@ public class UnitPanelUI : MonoBehaviour
             RefreshGroup(units.Count);
         }
 
-        Debug.Log($"🖥️ UnitPanelUI: {units.Count} unité(s) sélectionnée(s)");
+        GameLogger.Log(GameLogger.Category.UI, $"🖥️ UnitPanelUI: {units.Count} unité(s) sélectionnée(s)", this);
     }
 
     // Reçoit les coordonnées grille du terrain sélectionné
@@ -226,7 +227,7 @@ public class UnitPanelUI : MonoBehaviour
     {
         ShowPanel();
         RefreshGround(gridPosition);
-        Debug.Log($"🖥️ UnitPanelUI: Terrain sélectionné en {gridPosition}");
+        GameLogger.Log(GameLogger.Category.UI, $"🖥️ UnitPanelUI: Terrain sélectionné en {gridPosition}", this);
     }
 
     // Reçoit le bâtiment sélectionné
@@ -248,7 +249,7 @@ public class UnitPanelUI : MonoBehaviour
 
         ShowPanel();
         RefreshBuilding(buildingObject);
-        Debug.Log($"🏗️ UnitPanelUI: Bâtiment sélectionné — {buildingObject.name}");
+        GameLogger.Log(GameLogger.Category.UI, $"🏗️ UnitPanelUI: Bâtiment sélectionné — {buildingObject.name}", this);
     }
 
     // Reçoit l'obstacle sélectionné
@@ -256,7 +257,7 @@ public class UnitPanelUI : MonoBehaviour
     {
         ShowPanel();
         RefreshObstacle(obstacle);
-        Debug.Log($"🖥️ UnitPanelUI: Obstacle sélectionné — {obstacle?.name}");
+        GameLogger.Log(GameLogger.Category.UI, $"🖥️ UnitPanelUI: Obstacle sélectionné — {obstacle?.name}", this);
     }
 
     // Aucune sélection — masque le panneau entier
@@ -269,7 +270,7 @@ public class UnitPanelUI : MonoBehaviour
         UntrackBuilding();
         ConfigureVisibility(EntityType.None);
         HidePanel();
-        Debug.Log("🖥️ UnitPanelUI: Sélection effacée — panneau masqué");
+        GameLogger.Log(GameLogger.Category.UI, "🖥️ UnitPanelUI: Sélection effacée — panneau masqué", this);
     }
 
     // === CONFIGURATION DE VISIBILITÉ CENTRALISÉE ===
@@ -354,7 +355,7 @@ public class UnitPanelUI : MonoBehaviour
         UnitStatsComponent stats = unitObject.GetComponent<UnitStatsComponent>();
         if (stats == null)
         {
-            Debug.LogWarning($"🖥️ UnitPanelUI: Pas de UnitStatsComponent sur {unitObject.name}");
+            GameLogger.Warn(GameLogger.Category.UI, $"🖥️ UnitPanelUI: Pas de UnitStatsComponent sur {unitObject.name}", this);
             return;
         }
 
@@ -529,7 +530,7 @@ public class UnitPanelUI : MonoBehaviour
         BuildingStatsComponent stats = buildingObject.GetComponent<BuildingStatsComponent>();
         if (stats == null)
         {
-            Debug.LogWarning($"🏗️ UnitPanelUI: Pas de BuildingStatsComponent sur {buildingObject.name}");
+            GameLogger.Warn(GameLogger.Category.UI, $"🏗️ UnitPanelUI: Pas de BuildingStatsComponent sur {buildingObject.name}", this);
             return;
         }
 
@@ -812,14 +813,14 @@ public class UnitPanelUI : MonoBehaviour
     {
         if (currentSelectedEntity == null)
         {
-            Debug.LogWarning("🖱️ Ability button cliqué mais aucune entité sélectionnée");
+            GameLogger.Warn(GameLogger.Category.UI, "🖱️ Ability button cliqué mais aucune entité sélectionnée", this);
             return;
         }
 
         AbilityData abilityData = GetAbilityDataFromEntity(currentSelectedEntity);
         if (abilityData == null)
         {
-            Debug.LogWarning($"🖱️ Pas d'AbilityData sur {currentSelectedEntity.name}");
+            GameLogger.Warn(GameLogger.Category.UI, $"🖱️ Pas d'AbilityData sur {currentSelectedEntity.name}", this);
             return;
         }
 
@@ -834,8 +835,10 @@ public class UnitPanelUI : MonoBehaviour
         BudComponent bud = currentSelectedEntity.GetComponent<BudComponent>();
         if (bud != null)
             bud.Cancel();
+        else if (sacrificeAbilityData != null)
+            AbilityManager.Instance.TryExecuteAbility(currentSelectedEntity, sacrificeAbilityData);
         else
-            Debug.Log($"🔥 Sacrifice demandé pour {currentSelectedEntity.name}"); // TODO: sacrifice
+            GameLogger.Warn(GameLogger.Category.UI, " SacrificeAbility non assigné dans UnitPanelUI", this);
     }
 
     // Récupère l'AbilityData d'une entité (bâtiment ou unité)

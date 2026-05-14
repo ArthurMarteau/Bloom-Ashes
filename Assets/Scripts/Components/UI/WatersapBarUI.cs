@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
 
@@ -42,7 +42,7 @@ public class WatersapBarUI : MonoBehaviour
 
         if (WatersapManager.Instance == null)
         {
-            Debug.LogError("💧 WatersapBarUI : WatersapManager introuvable dans la scène !");
+            GameLogger.Error("💧 WatersapBarUI : WatersapManager introuvable dans la scène !", this);
             return;
         }
 
@@ -80,6 +80,6 @@ public class WatersapBarUI : MonoBehaviour
         if (watersapText != null)
             watersapText.text = $"{current} / {max}";
 
-        Debug.Log($"💧 WatersapBarUI : équipe {trackedTeamID} → {current} / {max}");
+        GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapBarUI : équipe {trackedTeamID} → {current} / {max}", this);
     }
 }

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Classe utilitaire pour gérer les capacités de déplacement des unités
 // Façade acceptant un GameObject — récupère UnitStatsData via UnitStatsComponent en interne
@@ -20,7 +20,7 @@ public static class UnitTypeHelper
         UnitStatsData stats = GetStats(unit);
         if (stats == null)
         {
-            Debug.LogWarning($"CanFlyOverObstacles: UnitStatsData introuvable sur {unit?.name}");
+            GameLogger.Warn(GameLogger.Category.Movement, $"CanFlyOverObstacles: UnitStatsData introuvable sur {unit?.name}", null);
             return false;
         }
         return stats.movementType == UnitMovementType.Flying;
@@ -33,7 +33,7 @@ public static class UnitTypeHelper
         UnitStatsData stats = GetStats(unit);
         if (stats == null)
         {
-            Debug.LogWarning($"CanWalkOnGround: UnitStatsData introuvable sur {unit?.name}");
+            GameLogger.Warn(GameLogger.Category.Movement, $"CanWalkOnGround: UnitStatsData introuvable sur {unit?.name}", null);
             return false;
         }
 
@@ -77,7 +77,7 @@ public static class UnitTypeHelper
                 return true;
 
             default:
-                Debug.LogWarning($"UnitMovementType inconnu : {stats.movementType}");
+                GameLogger.Warn(GameLogger.Category.Movement, $"UnitMovementType inconnu : {stats.movementType}", null);
                 return false;
         }
     }

@@ -48,24 +48,24 @@ public class AttackController : MonoBehaviour
 
         if (unitStatsComponent == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: UnitStatsComponent non trouvé !");
+            GameLogger.Error($"AttackController sur {gameObject.name}: UnitStatsComponent non trouvé !", this);
         }
 
         if (teamMember == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: ITeamMember (TeamComponent) non trouvé !");
+            GameLogger.Error($"AttackController sur {gameObject.name}: ITeamMember (TeamComponent) non trouvé !", this);
         }
 
         animatorController = GetComponent<AnimatorController>();
         if (animatorController == null)
         {
-            Debug.LogWarning($"AttackController sur {gameObject.name}: AnimatorController non trouvé!");
+            GameLogger.Warn(GameLogger.Category.Combat, $"AttackController sur {gameObject.name}: AnimatorController non trouvé!", this);
         }
 
         movementController = GetComponent<MovementController>();
         if (movementController == null)
         {
-            Debug.LogError($"AttackController sur {gameObject.name}: MovementController non trouvé !");
+            GameLogger.Error($"AttackController sur {gameObject.name}: MovementController non trouvé !", this);
         }
     }
 
@@ -111,14 +111,14 @@ public class AttackController : MonoBehaviour
                 {
                     if (debugAttack)
                     {
-                        Debug.Log($"🔄 Update {gameObject.name}: Attaque en cours, on attend");
+                        GameLogger.Log(GameLogger.Category.Combat, $"🔄 Update {gameObject.name}: Attaque en cours, on attend", this);
                     }
                     return;
                 }
 
                 if (debugAttack)
                 {
-                    Debug.Log($"🔄 Update {gameObject.name}: État Idle/Arrived → Appel ProcessAttackLogic");
+                    GameLogger.Log(GameLogger.Category.Combat, $"🔄 Update {gameObject.name}: État Idle/Arrived → Appel ProcessAttackLogic", this);
                 }
                 // Force ProcessAttackLogic immédiatement sans attendre checkInterval
                 ProcessAttackLogic();
@@ -144,7 +144,7 @@ public class AttackController : MonoBehaviour
         {
             if (debugAttack)
             {
-                Debug.LogWarning($"AttackController {gameObject.name}: Unité morte, ne peut pas attaquer");
+                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Unité morte, ne peut pas attaquer", this);
             }
             return;
         }
@@ -162,7 +162,7 @@ public class AttackController : MonoBehaviour
         {
             if (debugAttack)
             {
-                Debug.Log($"🎯 AttackController {gameObject.name}: Ennemi détecté à portée ({nearestEnemy.name}), attaque automatique !");
+                GameLogger.Log(GameLogger.Category.Combat, $"🎯 AttackController {gameObject.name}: Ennemi détecté à portée ({nearestEnemy.name}), attaque automatique !", this);
             }
             InterruptChaseAndAttack(nearestEnemy);
         }
@@ -214,7 +214,7 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack)
         {
-            Debug.Log($"AttackController {gameObject.name}: Ordre manuel → {value}");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Ordre manuel → {value}", this);
         }
     }
 
@@ -253,7 +253,7 @@ public class AttackController : MonoBehaviour
 
         if (EntityRegistry.Instance == null)
         {
-            Debug.LogWarning($"⚠️ AttackController {gameObject.name}: EntityRegistry introuvable, auto-attaque désactivée");
+            GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ AttackController {gameObject.name}: EntityRegistry introuvable, auto-attaque désactivée", this);
             return null;
         }
 
@@ -297,18 +297,18 @@ public class AttackController : MonoBehaviour
     {
         if (debugAttack)
         {
-            Debug.Log($"🎯 StartAttack appelé pour {gameObject.name} → cible {(target != null ? target.name : "null")}");
+            GameLogger.Log(GameLogger.Category.Combat, $"🎯 StartAttack appelé pour {gameObject.name} → cible {(target != null ? target.name : "null")}", this);
         }
 
         if (target == null)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: Tentative d'attaque sur cible null");
+            GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Tentative d'attaque sur cible null", this);
             return;
         }
 
         if (target == unitGameObject)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: Une unité ne peut pas s'attaquer elle-même");
+            GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Une unité ne peut pas s'attaquer elle-même", this);
             return;
         }
 
@@ -319,7 +319,7 @@ public class AttackController : MonoBehaviour
         {
             if (debugAttack)
             {
-                Debug.Log($"🛡️ AttackController {gameObject.name}: {target.name} est invulnérable — ordre d'attaque ignoré");
+                GameLogger.Log(GameLogger.Category.Combat, $"🛡️ AttackController {gameObject.name}: {target.name} est invulnérable — ordre d'attaque ignoré", this);
             }
             return;
         }
@@ -330,7 +330,7 @@ public class AttackController : MonoBehaviour
             ITeamMember targetTeamMember = target.GetComponent<ITeamMember>();
             if (targetTeamMember == null || !teamMember.IsEnemy(targetTeamMember))
             {
-                Debug.LogWarning($"AttackController {gameObject.name}: {target.name} n'est pas un ennemi ou n'a pas d'ITeamMember");
+                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: {target.name} n'est pas un ennemi ou n'a pas d'ITeamMember", this);
                 return;
             }
         }
@@ -357,14 +357,14 @@ public class AttackController : MonoBehaviour
 
                 if (debugAttack)
                 {
-                    Debug.Log($"AttackController {gameObject.name}: Queue vidée, finit interpolation puis attaque");
+                    GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Queue vidée, finit interpolation puis attaque", this);
                 }
             }
         }
 
         if (debugAttack)
         {
-            Debug.Log($"AttackController {gameObject.name}: Début attaque de {target.name}");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Début attaque de {target.name}", this);
         }
 
         // Lance immédiatement la logique d'attaque
@@ -407,7 +407,7 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack)
         {
-            Debug.Log($"AttackController {gameObject.name}: Attaque arrêtée, retour en Idle");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Attaque arrêtée, retour en Idle", this);
         }
 
         if (resumeTarget != null)
@@ -419,7 +419,7 @@ public class AttackController : MonoBehaviour
 
                 if (debugAttack)
                 {
-                    Debug.Log($"🔄 Reprise chase sur {resumeTarget.name}");
+                    GameLogger.Log(GameLogger.Category.Combat, $"🔄 Reprise chase sur {resumeTarget.name}", this);
                 }
             }
         }
@@ -434,7 +434,7 @@ public class AttackController : MonoBehaviour
         {
             if (debugAttack)
             {
-                Debug.Log($"AttackController {gameObject.name}: Cible invalide, arrêt attaque");
+                GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible invalide, arrêt attaque", this);
             }
             StopAttack();
             return;
@@ -459,7 +459,7 @@ public class AttackController : MonoBehaviour
                 {
                     if (debugAttack)
                     {
-                        Debug.Log($"AttackController {gameObject.name}: En mouvement, attend d'être centré avant AttackIdle");
+                        GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: En mouvement, attend d'être centré avant AttackIdle", this);
                     }
                     return;
                 }
@@ -475,7 +475,7 @@ public class AttackController : MonoBehaviour
                     // Ne joue pas AttackIdle, laisse PerformAttack() gérer IdleReversed d'abord
                     if (debugAttack)
                     {
-                        Debug.Log($"AttackController {gameObject.name}: Rootborn attend IdleReversed avant AttackIdle");
+                        GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Rootborn attend IdleReversed avant AttackIdle", this);
                     }
 
                     // Lance directement l'attaque pour déclencher IdleReversed
@@ -514,7 +514,7 @@ public class AttackController : MonoBehaviour
 
                 if (debugAttack)
                 {
-                    Debug.Log($"⚔️ AttackController {gameObject.name}: Attaque lancée, prochain cooldown dans {attackSpeed}s");
+                    GameLogger.Log(GameLogger.Category.Combat, $"⚔️ AttackController {gameObject.name}: Attaque lancée, prochain cooldown dans {attackSpeed}s", this);
                 }
             }
             }
@@ -534,7 +534,7 @@ public class AttackController : MonoBehaviour
 
                     if (debugAttack)
                     {
-                        Debug.Log($"AttackController {gameObject.name}: Cible hors portée, annulation des dégâts en cours");
+                        GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible hors portée, annulation des dégâts en cours", this);
                     }
                 }
 
@@ -594,7 +594,7 @@ public class AttackController : MonoBehaviour
         {
             bool inRange = CombatSystem.IsInRangeOfOccupiedTiles(myPosition, buildingTarget.GetOccupiedTiles(), attackRange);
             if (debugAttack && inRange)
-                Debug.Log($"AttackController {gameObject.name}: À portée du bâtiment multi-tiles");
+                GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: À portée du bâtiment multi-tiles", this);
             return inRange;
         }
 
@@ -603,7 +603,7 @@ public class AttackController : MonoBehaviour
         bool inRangeStandard = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
 
         if (debugAttack && inRangeStandard)
-            Debug.Log($"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer", this);
 
         return inRangeStandard;
     }
@@ -635,7 +635,7 @@ public class AttackController : MonoBehaviour
             if (debugAttack)
             {
                 Vector2Int anchor = buildingTarget.GetAnchorGridPosition();
-                Debug.Log($"🔍 MoveToRange (bâtiment): Position {myPosition}, Ancre {anchor}, Taille {buildingTarget.GetSize()}");
+                GameLogger.Log(GameLogger.Category.Combat, $"🔍 MoveToRange (bâtiment): Position {myPosition}, Ancre {anchor}, Taille {buildingTarget.GetSize()}", this);
             }
         }
         else
@@ -646,7 +646,7 @@ public class AttackController : MonoBehaviour
             if (debugAttack)
             {
                 int currentDistance = CombatSystem.CalculateChebyshevDistance(myPosition, targetPosition);
-                Debug.Log($"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}");
+                GameLogger.Log(GameLogger.Category.Combat, $"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}", this);
             }
 
             bestPosition = CombatSystem.FindBestAttackPosition(
@@ -660,7 +660,7 @@ public class AttackController : MonoBehaviour
         if (bestPosition == Vector2Int.zero)
         {
             if (debugAttack)
-                Debug.LogWarning($"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name} — retry dans 1s");
+                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name} — retry dans 1s", this);
 
             if (approachRetryCoroutine == null)
                 approachRetryCoroutine = StartCoroutine(RetryApproachPeriodically());
@@ -671,7 +671,7 @@ public class AttackController : MonoBehaviour
         if (bestPosition == myPosition)
         {
             if (debugAttack)
-                Debug.LogWarning($"⚠️ MoveToRange: bestPosition == myPosition ! Pas de mouvement nécessaire");
+                GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ MoveToRange: bestPosition == myPosition ! Pas de mouvement nécessaire", this);
             return;
         }
 
@@ -684,7 +684,7 @@ public class AttackController : MonoBehaviour
         movementController.MoveTo(bestPosition);
 
         if (debugAttack)
-            Debug.Log($"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})", this);
     }
 
     // Relance périodiquement la logique d'approche tant que la cible reste valide, hors portée et sans position accessible
@@ -710,7 +710,7 @@ public class AttackController : MonoBehaviour
         {
             if (debugAttack)
             {
-                Debug.LogWarning($"AttackController {gameObject.name}: PerformAttack() bloqué - attaque déjà en cours");
+                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: PerformAttack() bloqué - attaque déjà en cours", this);
             }
             return;
         }
@@ -725,13 +725,13 @@ public class AttackController : MonoBehaviour
 
         if (targetDamageable == null)
         {
-            Debug.LogWarning($"AttackController {gameObject.name}: Cible {currentTarget.name} n'implémente pas IDamageable !");
+            GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible {currentTarget.name} n'implémente pas IDamageable !", this);
             return;
         }
 
         if (debugAttack)
         {
-            Debug.Log($"⚔️ AttackController {gameObject.name}: Début attaque sur {currentTarget.name}");
+            GameLogger.Log(GameLogger.Category.Combat, $"⚔️ AttackController {gameObject.name}: Début attaque sur {currentTarget.name}", this);
         }
 
         // Marque qu'une attaque est en cours
@@ -773,7 +773,7 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack)
         {
-            Debug.Log($"AttackController {gameObject.name}: Animation pré-attaque Rootborn terminée");
+            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Animation pré-attaque Rootborn terminée", this);
         }
 
         // Lance l'attaque normale maintenant
@@ -829,7 +829,7 @@ public class AttackController : MonoBehaviour
 
             if (debugAttack)
             {
-                Debug.Log($"🏹 AttackController {gameObject.name}: Projectile lancé, distance {distanceInCells} cases, trajet {projectileTravelTime}s");
+                GameLogger.Log(GameLogger.Category.Combat, $"🏹 AttackController {gameObject.name}: Projectile lancé, distance {distanceInCells} cases, trajet {projectileTravelTime}s", this);
             }
 
             // Spawne le projectile avec payload de dégâts autonomes
@@ -860,7 +860,7 @@ public class AttackController : MonoBehaviour
 
                 if (debugAttack)
                 {
-                    Debug.Log($"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable");
+                    GameLogger.Log(GameLogger.Category.Combat, $"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable", this);
                 }
             }
         }
@@ -874,7 +874,7 @@ public class AttackController : MonoBehaviour
 
         if (debugAttack && cooldown > 0f)
         {
-            Debug.Log($"⏳ AttackController {gameObject.name}: Cooldown de {cooldown}s avant prochaine attaque");
+            GameLogger.Log(GameLogger.Category.Combat, $"⏳ AttackController {gameObject.name}: Cooldown de {cooldown}s avant prochaine attaque", this);
         }
 
         // Attend le cooldown
@@ -918,10 +918,10 @@ public class AttackController : MonoBehaviour
     [ContextMenu("Debug Attack State")]
     private void DebugAttackState()
     {
-        Debug.Log($"=== AttackController Debug - {gameObject.name} ===");
-        Debug.Log($"En attaque: {currentState}");
-        Debug.Log($"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}");
-        Debug.Log($"À portée: {(currentState != AttackState.Idle ? IsTargetInRange() : false)}");
-        Debug.Log($"Portée d'attaque: {(unitStatsComponent != null ? unitStatsComponent.GetAttackRange() : 0)} cases");
+        GameLogger.Log(GameLogger.Category.Combat, $"=== AttackController Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"En attaque: {currentState}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"À portée: {(currentState != AttackState.Idle ? IsTargetInRange() : false)}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Portée d'attaque: {(unitStatsComponent != null ? unitStatsComponent.GetAttackRange() : 0)} cases", this);
     }
 }

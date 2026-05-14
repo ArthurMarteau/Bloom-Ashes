@@ -39,7 +39,7 @@ public class EntityRegistry : MonoBehaviour
         }
 
         Instance = this;
-        Debug.Log("📋 EntityRegistry: Initialisé et prêt à recevoir les entités");
+        GameLogger.Log(GameLogger.Category.Spawn, "📋 EntityRegistry: Initialisé et prêt à recevoir les entités", null);
     }
 
     // Nettoie la référence singleton lors de la destruction
@@ -59,7 +59,7 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null || entity == null)
         {
-            Debug.LogWarning("📋 EntityRegistry.RegisterEntity: go ou entity est null — enregistrement ignoré");
+            GameLogger.Warn(GameLogger.Category.Spawn, "📋 EntityRegistry.RegisterEntity: go ou entity est null — enregistrement ignoré", null);
             return;
         }
 
@@ -68,7 +68,7 @@ public class EntityRegistry : MonoBehaviour
 
         if (debugRegistry)
         {
-            Debug.Log($"📋 EntityRegistry: ✅ {go.name} enregistré ({entities.Count} entités au total)");
+            GameLogger.Log(GameLogger.Category.Spawn, $"📋 EntityRegistry: ✅ {go.name} enregistré ({entities.Count} entités au total)", null);
         }
     }
 
@@ -92,7 +92,7 @@ public class EntityRegistry : MonoBehaviour
 
         if (debugRegistry)
         {
-            Debug.Log($"📋 EntityRegistry: ❌ {go.name} désenregistré ({entities.Count} entités restantes)");
+            GameLogger.Log(GameLogger.Category.Spawn, $"📋 EntityRegistry: ❌ {go.name} désenregistré ({entities.Count} entités restantes)", null);
         }
     }
 
@@ -111,7 +111,7 @@ public class EntityRegistry : MonoBehaviour
 
         if (positionToUnit.TryGetValue(position, out var existing) && existing != go && existing != null)
         {
-            Debug.LogWarning($" EntityRegistry: collision logique sur {position} entre {existing.name} et {go.name}");
+            GameLogger.Warn(GameLogger.Category.Spawn, $" EntityRegistry: collision logique sur {position} entre {existing.name} et {go.name}", null);
         }
         positionToUnit[position] = go;
     }
@@ -342,7 +342,7 @@ public class EntityRegistry : MonoBehaviour
 
         if (toRemove.Count > 0)
         {
-            Debug.LogWarning($"📋 EntityRegistry: {toRemove.Count} entrées orphelines nettoyées");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"📋 EntityRegistry: {toRemove.Count} entrées orphelines nettoyées", null);
         }
     }
 
@@ -353,7 +353,7 @@ public class EntityRegistry : MonoBehaviour
     private void DebugListAllEntities()
     {
         CleanupNullEntities();
-        Debug.Log($"📋 EntityRegistry: {entities.Count} entités enregistrées ===");
+        GameLogger.Log(GameLogger.Category.Spawn, $"📋 EntityRegistry: {entities.Count} entités enregistrées ===", null);
 
         foreach (var kvp in entities)
         {
@@ -363,7 +363,7 @@ public class EntityRegistry : MonoBehaviour
             string teamStr = t != null ? $"Équipe {t.GetTeamID()}" : "Pas d'équipe";
             string hpStr = d != null ? $"HP {d.GetCurrentHP()}/{d.GetMaxHP()}" : "IDamageable null";
             string deadStr = d != null && d.IsDead() ? " 💀" : "";
-            Debug.Log($"  → {(go != null ? go.name : "NULL")} | {hpStr} | {teamStr}{deadStr}");
+            GameLogger.Log(GameLogger.Category.Spawn, $"  → {(go != null ? go.name : "NULL")} | {hpStr} | {teamStr}{deadStr}", null);
         }
     }
 
@@ -373,6 +373,6 @@ public class EntityRegistry : MonoBehaviour
     {
         int before = entities.Count;
         CleanupNullEntities();
-        Debug.Log($"📋 EntityRegistry: Nettoyage — {before} → {entities.Count} entités");
+        GameLogger.Log(GameLogger.Category.Spawn, $"📋 EntityRegistry: Nettoyage — {before} → {entities.Count} entités", null);
     }
 }

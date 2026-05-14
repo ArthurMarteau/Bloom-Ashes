@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -45,7 +45,7 @@ public class ActionPanelUI : MonoBehaviour
         selectionManager = Object.FindFirstObjectByType<SelectionManager>();
         if (selectionManager == null)
         {
-            Debug.LogError("🌿 ActionPanelUI : SelectionManager introuvable dans la scène !");
+            GameLogger.Error("🌿 ActionPanelUI : SelectionManager introuvable dans la scène !", this);
             return;
         }
 
@@ -143,7 +143,7 @@ public class ActionPanelUI : MonoBehaviour
             slots[i].Setup(unitData, state, (ud) => { tc.ExecuteTransform(ud); HidePanel(); });
         }
 
-        Debug.Log($"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}");
+        GameLogger.Log(GameLogger.Category.UI, $"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}", this);
     }
 
     // === CONTEXTE UPGRADE ===
@@ -213,7 +213,7 @@ public class ActionPanelUI : MonoBehaviour
             slots[i].Setup(unitData, state, (_) => { trackedBuilding.UpgradeTier(trackedTeamID, capturedCost); }, capturedCost);
         }
 
-        Debug.Log($"🌿 ActionPanelUI : upgrade — tier {trackedBuilding.GetCurrentTier()}/{trackedBuilding.GetMaxTier()} pour {trackedBuilding.GetBuildingName()}");
+        GameLogger.Log(GameLogger.Category.UI, $"🌿 ActionPanelUI : upgrade — tier {trackedBuilding.GetCurrentTier()}/{trackedBuilding.GetMaxTier()} pour {trackedBuilding.GetBuildingName()}", this);
     }
 
     // === DISPATCH ===

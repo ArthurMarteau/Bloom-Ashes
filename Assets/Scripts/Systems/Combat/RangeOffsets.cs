@@ -53,7 +53,7 @@ public static class RangeOffsets
             case 2: return range2Offsets;
             case 3: return range3Offsets;
             default:
-                Debug.LogWarning($"⚠️ RangeOffsets.GetOffsets: portée {range} non supportée, utilisation range 1");
+                GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ RangeOffsets.GetOffsets: portée {range} non supportée, utilisation range 1", null);
                 return range1Offsets;
         }
     }

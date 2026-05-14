@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Gère le curseur hardware Unity à partir d'un CursorData assigné dans la scène bootstrap
 public class CursorManager : MonoBehaviour
@@ -36,17 +36,17 @@ public class CursorManager : MonoBehaviour
     {
         if (cursorData == null)
         {
-            Debug.LogWarning("🖱️ CursorManager : CursorData non assigné, curseur par défaut conservé");
+            GameLogger.Warn(GameLogger.Category.UI, "🖱️ CursorManager : CursorData non assigné, curseur par défaut conservé", this);
             return;
         }
 
         if (cursorData.cursorTexture == null)
         {
-            Debug.LogWarning("🖱️ CursorManager : texture de curseur non assignée. Importer la Texture2D en mode Cursor dans Unity.");
+            GameLogger.Warn(GameLogger.Category.UI, "🖱️ CursorManager : texture de curseur non assignée. Importer la Texture2D en mode Cursor dans Unity.", this);
             return;
         }
 
         Cursor.SetCursor(cursorData.cursorTexture, cursorData.hotspot, cursorData.cursorMode);
-        Debug.Log("🖱️ CursorManager : curseur personnalisé appliqué. Vérifier que la texture est importée en mode Cursor.");
+        GameLogger.Log(GameLogger.Category.UI, "🖱️ CursorManager : curseur personnalisé appliqué. Vérifier que la texture est importée en mode Cursor.", this);
     }
 }

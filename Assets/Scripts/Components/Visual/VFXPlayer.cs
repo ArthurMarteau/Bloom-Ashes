@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.Rendering.Universal;
 
@@ -12,7 +12,7 @@ public class VFXPlayer : MonoBehaviour
     {
         if (data == null)
         {
-            Debug.LogWarning("✨ VFXPlayer.PlayAt : VFXData null, aucun effet joué");
+            GameLogger.Warn(GameLogger.Category.UI, "✨ VFXPlayer.PlayAt : VFXData null, aucun effet joué", null);
             return;
         }
 
@@ -25,7 +25,7 @@ public class VFXPlayer : MonoBehaviour
         VFXPlayer player = vfxRoot.AddComponent<VFXPlayer>();
         player.StartCoroutine(player.PlayAllEffects(data));
 
-        Debug.Log($"✨ VFXPlayer : lecture de '{data.name}' à {position}");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXPlayer : lecture de '{data.name}' à {position}", null);
     }
 
     // Coroutine principale : lance tous les effets en parallèle et détruit le root quand tout est terminé

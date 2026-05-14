@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Logique d'exécution de l'ability Spawn Rootborn du Nexus
 // Délègue à NexusController.TrySpawnRootborn() qui gère déjà le coût Watersap en interne
@@ -12,7 +12,7 @@ public class SpawnRootbornExecutor : AbilityExecutor
         NexusController nexus = caster.GetComponent<NexusController>();
         if (nexus == null)
         {
-            Debug.LogWarning($"⚠️ SpawnRootbornExecutor : NexusController manquant sur {caster.name}");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"⚠️ SpawnRootbornExecutor : NexusController manquant sur {caster.name}", null);
             return false;
         }
 
@@ -20,7 +20,7 @@ public class SpawnRootbornExecutor : AbilityExecutor
         bool success = nexus.TrySpawnRootborn();
 
         if (success)
-            Debug.Log($"✅ {abilityData.abilityName} : Rootborn spawné avec succès");
+            GameLogger.Log(GameLogger.Category.Spawn, $"✅ {abilityData.abilityName} : Rootborn spawné avec succès", null);
         return success;
     }
 }

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -34,7 +34,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     {
         if (baseStats == null)
         {
-            Debug.LogError($"🏛️ BuildingStatsComponent sur {gameObject.name}: baseStats non assigné !");
+            GameLogger.Error($"🏛️ BuildingStatsComponent sur {gameObject.name}: baseStats non assigné !", this);
             enabled = false;
             return;
         }
@@ -44,13 +44,13 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         teamComponent = GetComponent<TeamComponent>();
 
         if (teamComponent == null)
-            Debug.LogWarning($"⚠️ BuildingStatsComponent {gameObject.name}: TeamComponent manquant — équipe non définie");
+            GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ BuildingStatsComponent {gameObject.name}: TeamComponent manquant — équipe non définie", this);
 
         if (debugStats)
         {
             string invulnerableStr = baseStats.isInvulnerable ? " | INVULNÉRABLE" : "";
             int teamID = teamComponent != null ? teamComponent.GetTeamID() : 0;
-            Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): HP={currentHP}, DEF={baseStats.defense}{invulnerableStr}, Équipe={teamID}");
+            GameLogger.Log(GameLogger.Category.Combat, $"🏛️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): HP={currentHP}, DEF={baseStats.defense}{invulnerableStr}, Équipe={teamID}", this);
         }
 
         // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
@@ -60,7 +60,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
         else if (debugStats)
         {
-            Debug.LogWarning($"⚠️ BuildingStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré");
+            GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ BuildingStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré", this);
         }
     }
 
@@ -89,7 +89,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         {
             if (debugStats)
             {
-                Debug.Log($"🛡️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Invulnérable — {damage} dégâts ignorés");
+                GameLogger.Log(GameLogger.Category.Combat, $"🛡️ BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Invulnérable — {damage} dégâts ignorés", this);
             }
             return;
         }
@@ -101,7 +101,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"💥 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): {damage} dégâts (effectif: {effectiveDamage}) → HP: {currentHP}/{GetMaxHP()}");
+            GameLogger.Log(GameLogger.Category.Combat, $"💥 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): {damage} dégâts (effectif: {effectiveDamage}) → HP: {currentHP}/{GetMaxHP()}", this);
         }
 
         OnDamaged?.Invoke();
@@ -129,7 +129,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         {
             if (debugStats)
             {
-                Debug.Log($"💚 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Soigné de {actualHealing} → HP: {currentHP}/{GetMaxHP()}");
+                GameLogger.Log(GameLogger.Category.Combat, $"💚 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Soigné de {actualHealing} → HP: {currentHP}/{GetMaxHP()}", this);
             }
             OnHealed?.Invoke();
         }
@@ -179,7 +179,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"💀 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Détruit !");
+            GameLogger.Log(GameLogger.Category.Combat, $"💀 BuildingStatsComponent {gameObject.name} ({baseStats.buildingName}): Détruit !", this);
         }
 
         OnBuildingDestroyed?.Invoke();
@@ -261,7 +261,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     {
         if (currentTier >= 4)
         {
-            Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} : tier max atteint ({currentTier}/4)");
+            GameLogger.Log(GameLogger.Category.Combat, $"🏛️ BuildingStatsComponent {gameObject.name} : tier max atteint ({currentTier}/4)", this);
             return false;
         }
 
@@ -272,7 +272,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         currentTier++;
         OnTierUpgraded.Invoke();
 
-        Debug.Log($"🏛️ BuildingStatsComponent {gameObject.name} : tier {currentTier - 1} → {currentTier} (équipe {teamID})");
+        GameLogger.Log(GameLogger.Category.Combat, $"🏛️ BuildingStatsComponent {gameObject.name} : tier {currentTier - 1} → {currentTier} (équipe {teamID})", this);
         return true;
     }
 
@@ -340,17 +340,17 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     {
         if (baseStats == null)
         {
-            Debug.LogWarning($"BuildingStatsComponent {gameObject.name}: baseStats non assigné !");
+            GameLogger.Warn(GameLogger.Category.Combat, $"BuildingStatsComponent {gameObject.name}: baseStats non assigné !", this);
             return;
         }
 
-        Debug.Log($"=== BuildingStatsComponent Debug - {gameObject.name} ===");
-        Debug.Log($"Nom: {baseStats.buildingName}");
-        Debug.Log($"HP: {currentHP}/{GetMaxHP()} ({GetHealthPercentage() * 100:F1}%)");
-        Debug.Log($"Défense: {baseStats.defense}");
-        Debug.Log($"Invulnérable: {baseStats.isInvulnerable}");
-        Debug.Log($"Équipe: {(teamComponent != null ? teamComponent.GetTeamID() : 0)}");
-        Debug.Log($"Détruit: {isDestroyed}");
+        GameLogger.Log(GameLogger.Category.Combat, $"=== BuildingStatsComponent Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Nom: {baseStats.buildingName}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"HP: {currentHP}/{GetMaxHP()} ({GetHealthPercentage() * 100:F1}%)", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Défense: {baseStats.defense}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Invulnérable: {baseStats.isInvulnerable}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Équipe: {(teamComponent != null ? teamComponent.GetTeamID() : 0)}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Détruit: {isDestroyed}", this);
     }
 
     // Inflige 10 dégâts pour tester la résistance et l'invulnérabilité

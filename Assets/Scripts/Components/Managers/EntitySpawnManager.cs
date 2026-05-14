@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 // Coordinateur centralisé pour tous les spawns/replacements d'entités
@@ -36,11 +36,11 @@ public class EntitySpawnManager : MonoBehaviour
     {
         if (spawner == null || spawnedEntity == null)
         {
-            Debug.LogWarning("⚠️ EntitySpawnManager : NotifyEntitySpawned appelé avec spawner ou spawnedEntity null");
+            GameLogger.Warn(GameLogger.Category.Spawn, "⚠️ EntitySpawnManager : NotifyEntitySpawned appelé avec spawner ou spawnedEntity null", this);
             return;
         }
 
-        Debug.Log($"🌱 EntitySpawnManager : {spawner.name} a spawné {spawnedEntity.name}");
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawner.name} a spawné {spawnedEntity.name}", this);
         OnEntitySpawned.Invoke(spawner, spawnedEntity);
     }
 
@@ -52,11 +52,11 @@ public class EntitySpawnManager : MonoBehaviour
     {
         if (oldEntity == null || newEntity == null)
         {
-            Debug.LogWarning("⚠️ EntitySpawnManager : NotifyEntityReplaced appelé avec oldEntity ou newEntity null");
+            GameLogger.Warn(GameLogger.Category.Spawn, "⚠️ EntitySpawnManager : NotifyEntityReplaced appelé avec oldEntity ou newEntity null", this);
             return;
         }
 
-        Debug.Log($"🔄 EntitySpawnManager : {oldEntity.name} remplacé par {newEntity.name}");
+        GameLogger.Log(GameLogger.Category.Spawn, $"🔄 EntitySpawnManager : {oldEntity.name} remplacé par {newEntity.name}", this);
         OnEntityReplaced.Invoke(oldEntity, newEntity);
     }
 }

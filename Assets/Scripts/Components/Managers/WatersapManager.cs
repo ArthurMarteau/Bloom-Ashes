@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -40,7 +40,7 @@ public class WatersapManager : MonoBehaviour
         Instance = this;
 
         if (watersapData == null)
-            Debug.LogError("💧 WatersapManager : WatersapData non assigné !");
+            GameLogger.Error("💧 WatersapManager : WatersapData non assigné !", this);
     }
 
     // Fait avancer les timers de revenu passif pour toutes les équipes enregistrées
@@ -60,7 +60,7 @@ public class WatersapManager : MonoBehaviour
                 AddWatersap(teamID, watersapData.passiveIncomeAmount);
 
                 if (debugWatersap)
-                    Debug.Log($"💧 WatersapManager : revenu passif appliqué à l'équipe {teamID}.");
+                    GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : revenu passif appliqué à l'équipe {teamID}.", this);
             }
         }
     }
@@ -70,7 +70,7 @@ public class WatersapManager : MonoBehaviour
     {
         if (watersapByTeam.ContainsKey(teamID))
         {
-            Debug.LogWarning($"💧 WatersapManager : équipe {teamID} déjà enregistrée.");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} déjà enregistrée.", this);
             return;
         }
 
@@ -84,7 +84,7 @@ public class WatersapManager : MonoBehaviour
         }
 
         if (debugWatersap)
-            Debug.Log($"💧 WatersapManager : équipe {teamID} enregistrée.");
+            GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} enregistrée.", this);
     }
 
     // Retourne le watersap maximum (lu depuis le SO)
@@ -95,7 +95,7 @@ public class WatersapManager : MonoBehaviour
     {
         if (!watersapByTeam.TryGetValue(teamID, out int current))
         {
-            Debug.LogWarning($"💧 WatersapManager : GetWatersap — équipe {teamID} non enregistrée.");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : GetWatersap — équipe {teamID} non enregistrée.", this);
             return 0;
         }
 
@@ -107,7 +107,7 @@ public class WatersapManager : MonoBehaviour
     {
         if (!watersapByTeam.TryGetValue(teamID, out int current))
         {
-            Debug.LogWarning($"💧 WatersapManager : AddWatersap — équipe {teamID} non enregistrée.");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : AddWatersap — équipe {teamID} non enregistrée.", this);
             return;
         }
 
@@ -115,7 +115,7 @@ public class WatersapManager : MonoBehaviour
         watersapByTeam[teamID] = newAmount;
 
         if (debugWatersap)
-            Debug.Log($"💧 WatersapManager : équipe {teamID} +{amount} watersap → {newAmount}/{watersapData.maxWatersap}");
+            GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} +{amount} watersap → {newAmount}/{watersapData.maxWatersap}", this);
 
         OnWatersapChanged.Invoke(teamID, newAmount);
     }
@@ -125,7 +125,7 @@ public class WatersapManager : MonoBehaviour
     {
         if (!watersapByTeam.TryGetValue(teamID, out int current))
         {
-            Debug.LogWarning($"💧 WatersapManager : CanSpend — équipe {teamID} non enregistrée.");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : CanSpend — équipe {teamID} non enregistrée.", this);
             return false;
         }
 
@@ -137,13 +137,13 @@ public class WatersapManager : MonoBehaviour
     {
         if (!watersapByTeam.TryGetValue(teamID, out int current))
         {
-            Debug.LogWarning($"💧 WatersapManager : SpendWatersap — équipe {teamID} non enregistrée.");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : SpendWatersap — équipe {teamID} non enregistrée.", this);
             return false;
         }
 
         if (!watersapSystem.CanAfford(current, amount))
         {
-            Debug.LogWarning($"💧 WatersapManager : équipe {teamID} ne peut pas se permettre {amount} watersap (solde : {current}).");
+            GameLogger.Warn(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} ne peut pas se permettre {amount} watersap (solde : {current}).", this);
             return false;
         }
 
@@ -151,7 +151,7 @@ public class WatersapManager : MonoBehaviour
         watersapByTeam[teamID] = newAmount;
 
         if (debugWatersap)
-            Debug.Log($"💧 WatersapManager : équipe {teamID} -{amount} watersap → {newAmount}/{watersapData.maxWatersap}");
+            GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} -{amount} watersap → {newAmount}/{watersapData.maxWatersap}", this);
 
         OnWatersapChanged.Invoke(teamID, newAmount);
         return true;

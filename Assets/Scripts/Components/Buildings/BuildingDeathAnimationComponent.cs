@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Joue l'animation de mort d'un bâtiment quand OnBuildingDestroyed est déclenché
 // La destruction du GameObject est gérée par BuildingStatsComponent (Destroy avec délai)
@@ -19,7 +19,7 @@ public class BuildingDeathAnimationComponent : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning($"💀 BuildingDeathAnimationComponent {gameObject.name} : BuildingStatsComponent introuvable sur ce GameObject !");
+            GameLogger.Warn(GameLogger.Category.UI, $"💀 BuildingDeathAnimationComponent {gameObject.name} : BuildingStatsComponent introuvable sur ce GameObject !", this);
         }
     }
 

@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 // Composant Unity gérant l'état de santé et stats d'une unité
@@ -33,7 +33,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         // Valide que le SO est assigné
         if (baseStats == null)
         {
-            Debug.LogError($"UnitStatsComponent sur {gameObject.name}: BaseStats non assigné !");
+            GameLogger.Error($"UnitStatsComponent sur {gameObject.name}: BaseStats non assigné !", this);
             enabled = false;
             return;
         }
@@ -43,7 +43,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: HP={baseStats.maxHP}, ATK={baseStats.attackDamage}, DEF={baseStats.defense}, Range={baseStats.attackRange}, Speed={baseStats.moveSpeed}");
+            GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: HP={baseStats.maxHP}, ATK={baseStats.attackDamage}, DEF={baseStats.defense}, Range={baseStats.attackRange}, Speed={baseStats.moveSpeed}", this);
         }
 
         // Synchronise la vitesse avec MovementController
@@ -60,7 +60,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         }
         else if (debugStats)
         {
-            Debug.LogWarning($"⚠️ UnitStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré");
+            GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ UnitStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré", this);
         }
     }
 
@@ -91,7 +91,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: Dégâts reçus {damage} (effectif: {effectiveDamage}) -> HP: {currentHP}/{baseStats.maxHP}");
+            GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: Dégâts reçus {damage} (effectif: {effectiveDamage}) -> HP: {currentHP}/{baseStats.maxHP}", this);
         }
 
         // Déclenche l'événement de dégâts
@@ -99,7 +99,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"🔔 UnitStatsComponent {gameObject.name}: Event OnDamaged déclenché, {OnDamaged.GetPersistentEventCount()} listeners");
+            GameLogger.Log(GameLogger.Category.Combat, $"🔔 UnitStatsComponent {gameObject.name}: Event OnDamaged déclenché, {OnDamaged.GetPersistentEventCount()} listeners", this);
         }
 
         // Vérifie si l'unité meurt
@@ -170,7 +170,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"⚔️ Riposte auto sur {attacker.name}");
+            GameLogger.Log(GameLogger.Category.Combat, $"⚔️ Riposte auto sur {attacker.name}", this);
         }
     }
 
@@ -189,7 +189,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: Soigné de {actualHealing} -> HP: {currentHP}/{baseStats.maxHP}");
+            GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: Soigné de {actualHealing} -> HP: {currentHP}/{baseStats.maxHP}", this);
         }
 
         // Déclenche l'événement de soin
@@ -209,7 +209,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: HP définis à {currentHP}/{baseStats.maxHP}");
+            GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: HP définis à {currentHP}/{baseStats.maxHP}", this);
         }
     }
 
@@ -226,7 +226,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
         if (debugStats)
         {
-            Debug.Log($"💀 UnitStatsComponent {gameObject.name}: Unité morte");
+            GameLogger.Log(GameLogger.Category.Combat, $"💀 UnitStatsComponent {gameObject.name}: Unité morte", this);
         }
 
         // Déclenche l'événement de mort
@@ -249,7 +249,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
 
             if (debugStats)
             {
-                Debug.Log($"UnitStatsComponent {gameObject.name}: Sorting order abaissé à -1 (mort)");
+                GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: Sorting order abaissé à -1 (mort)", this);
             }
         }
 
@@ -268,43 +268,11 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
     // Empêche l'unité morte de bouger, être sélectionnée, etc.
     private void DisableGameplayComponents()
     {
-        // Désactive le mouvement
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
-        {
-            if (movementController.enabled)
-            {
-                movementController.StopAllCoroutines();
-            }
-            movementController.enabled = false;
-        }
-
-        // Désactive la chase
-        ChaseController chaseController = GetComponent<ChaseController>();
-        if (chaseController != null)
-        {
-            chaseController.StopChase();
-            chaseController.enabled = false;
-        }
-
-        // Désactive l'attaque
-        AttackController attackController = GetComponent<AttackController>();
-        if (attackController != null)
-        {
-            attackController.StopAttack();
-            attackController.enabled = false;
-        }
-
-        // Désactive le collider
-        Collider2D collider = GetComponent<Collider2D>();
-        if (collider != null)
-        {
-            collider.enabled = false;
-        }
+        UnitFreezer.Freeze(gameObject, disableComponents: true, freezeAnimator: false);
 
         if (debugStats)
         {
-            Debug.Log($"UnitStatsComponent {gameObject.name}: Composants de gameplay désactivés");
+            GameLogger.Log(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: Composants de gameplay désactivés", this);
         }
     }
 
@@ -407,17 +375,17 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
     {
         if (baseStats == null)
         {
-            Debug.LogWarning($"UnitStatsComponent {gameObject.name}: baseStats non assigné!");
+            GameLogger.Warn(GameLogger.Category.Combat, $"UnitStatsComponent {gameObject.name}: baseStats non assigné!", this);
             return;
         }
 
-        Debug.Log($"=== UnitStatsComponent Debug - {gameObject.name} ===");
-        Debug.Log($"HP: {currentHP}/{baseStats.maxHP} ({GetHealthPercentage() * 100:F1}%)");
-        Debug.Log($"Attaque: {baseStats.attackDamage}");
-        Debug.Log($"Défense: {baseStats.defense}");
-        Debug.Log($"Portée: {baseStats.attackRange} cases");
-        Debug.Log($"Vitesse: {baseStats.moveSpeed}");
-        Debug.Log($"Mort: {isDead}");
+        GameLogger.Log(GameLogger.Category.Combat, $"=== UnitStatsComponent Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"HP: {currentHP}/{baseStats.maxHP} ({GetHealthPercentage() * 100:F1}%)", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Attaque: {baseStats.attackDamage}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Défense: {baseStats.defense}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Portée: {baseStats.attackRange} cases", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Vitesse: {baseStats.moveSpeed}", this);
+        GameLogger.Log(GameLogger.Category.Combat, $"Mort: {isDead}", this);
     }
 
     // Tue instantanément l'unité (pour tests)

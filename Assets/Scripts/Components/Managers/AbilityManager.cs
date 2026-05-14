@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 using UnityEngine.Events;
 
 // Singleton gérant l'exécution de toutes les abilities
@@ -28,13 +28,13 @@ public class AbilityManager : MonoBehaviour
     {
         if (caster == null)
         {
-            Debug.LogWarning("⚠️ AbilityManager : Caster null");
+            GameLogger.Warn(GameLogger.Category.UI, "⚠️ AbilityManager : Caster null", this);
             return;
         }
 
         if (abilityData == null)
         {
-            Debug.LogWarning($"⚠️ AbilityManager : AbilityData null sur {caster.name}");
+            GameLogger.Warn(GameLogger.Category.UI, $"⚠️ AbilityManager : AbilityData null sur {caster.name}", this);
             return;
         }
 

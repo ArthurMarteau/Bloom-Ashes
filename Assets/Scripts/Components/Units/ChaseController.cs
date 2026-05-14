@@ -28,7 +28,7 @@ public class ChaseController : MonoBehaviour
         movementController = GetComponent<MovementController>();
         if (movementController == null)
         {
-            Debug.LogError($"ChaseController sur {gameObject.name}: MovementController non trouvé !");
+            GameLogger.Error($"ChaseController sur {gameObject.name}: MovementController non trouvé !", this);
         }
     }
 
@@ -50,7 +50,7 @@ public class ChaseController : MonoBehaviour
 
             if (debugChase)
             {
-                Debug.Log($"⚡ ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition} ! Recalcul immédiat");
+                GameLogger.Log(GameLogger.Category.Movement, $"⚡ ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition} ! Recalcul immédiat", this);
             }
 
             // Recalcule le chemin (le MovementController gère le changement de direction)
@@ -80,13 +80,13 @@ public class ChaseController : MonoBehaviour
     {
         if (target == null)
         {
-            Debug.LogWarning($"ChaseController {gameObject.name}: Tentative de chase sur cible null");
+            GameLogger.Warn(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Tentative de chase sur cible null", this);
             return;
         }
 
         if (target == unitGameObject)
         {
-            Debug.LogWarning($"ChaseController {gameObject.name}: Une unité ne peut pas se chaser elle-même");
+            GameLogger.Warn(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Une unité ne peut pas se chaser elle-même", this);
             return;
         }
 
@@ -103,7 +103,7 @@ public class ChaseController : MonoBehaviour
 
         if (debugChase)
         {
-            Debug.Log($"ChaseController {gameObject.name}: Début chase de {target.name}");
+            GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Début chase de {target.name}", this);
         }
 
         // Lance immédiatement le premier mouvement
@@ -124,7 +124,7 @@ public class ChaseController : MonoBehaviour
 
         if (debugChase)
         {
-            Debug.Log($"ChaseController {gameObject.name}: Chase arrêtée");
+            GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Chase arrêtée", this);
         }
     }
 
@@ -137,7 +137,7 @@ public class ChaseController : MonoBehaviour
             // Cible détruite ou disparue
             if (debugChase)
             {
-                Debug.Log($"ChaseController {gameObject.name}: Cible disparue, arrêt chase");
+                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Cible disparue, arrêt chase", this);
             }
             StopChase();
             return;
@@ -152,7 +152,7 @@ public class ChaseController : MonoBehaviour
 
             if (debugChase)
             {
-                Debug.Log($"ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition}, recalcul");
+                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition}, recalcul", this);
             }
 
             MoveTowardsTarget();
@@ -189,7 +189,7 @@ public class ChaseController : MonoBehaviour
         {
             if (debugChase)
             {
-                Debug.Log($"ChaseController {gameObject.name}: Déjà adjacent à {currentTarget.name}, surveillance");
+                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Déjà adjacent à {currentTarget.name}, surveillance", this);
             }
             return;
         }
@@ -201,18 +201,18 @@ public class ChaseController : MonoBehaviour
         {
             if (debugChase)
             {
-                Debug.LogWarning($"ChaseController {gameObject.name}: Aucune case accessible vers {currentTarget.name}");
+                GameLogger.Warn(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Aucune case accessible vers {currentTarget.name}", this);
             }
             return;
         }
 
         // Envoie l'ordre de mouvement
-        Debug.Log($"📤 Chase: Envoi ordre mouvement vers {bestCell}");
+        GameLogger.Log(GameLogger.Category.Movement, $"📤 Chase: Envoi ordre mouvement vers {bestCell}", this);
         movementController.MoveTo(bestCell);
 
         if (debugChase)
         {
-            Debug.Log($"ChaseController {gameObject.name}: Mouvement vers {bestCell} (cible: {targetPosition})");
+            GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Mouvement vers {bestCell} (cible: {targetPosition})", this);
         }
     }
 
@@ -266,7 +266,7 @@ public class ChaseController : MonoBehaviour
         {
             if (debugChase)
             {
-                Debug.Log($"ChaseController {gameObject.name}: Meilleure case trouvée {bestAdjacentCell} avec chemin de {shortestPathLength} cases");
+                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Meilleure case trouvée {bestAdjacentCell} avec chemin de {shortestPathLength} cases", this);
             }
             return bestAdjacentCell;
         }
@@ -275,7 +275,7 @@ public class ChaseController : MonoBehaviour
         // Le pathfinding ira aussi près que possible
         if (debugChase)
         {
-            Debug.LogWarning($"ChaseController {gameObject.name}: Aucune case adjacente accessible, tentative vers cible directement");
+            GameLogger.Warn(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Aucune case adjacente accessible, tentative vers cible directement", this);
         }
         return targetPosition;
     }
@@ -306,9 +306,9 @@ public class ChaseController : MonoBehaviour
     [ContextMenu("Debug Chase State")]
     private void DebugChaseState()
     {
-        Debug.Log($"=== ChaseController Debug - {gameObject.name} ===");
-        Debug.Log($"En chase: {isChasing}");
-        Debug.Log($"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}");
-        Debug.Log($"Dernière position cible: {lastTargetPosition}");
+        GameLogger.Log(GameLogger.Category.Movement, $"=== ChaseController Debug - {gameObject.name} ===", this);
+        GameLogger.Log(GameLogger.Category.Movement, $"En chase: {isChasing}", this);
+        GameLogger.Log(GameLogger.Category.Movement, $"Cible: {(currentTarget != null ? currentTarget.name : "Aucune")}", this);
+        GameLogger.Log(GameLogger.Category.Movement, $"Dernière position cible: {lastTargetPosition}", this);
     }
 }

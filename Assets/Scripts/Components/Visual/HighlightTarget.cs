@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Attaché sur chaque prefab d'unité
 // Gère un SpriteRenderer enfant dédié à l'outline pixel art
@@ -22,7 +22,7 @@ public class HighlightTarget : MonoBehaviour
 
         if (mainRenderer == null)
         {
-            Debug.LogError($"HighlightTarget sur {name} : aucun SpriteRenderer trouvé sur ce GameObject !");
+            GameLogger.Error($"HighlightTarget sur {name} : aucun SpriteRenderer trouvé sur ce GameObject !", this);
             return;
         }
 
@@ -61,7 +61,7 @@ public class HighlightTarget : MonoBehaviour
         }
         else
         {
-            Debug.LogError("HighlightTarget : Shader 'Custom/SpriteOutline' introuvable !");
+            GameLogger.Error("HighlightTarget : Shader 'Custom/SpriteOutline' introuvable !", this);
         }
 
         outlineRenderer.enabled = false; // désactivé par défaut

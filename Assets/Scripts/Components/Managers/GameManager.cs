@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Point d'entrée principal de la session de jeu
 // Initialise les systèmes dans le bon ordre : équipes, ressources, etc.
@@ -15,6 +15,7 @@ public class GameManager : MonoBehaviour
     public bool DevModeAllTeams => devModeAllTeams;
 
     [Header("Debug")]
+    [SerializeField] private GameLoggerSettings loggerSettings;
     [SerializeField] private bool debugGame = true;
 
     // Initialise le singleton et les systèmes de jeu
@@ -26,12 +27,26 @@ public class GameManager : MonoBehaviour
             return;
         }
         Instance = this;
+
+        InitializeGameLogger();
+    }
+
+    // Applique la configuration de logs assignée dans l'Inspector si elle existe.
+    private void InitializeGameLogger()
+    {
+        if (loggerSettings != null)
+        {
+            loggerSettings.Apply();
+            return;
+        }
+
+        GameLogger.EnabledCategories = GameLogger.Category.None;
     }
 
     // Point d'entrée de la session — les équipes sont déjà enregistrées par PlayerManager
     private void Start()
     {
         if (debugGame)
-            Debug.Log("🎮 GameManager: Session démarrée");
+            GameLogger.Log(GameLogger.Category.Selection, "🎮 GameManager: Session démarrée", this);
     }
 }

@@ -22,7 +22,7 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - Fast and strategic engagements
 - Abilities cost Watersap directly (army building vs spell casting trade-off)
 - **Ability Auto-Cast**: All active abilities can be toggled to auto-cast. When enabled, the unit uses the ability automatically when conditions are met (target in range, enough Watersap).
-- **Sacrifice**: Any unit can be sacrificed (active ability) to grant 20 Watersap. Strategic use: sacrifice a dying unit before death to recover resources.
+- **Sacrifice**: Any unit can be sacrificed (active ability) to grant 10 Watersap. Strategic use: sacrifice a dying unit before death to recover resources.
 - Units size 1x1. Building 1x1 or more.
 - Pas de virgule pour les stats. (Except Path Ground)
 
@@ -131,7 +131,7 @@ When a Rootborn transforms into a combat unit adjacent to a building, it enters 
 | Defense | Invulnerable |
 | Size    | 1x1          |
 
-**Function**: Spawns Rootborn units. Reverse battle unit in Rootborn for 20 Watersap.
+**Function**: Spawns Rootborn units. Reverse battle unit in Rootborn for 10 Watersap.
 
 ---
 

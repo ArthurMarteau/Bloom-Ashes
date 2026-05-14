@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -56,14 +56,14 @@ public static class PathFinding
         // Valide les paramètres avant calcul
         if (!IsValidPathRequest(startPosition, endPosition, unit))
         {
-            Debug.LogWarning($"Demande de chemin invalide : {startPosition} -> {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}");
+            GameLogger.Warn(GameLogger.Category.Movement, $"Demande de chemin invalide : {startPosition} -> {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
             return new List<Vector2Int>();
         }
 
         // Lance le calcul A* et retourne le résultat
         List<Vector2Int> calculatedPath = ExecuteAStar(startPosition, endPosition, unit);
 
-        Debug.Log($"Chemin calculé pour {UnitTypeHelper.GetDisplayName(unit)} : {startPosition} -> {endPosition}, {calculatedPath.Count} étapes");
+        GameLogger.Log(GameLogger.Category.Movement, $"Chemin calculé pour {UnitTypeHelper.GetDisplayName(unit)} : {startPosition} -> {endPosition}, {calculatedPath.Count} étapes", null);
         return calculatedPath;
     }
 
@@ -97,7 +97,7 @@ public static class PathFinding
             // Vérifie si la destination est atteinte
             if (currentNode.position == endPosition)
             {
-                Debug.Log("Destination atteinte, reconstitution du chemin");
+                GameLogger.Log(GameLogger.Category.Movement, "Destination atteinte, reconstitution du chemin", null);
                 return ReconstructPath(currentNode);
             }
 
@@ -134,7 +134,7 @@ public static class PathFinding
         }
 
         // Aucun chemin trouvé après exploration complète
-        Debug.LogWarning($"Aucun chemin trouvé entre {startPosition} et {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}");
+        GameLogger.Warn(GameLogger.Category.Movement, $"Aucun chemin trouvé entre {startPosition} et {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
         return new List<Vector2Int>();
     }
 
@@ -229,7 +229,7 @@ public static class PathFinding
         // Supprime la case de départ — l'unité y est déjà, inutile de l'inclure
         if (path.Count > 0) path.RemoveAt(0);
 
-        Debug.Log($"Chemin reconstitué : {path.Count} étapes");
+        GameLogger.Log(GameLogger.Category.Movement, $"Chemin reconstitué : {path.Count} étapes", null);
         return path;
     }
 
@@ -248,13 +248,13 @@ public static class PathFinding
         // Vérifie que l'unité existe et a un tag valide
         if (unit == null)
         {
-            Debug.LogError("PathFinding appelé avec GameObject unité null");
+            GameLogger.Error("PathFinding appelé avec GameObject unité null", null);
             return false;
         }
 
         if (!UnitTypeHelper.IsValidUnit(unit))
         {
-            Debug.LogWarning($"GameObject {unit.name} n'a pas de tag d'unité valide : {unit.tag}");
+            GameLogger.Warn(GameLogger.Category.Movement, $"GameObject {unit.name} n'a pas de tag d'unité valide : {unit.tag}", null);
             return false;
         }
 
@@ -269,7 +269,7 @@ public static class PathFinding
         // Vérifie que la destination est accessible pour cette unité
         if (!GridManager.Instance.IsWalkableFor(endPosition, unit))
         {
-            Debug.LogWarning($"Destination {endPosition} inaccessible pour {UnitTypeHelper.GetDisplayName(unit)}");
+            GameLogger.Warn(GameLogger.Category.Movement, $"Destination {endPosition} inaccessible pour {UnitTypeHelper.GetDisplayName(unit)}", null);
             return false;
         }
 

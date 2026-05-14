@@ -1,4 +1,4 @@
-using System.Collections;
+﻿using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
@@ -93,7 +93,7 @@ public class BudComponent : MonoBehaviour
 
         if (unitInProduction == null)
         {
-            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : ProductionRoutine — unitInProduction null, spawn final impossible");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ProductionRoutine — unitInProduction null, spawn final impossible", this);
             Destroy(gameObject);
             yield break;
         }
@@ -112,7 +112,7 @@ public class BudComponent : MonoBehaviour
 
         if (unitInProduction.unitPrefab == null)
         {
-            Debug.LogWarning($"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — unitPrefab null pour {unitInProduction.unitName}");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — unitPrefab null pour {unitInProduction.unitName}", this);
             Destroy(gameObject);
             return;
         }
@@ -123,7 +123,7 @@ public class BudComponent : MonoBehaviour
         if (spawnedTeam != null)
             spawnedTeam.SetTeamID(teamID);
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})");
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})", this);
 
         // Notifie le système de remplacement AVANT destruction
         if (EntitySpawnManager.Instance != null)
@@ -153,7 +153,7 @@ public class BudComponent : MonoBehaviour
 
         if (respawnStatsData?.unitPrefab == null)
         {
-            Debug.LogError($"🌱 BudComponent {gameObject.name} : Cancel — respawnStatsData ou unitPrefab non assigné");
+            GameLogger.Error($"🌱 BudComponent {gameObject.name} : Cancel — respawnStatsData ou unitPrefab non assigné", this);
             Destroy(gameObject);
             return;
         }
@@ -168,7 +168,7 @@ public class BudComponent : MonoBehaviour
         if (stats != null)
             stats.SetCurrentHP(budCurrentHP);
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)");
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)", this);
 
         // Étape 7 : Notifie le système de remplacement
         if (EntitySpawnManager.Instance != null)
@@ -211,10 +211,10 @@ public class BudComponent : MonoBehaviour
     {
         if (unitInProduction == null)
         {
-            Debug.Log($"🌱 BudComponent {gameObject.name} : non initialisé");
+            GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : non initialisé", this);
             return;
         }
 
-        Debug.Log($"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedTime:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}");
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedTime:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}", this);
     }
 }

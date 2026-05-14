@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Classe abstraite de base pour toutes les logiques d'ability
 // Fournit la gestion du cooldown et la vérification Watersap
@@ -25,7 +25,7 @@ public abstract class AbilityExecutor : IAbility
             float timeSinceLastUse = Time.time - lastUsedTime;
             if (timeSinceLastUse < abilityData.cooldownDuration)
             {
-                Debug.Log($"⏳ {abilityData.abilityName} en cooldown ({abilityData.cooldownDuration - timeSinceLastUse:F1}s restantes)");
+                GameLogger.Log(GameLogger.Category.UI, $"⏳ {abilityData.abilityName} en cooldown ({abilityData.cooldownDuration - timeSinceLastUse:F1}s restantes)", null);
                 return false;
             }
         }
@@ -38,7 +38,7 @@ public abstract class AbilityExecutor : IAbility
 
             if (!WatersapManager.Instance.CanSpend(team.GetTeamID(), abilityData.watersapCost))
             {
-                Debug.Log($"💧 Watersap insuffisant pour {abilityData.abilityName} (coût : {abilityData.watersapCost})");
+                GameLogger.Log(GameLogger.Category.UI, $"💧 Watersap insuffisant pour {abilityData.abilityName} (coût : {abilityData.watersapCost})", null);
                 return false;
             }
         }

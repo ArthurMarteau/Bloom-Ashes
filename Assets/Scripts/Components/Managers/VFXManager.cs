@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Singleton MonoBehaviour qui orchestre les VFX liés aux événements de spawn/remplacement d'entités
 // Écoute EntitySpawnManager.OnEntityReplaced et OnEntitySpawned pour les VFX de spawn
@@ -33,15 +33,15 @@ public class VFXManager : MonoBehaviour
     {
         if (EntitySpawnManager.Instance == null)
         {
-            Debug.LogWarning("✨ VFXManager : EntitySpawnManager introuvable — les VFX d'éclosion ne seront pas joués");
+            GameLogger.Warn(GameLogger.Category.UI, "✨ VFXManager : EntitySpawnManager introuvable — les VFX d'éclosion ne seront pas joués", this);
             return;
         }
 
         EntitySpawnManager.Instance.OnEntityReplaced.AddListener(HandleEntityReplaced);
-        Debug.Log("✨ VFXManager : abonné à EntitySpawnManager.OnEntityReplaced");
+        GameLogger.Log(GameLogger.Category.UI, "✨ VFXManager : abonné à EntitySpawnManager.OnEntityReplaced", this);
 
         EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
-        Debug.Log("✨ VFXManager : abonné à EntitySpawnManager.OnEntitySpawned");
+        GameLogger.Log(GameLogger.Category.UI, "✨ VFXManager : abonné à EntitySpawnManager.OnEntitySpawned", this);
 
         if (AbilityManager.Instance != null)
             AbilityManager.Instance.OnAbilityExecuted.AddListener(HandleAbilityExecuted);
@@ -98,7 +98,7 @@ public class VFXManager : MonoBehaviour
             return;
         }
 
-        Debug.Log($"✨ VFXManager : éclosion Bud→Unité détectée ({newEntity.name}) — déclenchement VFX");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : éclosion Bud→Unité détectée ({newEntity.name}) — déclenchement VFX", this);
 
         if (budHatchVFX == null) return;
 
@@ -134,11 +134,11 @@ public class VFXManager : MonoBehaviour
 
         if (rootbornSpawnVFX == null)
         {
-            Debug.LogWarning("✨ VFXManager : rootbornSpawnVFX non assigné — VFX de spawn Rootborn ignoré");
+            GameLogger.Warn(GameLogger.Category.UI, "✨ VFXManager : rootbornSpawnVFX non assigné — VFX de spawn Rootborn ignoré", this);
             return;
         }
 
-        Debug.Log($"✨ VFXManager : VFX spawn Rootborn déclenché sur {rootbornEntity.name}");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : VFX spawn Rootborn déclenché sur {rootbornEntity.name}", this);
 
         // Particules + Light 2D + Son
         VFXPlayer.PlayAt(rootbornSpawnVFX, rootbornEntity.transform.position);
@@ -157,7 +157,7 @@ public class VFXManager : MonoBehaviour
     {
         if (caster == null || abilityData == null || abilityData.vfxOnExecute == null) return;
 
-        Debug.Log($"✨ VFXManager : VFX ability '{abilityData.abilityName}' sur {caster.name}");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : VFX ability '{abilityData.abilityName}' sur {caster.name}", this);
         VFXPlayer.PlayAt(abilityData.vfxOnExecute, caster.transform.position);
 
         if (abilityData.vfxOnExecute.useWatersapFill) ApplyWatersapFill(caster, abilityData.vfxOnExecute);
@@ -176,7 +176,7 @@ public class VFXManager : MonoBehaviour
         flashController.SetFlashAmount(1f);
         flashController.FadeOut(data.flashFadeDuration, data.flashFadeCurve);
 
-        Debug.Log($"✨ VFXManager : flash appliqué sur {entity.name} — FadeOut {data.flashFadeDuration}s");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : flash appliqué sur {entity.name} — FadeOut {data.flashFadeDuration}s", this);
     }
 
     // Applique un effet scale up linéaire sur l'entité
@@ -197,7 +197,7 @@ public class VFXManager : MonoBehaviour
             scaleDuration
         );
 
-        Debug.Log($"✨ VFXManager : scale up sur {entity.name} ({data.scaleUpStartScale} → {data.scaleUpEndScale} sur {scaleDuration}s)");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : scale up sur {entity.name} ({data.scaleUpStartScale} → {data.scaleUpEndScale} sur {scaleDuration}s)", this);
     }
 
     // Applique l'effet de vague Watersap qui remonte le sprite du bas vers le haut
@@ -215,7 +215,7 @@ public class VFXManager : MonoBehaviour
             data.watersapFillCurve
         );
 
-        Debug.Log($"✨ VFXManager : watersap fill sur {entity.name} ({data.watersapFillDuration}s + hold {data.watersapFillHoldDuration}s)");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : watersap fill sur {entity.name} ({data.watersapFillDuration}s + hold {data.watersapFillHoldDuration}s)", this);
     }
 
     // Déclenche le flash fade-in sur le Bud au début de sa phase Hatching
@@ -235,7 +235,7 @@ public class VFXManager : MonoBehaviour
         // Fade-in sur la durée du Hatching — utilise la même courbe que le fade-out (inversion implicite dans FlashCurveSystem.EvaluateFadeIn)
         flashController.FadeIn(bud.HatchingDuration, budHatchVFX.flashFadeCurve);
 
-        Debug.Log($"✨ VFXManager : flash Hatching déclenché sur {bud.name} — FadeIn {bud.HatchingDuration}s");
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : flash Hatching déclenché sur {bud.name} — FadeIn {bud.HatchingDuration}s", this);
     }
 
     // Méthode publique pour jouer un VFX arbitraire depuis d'autres systèmes
@@ -256,7 +256,7 @@ public class VFXManager : MonoBehaviour
     {
         if (data == null)
         {
-            Debug.LogWarning("✨ VFXManager.PlayVFX : VFXData null");
+            GameLogger.Warn(GameLogger.Category.UI, "✨ VFXManager.PlayVFX : VFXData null", this);
             return;
         }
 

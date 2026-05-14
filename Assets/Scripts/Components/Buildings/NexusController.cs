@@ -1,4 +1,4 @@
-using UnityEngine;
+﻿using UnityEngine;
 
 // Contrôleur du Nexus — spawn les Rootborn sur la tile du bâtiment
 // Nécessite BuildingStatsComponent (isNexus = true) et TeamComponent sur le même GameObject
@@ -25,7 +25,7 @@ public class NexusController : MonoBehaviour
         BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
         if (buildingStats == null)
         {
-            Debug.LogError($"🏛️ NexusController {gameObject.name} : BuildingStatsComponent manquant !");
+            GameLogger.Error($"🏛️ NexusController {gameObject.name} : BuildingStatsComponent manquant !", this);
             enabled = false;
             return;
         }
@@ -33,7 +33,7 @@ public class NexusController : MonoBehaviour
         baseStats = buildingStats.GetBaseStats();
         if (baseStats == null)
         {
-            Debug.LogError($"🏛️ NexusController {gameObject.name} : BuildingStatsData non assigné !");
+            GameLogger.Error($"🏛️ NexusController {gameObject.name} : BuildingStatsData non assigné !", this);
             enabled = false;
             return;
         }
@@ -41,13 +41,13 @@ public class NexusController : MonoBehaviour
         // Vérifie que ce bâtiment est bien configuré comme Nexus
         if (!baseStats.isNexus)
         {
-            Debug.LogError($"🏛️ NexusController {gameObject.name} : isNexus = false dans {baseStats.buildingName} — ce contrôleur ne doit être ajouté qu'au Nexus !");
+            GameLogger.Error($"🏛️ NexusController {gameObject.name} : isNexus = false dans {baseStats.buildingName} — ce contrôleur ne doit être ajouté qu'au Nexus !", this);
             enabled = false;
             return;
         }
 
         if (debugNexus)
-            Debug.Log($"🏛️ NexusController {gameObject.name} : initialisé ({baseStats.buildingName})");
+            GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : initialisé ({baseStats.buildingName})", this);
     }
 
     // S'abonne aux clics droits du gameplay pour déclencher le spawn sur le Nexus ciblé
@@ -72,7 +72,7 @@ public class NexusController : MonoBehaviour
         if (_collider.OverlapPoint(worldPosition))
         {
             if (debugNexusInput)
-                Debug.Log($"🏛️ NexusController {gameObject.name} : clic droit détecté sur Nexus");
+                GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : clic droit détecté sur Nexus", this);
 
             TrySpawnRootborn();
         }
@@ -86,7 +86,7 @@ public class NexusController : MonoBehaviour
         TeamComponent teamComponent = GetComponent<TeamComponent>();
         if (teamComponent == null)
         {
-            Debug.LogWarning($"🏛️ NexusController {gameObject.name} : TeamComponent manquant — spawn annulé");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : TeamComponent manquant — spawn annulé", this);
             return false;
         }
         int teamID = teamComponent.GetTeamID();
@@ -94,7 +94,7 @@ public class NexusController : MonoBehaviour
         // Vérifie que la liste de production est configurée
         if (baseStats.producibleUnits == null || baseStats.producibleUnits.Count == 0)
         {
-            Debug.LogWarning($"🏛️ NexusController {gameObject.name} : producibleUnits vide — aucun Rootborn à spawner");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : producibleUnits vide — aucun Rootborn à spawner", this);
             return false;
         }
 
@@ -102,13 +102,13 @@ public class NexusController : MonoBehaviour
         UnitStatsData rootbornData = baseStats.producibleUnits[0];
         if (rootbornData == null)
         {
-            Debug.LogWarning($"🏛️ NexusController {gameObject.name} : producibleUnits[0] est null");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : producibleUnits[0] est null", this);
             return false;
         }
 
         if (rootbornData.unitPrefab == null)
         {
-            Debug.LogWarning($"🏛️ NexusController {gameObject.name} : unitPrefab manquant sur {rootbornData.unitName}");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : unitPrefab manquant sur {rootbornData.unitName}", this);
             return false;
         }
 
@@ -119,7 +119,7 @@ public class NexusController : MonoBehaviour
             if (occupant != null)
             {
                 if (debugNexus)
-                    Debug.LogWarning($"️ NexusController {gameObject.name} : case {nexusTile} occupée par {occupant.name} — spawn bloqué");
+                    GameLogger.Warn(GameLogger.Category.Spawn, $"️ NexusController {gameObject.name} : case {nexusTile} occupée par {occupant.name} — spawn bloqué", this);
                 return false;
             }
         }
@@ -128,7 +128,7 @@ public class NexusController : MonoBehaviour
         if (!WatersapManager.Instance.SpendWatersap(teamID, rootbornData.watersapCost))
         {
             if (debugNexus)
-                Debug.LogWarning($"🏛️ NexusController {gameObject.name} : Watersap insuffisant pour spawner {rootbornData.unitName} (coût : {rootbornData.watersapCost})");
+                GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Watersap insuffisant pour spawner {rootbornData.unitName} (coût : {rootbornData.watersapCost})", this);
             return false;
         }
 
@@ -140,12 +140,12 @@ public class NexusController : MonoBehaviour
         if (unitTeam != null)
             unitTeam.SetTeamID(teamID);
         else
-            Debug.LogWarning($"🏛️ NexusController {gameObject.name} : TeamComponent manquant sur le Rootborn spawné — équipe non assignée");
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : TeamComponent manquant sur le Rootborn spawné — équipe non assignée", this);
 
         // 🔊 Hook SFX/VFX spawn Rootborn ici
 
         if (debugNexus)
-            Debug.Log($"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)");
+            GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)", this);
 
         // Notifie le système de spawn pour sélection automatique
         if (EntitySpawnManager.Instance != null)

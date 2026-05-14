@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -45,12 +45,12 @@ public class SelectionManager : MonoBehaviour
         mainCamera = Camera.main;
         if (mainCamera == null)
         {
-            Debug.LogError("❌ SelectionManager nécessite une caméra principale dans la scène !");
+            GameLogger.Error("❌ SelectionManager nécessite une caméra principale dans la scène !", this);
         }
 
         if (selectionSquarePrefab == null)
         {
-            Debug.LogError("❌ SelectionManager nécessite un prefab SelectionSquare assigné !");
+            GameLogger.Error("❌ SelectionManager nécessite un prefab SelectionSquare assigné !", this);
         }
 
         combinedSelectableMask = unitLayer | buildingLayer | environmentWalkableLayer | obstacleLayer;
@@ -63,7 +63,7 @@ public class SelectionManager : MonoBehaviour
         inputManager = InputManager.Instance;
         if (inputManager == null)
         {
-            Debug.LogError("❌ SelectionManager: InputManager introuvable dans la scène !");
+            GameLogger.Error("❌ SelectionManager: InputManager introuvable dans la scène !", this);
             return;
         }
 
@@ -101,7 +101,7 @@ public class SelectionManager : MonoBehaviour
     private void OnLeftClickDownHandler(Vector3 worldPosition)
     {
         isDragging = false;
-        Debug.Log($"🎯 START Selection — monde {worldPosition}");
+        GameLogger.Log(GameLogger.Category.Selection, $"🎯 START Selection — monde {worldPosition}", this);
     }
 
     // Début du drag — enregistre la position initiale et active le rectangle
@@ -110,7 +110,7 @@ public class SelectionManager : MonoBehaviour
         if (IsPointerOverUserInterface(screenPosition))
         {
             isDragging = false;
-            Debug.Log("🧱 SelectionManager : drag ignoré car démarré sur l'UI");
+            GameLogger.Log(GameLogger.Category.Selection, "🧱 SelectionManager : drag ignoré car démarré sur l'UI", this);
             return;
         }
 
@@ -119,7 +119,7 @@ public class SelectionManager : MonoBehaviour
         isDragging = true;
         rectangleRenderer.enabled = true;
 
-        Debug.Log("🟢 Mode rectangle ACTIVÉ !");
+        GameLogger.Log(GameLogger.Category.Selection, "🟢 Mode rectangle ACTIVÉ !", this);
     }
 
     // Drag en cours — met à jour la position courante et redessine le rectangle
@@ -131,7 +131,7 @@ public class SelectionManager : MonoBehaviour
         }
 
         lastDragScreenPosition = screenPosition;
-        Debug.Log("🎨 Dessin du rectangle...");
+        GameLogger.Log(GameLogger.Category.Selection, "🎨 Dessin du rectangle...", this);
         DrawSelectionRectangle();
     }
 
@@ -239,12 +239,12 @@ public class SelectionManager : MonoBehaviour
 
         if (selectableUnits.Count > MAX_SELECTED_UNITS)
         {
-            Debug.Log($"⚠️ Drag-select : {selectableUnits.Count} unités valides dans la zone → cap à {MAX_SELECTED_UNITS} (plus proches du centre)");
+            GameLogger.Log(GameLogger.Category.Selection, $"⚠️ Drag-select : {selectableUnits.Count} unités valides dans la zone → cap à {MAX_SELECTED_UNITS} (plus proches du centre)", this);
             selectableUnits.RemoveRange(MAX_SELECTED_UNITS, selectableUnits.Count - MAX_SELECTED_UNITS);
         }
 
         ApplyUnitListSelection(selectableUnits);
-        Debug.Log($"📦 Rectangle sélection : {state.Units.Count} unités sélectionnées (zone contenait {unitsInArea.Length})");
+        GameLogger.Log(GameLogger.Category.Selection, $"📦 Rectangle sélection : {state.Units.Count} unités sélectionnées (zone contenait {unitsInArea.Length})", this);
     }
 
     // Applique une transition de sélection unique ou unité depuis clic ou API externe
@@ -288,23 +288,23 @@ public class SelectionManager : MonoBehaviour
             if (state.Type == SelectionType.Units && state.Contains(unit))
             {
                 state.RemoveUnit(unit);
-                Debug.Log($"➖ Unité désélectionnée : {unit.name} (Total: {state.Units.Count})");
+                GameLogger.Log(GameLogger.Category.Selection, $"➖ Unité désélectionnée : {unit.name} (Total: {state.Units.Count})", this);
                 return;
             }
 
             bool added = state.AddUnit(unit, MAX_SELECTED_UNITS);
             if (!added)
             {
-                Debug.Log($"⚠️ Sélection plafonnée à {MAX_SELECTED_UNITS} unités — {unit.name} ignorée");
+                GameLogger.Log(GameLogger.Category.Selection, $"⚠️ Sélection plafonnée à {MAX_SELECTED_UNITS} unités — {unit.name} ignorée", this);
                 return;
             }
 
-            Debug.Log($"➕ Unité sélectionnée : {unit.name} (Total: {state.Units.Count})");
+            GameLogger.Log(GameLogger.Category.Selection, $"➕ Unité sélectionnée : {unit.name} (Total: {state.Units.Count})", this);
             return;
         }
 
         state.SetUnits(new[] { unit });
-        Debug.Log($"✅ Unité sélectionnée : {unit.name} (Total: {state.Units.Count})");
+        GameLogger.Log(GameLogger.Category.Selection, $"✅ Unité sélectionnée : {unit.name} (Total: {state.Units.Count})", this);
     }
 
     // Remplace la sélection par une liste d'unités issue du rectangle
@@ -535,7 +535,7 @@ public class SelectionManager : MonoBehaviour
                 SynchronizeSelectionVisuals(null);
                 SynchronizeDeathHandlers();
                 OnUnitsSelected.Invoke(GetSelectedUnits());
-                Debug.Log($"💀 SelectionManager : entité retirée de la sélection, {state.Units.Count} restantes");
+                GameLogger.Log(GameLogger.Category.Selection, $"💀 SelectionManager : entité retirée de la sélection, {state.Units.Count} restantes", this);
                 return;
             }
         }
@@ -556,7 +556,7 @@ public class SelectionManager : MonoBehaviour
             if (GridManager.Instance.IsInBounds(gridPosition))
             {
                 ApplySelection(SelectionType.Ground, null, gridPosition, lastPosition, false);
-                Debug.Log($"🔄 SelectionManager : Fallback vers terrain {gridPosition} après destruction d'entité");
+                GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Fallback vers terrain {gridPosition} après destruction d'entité", this);
                 return;
             }
         }
@@ -574,15 +574,15 @@ public class SelectionManager : MonoBehaviour
                 break;
             case SelectionType.Building:
                 OnBuildingSelected.Invoke(state.Single);
-                Debug.Log($"🏛️ Bâtiment sélectionné : {state.Single.name}");
+                GameLogger.Log(GameLogger.Category.Selection, $"🏛️ Bâtiment sélectionné : {state.Single.name}", this);
                 break;
             case SelectionType.Obstacle:
                 OnObstacleSelected.Invoke(state.Single);
-                Debug.Log($"🪨 Obstacle sélectionné : {state.Single.name}");
+                GameLogger.Log(GameLogger.Category.Selection, $"🪨 Obstacle sélectionné : {state.Single.name}", this);
                 break;
             case SelectionType.Ground:
                 OnGroundSelected.Invoke(state.Ground);
-                Debug.Log($"🌿 Terrain sélectionné : cellule {state.Ground}");
+                GameLogger.Log(GameLogger.Category.Selection, $"🌿 Terrain sélectionné : cellule {state.Ground}", this);
                 break;
             default:
                 OnSelectionCleared.Invoke();
@@ -627,7 +627,7 @@ public class SelectionManager : MonoBehaviour
     {
         if (selectionSquarePrefab == null)
         {
-            Debug.LogError("❌ Impossible de créer SelectionSquare : prefab non assigné !");
+            GameLogger.Error("❌ Impossible de créer SelectionSquare : prefab non assigné !", this);
             return null;
         }
 
@@ -636,7 +636,7 @@ public class SelectionManager : MonoBehaviour
 
         if (selectionSquare == null)
         {
-            Debug.LogError("❌ Le prefab SelectionSquare ne contient pas le composant SelectionSquare !");
+            GameLogger.Error("❌ Le prefab SelectionSquare ne contient pas le composant SelectionSquare !", this);
             Destroy(squareInstance);
             return null;
         }
@@ -655,7 +655,7 @@ public class SelectionManager : MonoBehaviour
         if (state.Contains(spawner))
         {
             SelectGameObject(spawnedEntity);
-            Debug.Log($"🔄 SelectionManager : Sélection auto {spawnedEntity.name} (spawné par {spawner.name})");
+            GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Sélection auto {spawnedEntity.name} (spawné par {spawner.name})", this);
         }
     }
 
@@ -670,7 +670,7 @@ public class SelectionManager : MonoBehaviour
         if (state.Contains(oldEntity))
         {
             SelectGameObject(newEntity);
-            Debug.Log($"🔄 SelectionManager : Sélection auto {newEntity.name} (remplace {oldEntity.name})");
+            GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Sélection auto {newEntity.name} (remplace {oldEntity.name})", this);
         }
     }
 
@@ -725,7 +725,7 @@ public class SelectionManager : MonoBehaviour
     {
         ClearAllSelectionSilent();
         OnSelectionCleared.Invoke();
-        Debug.Log("🧹 Toute sélection effacée");
+        GameLogger.Log(GameLogger.Category.Selection, "🧹 Toute sélection effacée", this);
     }
 
     // Retourne la liste de toutes les unités sélectionnées
