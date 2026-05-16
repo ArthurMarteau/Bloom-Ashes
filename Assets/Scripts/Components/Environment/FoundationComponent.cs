@@ -3,54 +3,46 @@ using UnityEngine;
 using UnityEngine.Events;
 
 // Composant de Foundation 2x2 : détecte les Rootborn idle sur ses 4 cellules et construit un bâtiment.
-public class FoundationComponent : MonoBehaviour
+public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile
 {
     [SerializeField] private FoundationStatsData foundationStats;
-    [SerializeField] private float scanInterval = 0.2f;
 
     public UnityEvent OnFoundationStateChanged = new UnityEvent();
 
-    private readonly Dictionary<Vector2Int, GameObject> rootbornsPerCell = new Dictionary<Vector2Int, GameObject>();
     private readonly Dictionary<Vector2Int, GameObject> idleRootbornsPerCell = new Dictionary<Vector2Int, GameObject>();
-    private readonly Dictionary<GameObject, UnityAction<bool>> idleHandlersByRootborn = new Dictionary<GameObject, UnityAction<bool>>();
-    private readonly Dictionary<GameObject, MovementController> movementByRootborn = new Dictionary<GameObject, MovementController>();
-    private readonly Vector2Int[] foundationCells = new Vector2Int[4];
+    private readonly Dictionary<GameObject, HashSet<Vector2Int>> rootbornCellsByRootborn = new Dictionary<GameObject, HashSet<Vector2Int>>();
+    private readonly Dictionary<GameObject, TrackedRootbornIdleHandler> trackedRootborns = new Dictionary<GameObject, TrackedRootbornIdleHandler>();
+    private Vector2Int[] foundationCells;
 
-    private float nextScanTime;
     private bool cellsInitialized;
     private bool isBuildInProgress;
+
+    private class TrackedRootbornIdleHandler
+    {
+        public MovementController Movement;
+        public UnityAction<bool> Handler;
+    }
 
     private void Start()
     {
         InitializeCells();
-        ScanRootborns();
-    }
-
-    private void Update()
-    {
-        if (Time.time < nextScanTime)
-            return;
-
-        nextScanTime = Time.time + scanInterval;
-        ScanRootborns();
+        RegisterCellListeners();
+        SynchronizeInitialRootborns();
     }
 
     private void OnDestroy()
     {
-        foreach (GameObject rootborn in new List<GameObject>(idleHandlersByRootborn.Keys))
+        EntityRegistry.Instance?.UnregisterAllCellListeners(this);
+
+        foreach (GameObject rootborn in new List<GameObject>(trackedRootborns.Keys))
         {
-            UnsubscribeRootborn(rootborn);
+            UnsubscribeIdleEvents(rootborn);
         }
     }
 
     public int GetIdleRootbornCount()
     {
         return idleRootbornsPerCell.Count;
-    }
-
-    public void ForceScan()
-    {
-        ScanRootborns();
     }
 
     public bool IsReadyToBuild()
@@ -86,6 +78,15 @@ public class FoundationComponent : MonoBehaviour
     public FoundationStatsData GetFoundationStats()
     {
         return foundationStats;
+    }
+
+    // Retourne les cellules occupées par cette Foundation.
+    public List<Vector2Int> GetOccupiedTiles()
+    {
+        if (!cellsInitialized)
+            InitializeCells();
+
+        return new List<Vector2Int>(foundationCells);
     }
 
     public int GetTeamID()
@@ -147,95 +148,93 @@ public class FoundationComponent : MonoBehaviour
         Destroy(gameObject);
     }
 
-    private void InitializeCells()
+    public void OnUnitEntered(Vector2Int cell, GameObject unit)
     {
-        if (cellsInitialized || GridManager.Instance == null)
-            return;
+        if (!IsFoundationCell(cell)) return;
+        if (!IsEligibleRootborn(unit)) return;
 
-        Vector2Int bottomLeftCell = GridManager.Instance.WorldToGrid(transform.position);
-        foundationCells[0] = bottomLeftCell;
-        foundationCells[1] = bottomLeftCell + new Vector2Int(1, 0);
-        foundationCells[2] = bottomLeftCell + new Vector2Int(0, 1);
-        foundationCells[3] = bottomLeftCell + new Vector2Int(1, 1);
-        cellsInitialized = true;
-    }
-
-    private void ScanRootborns()
-    {
-        InitializeCells();
-        GameLogger.Log(GameLogger.Category.Spawn, $"️ ScanRootborns : cellsInitialized={cellsInitialized}, cells=[{string.Join(", ", foundationCells)}]", this);
-
-        if (!cellsInitialized || EntityRegistry.Instance == null)
-            return;
-
-        bool changed = false;
-
-        foreach (Vector2Int cell in foundationCells)
+        if (!rootbornCellsByRootborn.TryGetValue(unit, out HashSet<Vector2Int> cells))
         {
-            GameObject currentRootborn = GetRootbornAt(cell);
-            rootbornsPerCell.TryGetValue(cell, out GameObject previousRootborn);
-
-            if (previousRootborn != currentRootborn)
-            {
-                if (previousRootborn != null)
-                    changed |= RemoveRootbornFromCell(cell, previousRootborn);
-
-                if (currentRootborn != null)
-                    changed |= TrackRootbornAtCell(cell, currentRootborn);
-            }
-            else if (currentRootborn != null)
-            {
-                changed |= SynchronizeIdleState(cell, currentRootborn);
-            }
+            cells = new HashSet<Vector2Int>();
+            rootbornCellsByRootborn[unit] = cells;
         }
 
-        CleanupDestroyedRootborns(ref changed);
+        cells.Add(cell);
+        SubscribeIdleEvents(unit);
+
+        if (SynchronizeIdleState(cell, unit))
+            OnFoundationStateChanged.Invoke();
+    }
+
+    public void OnUnitLeft(Vector2Int cell, GameObject unit)
+    {
+        if (!IsFoundationCell(cell)) return;
+
+        bool changed = RemoveIdleRootborn(unit);
+
+        if (unit != null && rootbornCellsByRootborn.TryGetValue(unit, out HashSet<Vector2Int> cells))
+        {
+            cells.Remove(cell);
+            if (cells.Count == 0)
+            {
+                rootbornCellsByRootborn.Remove(unit);
+                UnsubscribeIdleEvents(unit);
+            }
+        }
 
         if (changed)
             OnFoundationStateChanged.Invoke();
     }
 
-    private GameObject GetRootbornAt(Vector2Int cell)
+    private void InitializeCells()
     {
-        GameObject unit = EntityRegistry.Instance.GetUnitAtLogicalPosition(cell);
-        GameLogger.Log(GameLogger.Category.Spawn, $"️ GetRootbornAt {cell} : unit={(unit != null ? unit.name : "null")}", this);
-        GameLogger.Log(GameLogger.Category.Spawn, $"️ GetRootbornAt {cell} : eligible={(unit != null && unit.GetComponent<UnitStatsComponent>()?.IsRootborn() == true ? "oui" : "non")}", this);
-        if (unit == null)
-            return null;
+        if (cellsInitialized || GridManager.Instance == null)
+            return;
 
-        UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
-        return stats != null && stats.IsRootborn() && !stats.IsDead() ? unit : null;
-    }
+        int sizeX = foundationStats != null ? foundationStats.sizeX : 2;
+        int sizeY = foundationStats != null ? foundationStats.sizeY : 2;
+        foundationCells = new Vector2Int[sizeX * sizeY];
 
-    private bool TrackRootbornAtCell(Vector2Int cell, GameObject rootborn)
-    {
-        rootbornsPerCell[cell] = rootborn;
-        SubscribeRootborn(rootborn);
-        return SynchronizeIdleState(cell, rootborn);
-    }
-
-    private bool RemoveRootbornFromCell(Vector2Int cell, GameObject rootborn)
-    {
-        bool changed = false;
-
-        if (rootbornsPerCell.TryGetValue(cell, out GameObject registeredRootborn) && registeredRootborn == rootborn)
-            rootbornsPerCell.Remove(cell);
-
-        if (idleRootbornsPerCell.TryGetValue(cell, out GameObject idleRootborn) && idleRootborn == rootborn)
+        int index = 0;
+        Vector2Int bottomLeft = GridManager.Instance.WorldToGrid(transform.position);
+        for (int x = 0; x < sizeX; x++)
         {
-            idleRootbornsPerCell.Remove(cell);
-            changed = true;
+            for (int y = 0; y < sizeY; y++)
+            {
+                foundationCells[index++] = bottomLeft + new Vector2Int(x, y);
+            }
         }
 
-        if (!rootbornsPerCell.ContainsValue(rootborn))
-            UnsubscribeRootborn(rootborn);
-
-        return changed;
+        cellsInitialized = true;
     }
 
-    private void SubscribeRootborn(GameObject rootborn)
+    private void RegisterCellListeners()
     {
-        if (rootborn == null || idleHandlersByRootborn.ContainsKey(rootborn))
+        if (!cellsInitialized || EntityRegistry.Instance == null)
+            return;
+
+        foreach (Vector2Int cell in foundationCells)
+        {
+            EntityRegistry.Instance.RegisterCellListener(cell, this);
+        }
+    }
+
+    private void SynchronizeInitialRootborns()
+    {
+        if (!cellsInitialized || EntityRegistry.Instance == null)
+            return;
+
+        foreach (Vector2Int cell in foundationCells)
+        {
+            GameObject unit = EntityRegistry.Instance.GetUnitAtLogicalPosition(cell);
+            if (IsEligibleRootborn(unit))
+                OnUnitEntered(cell, unit);
+        }
+    }
+
+    private void SubscribeIdleEvents(GameObject rootborn)
+    {
+        if (rootborn == null || trackedRootborns.ContainsKey(rootborn))
             return;
 
         MovementController movement = rootborn.GetComponent<MovementController>();
@@ -244,20 +243,22 @@ public class FoundationComponent : MonoBehaviour
 
         UnityAction<bool> handler = isIdle => HandleRootbornIdleStateChanged(rootborn, isIdle);
         movement.OnIdleStateChanged.AddListener(handler);
-        idleHandlersByRootborn[rootborn] = handler;
-        movementByRootborn[rootborn] = movement;
+        trackedRootborns[rootborn] = new TrackedRootbornIdleHandler
+        {
+            Movement = movement,
+            Handler = handler
+        };
     }
 
-    private void UnsubscribeRootborn(GameObject rootborn)
+    private void UnsubscribeIdleEvents(GameObject rootborn)
     {
-        if (rootborn == null || !idleHandlersByRootborn.TryGetValue(rootborn, out UnityAction<bool> handler))
+        if (rootborn == null || !trackedRootborns.TryGetValue(rootborn, out TrackedRootbornIdleHandler tracked))
             return;
 
-        if (movementByRootborn.TryGetValue(rootborn, out MovementController movement) && movement != null)
-            movement.OnIdleStateChanged.RemoveListener(handler);
+        if (tracked.Movement != null)
+            tracked.Movement.OnIdleStateChanged.RemoveListener(tracked.Handler);
 
-        idleHandlersByRootborn.Remove(rootborn);
-        movementByRootborn.Remove(rootborn);
+        trackedRootborns.Remove(rootborn);
     }
 
     private void HandleRootbornIdleStateChanged(GameObject rootborn, bool isIdle)
@@ -274,7 +275,7 @@ public class FoundationComponent : MonoBehaviour
             if (movement != null)
             {
                 Vector2Int cell = movement.GetCurrentGridPosition();
-                if (IsFoundationCell(cell) && rootbornsPerCell.TryGetValue(cell, out GameObject registeredRootborn) && registeredRootborn == rootborn)
+                if (IsFoundationCell(cell) && rootbornCellsByRootborn.TryGetValue(rootborn, out HashSet<Vector2Int> cells) && cells.Contains(cell))
                     changed = SetIdleRootborn(cell, rootborn);
             }
         }
@@ -314,19 +315,6 @@ public class FoundationComponent : MonoBehaviour
         return changed;
     }
 
-    private void CleanupDestroyedRootborns(ref bool changed)
-    {
-        foreach (Vector2Int cell in new List<Vector2Int>(rootbornsPerCell.Keys))
-        {
-            if (rootbornsPerCell[cell] == null)
-            {
-                rootbornsPerCell.Remove(cell);
-                idleRootbornsPerCell.Remove(cell);
-                changed = true;
-            }
-        }
-    }
-
     private bool IsFoundationCell(Vector2Int cell)
     {
         foreach (Vector2Int foundationCell in foundationCells)
@@ -336,6 +324,15 @@ public class FoundationComponent : MonoBehaviour
         }
 
         return false;
+    }
+
+    private bool IsEligibleRootborn(GameObject unit)
+    {
+        if (unit == null)
+            return false;
+
+        UnitStatsComponent stats = unit.GetComponent<UnitStatsComponent>();
+        return stats != null && stats.IsRootborn() && !stats.IsDead();
     }
 
     [ContextMenu("Debug: Foundation State")]

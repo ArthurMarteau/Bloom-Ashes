@@ -25,6 +25,12 @@ public class TransformationController : MonoBehaviour
             return null;
         }
 
+        if (EntityRegistry.Instance == null)
+        {
+            LogWarning("FindAdjacentCompatibleBuilding - EntityRegistry introuvable");
+            return null;
+        }
+
         int teamID = ownTeam.GetTeamID();
         bool isRootborn = GetComponent<RootbornStockComponent>() != null;
         Vector2Int unitCell = GridManager.Instance.WorldToGrid(transform.position);
@@ -33,9 +39,7 @@ public class TransformationController : MonoBehaviour
         foreach (Vector2Int offset in offsets)
         {
             Vector2Int adjacentCell = unitCell + offset;
-            GameObject buildingObject = isRootborn
-                ? GridManager.Instance.GetBuildingAt(adjacentCell)
-                : GridManager.Instance.GetNexusAt(adjacentCell);
+            GameObject buildingObject = EntityRegistry.Instance.GetBuildingAtLogicalPosition(adjacentCell);
 
             if (buildingObject == null) continue;
 
@@ -45,6 +49,7 @@ public class TransformationController : MonoBehaviour
             BuildingStatsData baseStats = buildingStats.GetBaseStats();
             if (baseStats == null) continue;
             if (isRootborn && baseStats.isNexus) continue;
+            if (!isRootborn && !baseStats.isNexus) continue;
 
             TeamComponent buildingTeam = buildingObject.GetComponent<TeamComponent>();
             if (buildingTeam == null || buildingTeam.GetTeamID() != teamID) continue;

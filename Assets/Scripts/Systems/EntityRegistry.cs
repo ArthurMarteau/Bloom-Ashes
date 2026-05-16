@@ -24,7 +24,10 @@ public class EntityRegistry : MonoBehaviour
     // Permet à une autre unité de s'y engager sans attendre la fin du Lerp
     private Dictionary<GameObject, Vector2Int> leavingPositions = new Dictionary<GameObject, Vector2Int>();
     private Dictionary<Vector2Int, GameObject> positionToUnit = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, HashSet<GameObject>> cellToUnits = new Dictionary<Vector2Int, HashSet<GameObject>>();
     private Dictionary<Vector2Int, GameObject> leavingPositionToUnit = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, List<ICellListener>> cellListeners = new Dictionary<Vector2Int, List<ICellListener>>();
+    private Dictionary<Vector2Int, GameObject> buildingPositions = new Dictionary<Vector2Int, GameObject>();
 
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
@@ -79,9 +82,14 @@ public class EntityRegistry : MonoBehaviour
         if (go == null) return;
 
         entities.Remove(go);
-        if (logicalPositions.TryGetValue(go, out var lp) && positionToUnit.TryGetValue(lp, out var rl) && rl == go)
+        if (logicalPositions.TryGetValue(go, out var lp))
         {
-            positionToUnit.Remove(lp);
+            RemoveUnitFromCell(lp, go);
+            if (positionToUnit.TryGetValue(lp, out var rl) && rl == go)
+            {
+                positionToUnit.Remove(lp);
+                NotifyCellLeft(lp, go);
+            }
         }
         logicalPositions.Remove(go);
         if (leavingPositions.TryGetValue(go, out var leP) && leavingPositionToUnit.TryGetValue(leP, out var reL) && reL == go)
@@ -102,12 +110,15 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
 
-        if (logicalPositions.TryGetValue(go, out var oldPos) && positionToUnit.TryGetValue(oldPos, out var registered) && registered == go)
+        if (logicalPositions.TryGetValue(go, out var oldPos))
         {
-            positionToUnit.Remove(oldPos);
+            RemoveUnitFromCell(oldPos, go);
+            if (positionToUnit.TryGetValue(oldPos, out var registered) && registered == go)
+                positionToUnit.Remove(oldPos);
         }
 
         logicalPositions[go] = position;
+        AddUnitToCell(position, go);
 
         if (positionToUnit.TryGetValue(position, out var existing) && existing != go && existing != null)
         {
@@ -122,22 +133,37 @@ public class EntityRegistry : MonoBehaviour
     public bool TryClaimPosition(GameObject go, Vector2Int cell)
     {
         if (go == null) return false;
+        bool hadOldPos = logicalPositions.TryGetValue(go, out var previousPosition);
         if (positionToUnit.TryGetValue(cell, out var existing) && existing != null && existing != go)
         {
             if (go.GetInstanceID() < existing.GetInstanceID())
             {
                 if (logicalPositions.TryGetValue(existing, out var existingPos) && existingPos == cell)
+                {
                     logicalPositions.Remove(existing);
+                    RemoveUnitFromCell(existingPos, existing);
+                    NotifyCellLeft(existingPos, existing);
+                }
                 if (logicalPositions.TryGetValue(go, out var oldPos) && oldPos != cell
                     && positionToUnit.TryGetValue(oldPos, out var rl) && rl == go)
+                {
                     positionToUnit.Remove(oldPos);
+                    RemoveUnitFromCell(oldPos, go);
+                }
                 logicalPositions[go] = cell;
+                AddUnitToCell(cell, go);
                 positionToUnit[cell] = go;
+                NotifyCellEntered(cell, go);
+                if (hadOldPos && previousPosition != cell)
+                    NotifyCellLeft(previousPosition, go);
                 return true;
             }
             return false;
         }
         UpdateLogicalPosition(go, cell);
+        NotifyCellEntered(cell, go);
+        if (hadOldPos && previousPosition != cell)
+            NotifyCellLeft(previousPosition, go);
         return true;
     }
 
@@ -166,9 +192,14 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
 
-        if (logicalPositions.TryGetValue(go, out var lp) && positionToUnit.TryGetValue(lp, out var rl) && rl == go)
+        if (logicalPositions.TryGetValue(go, out var lp))
         {
-            positionToUnit.Remove(lp);
+            RemoveUnitFromCell(lp, go);
+            if (positionToUnit.TryGetValue(lp, out var rl) && rl == go)
+            {
+                positionToUnit.Remove(lp);
+                NotifyCellLeft(lp, go);
+            }
         }
         logicalPositions.Remove(go);
 
@@ -193,24 +224,86 @@ public class EntityRegistry : MonoBehaviour
         return null;
     }
 
+    // Ajoute un listener aux notifications d'une cellule logique.
+    public void RegisterCellListener(Vector2Int cell, ICellListener listener)
+    {
+        if (listener == null) return;
+
+        if (!cellListeners.TryGetValue(cell, out List<ICellListener> listeners))
+        {
+            listeners = new List<ICellListener>();
+            cellListeners[cell] = listeners;
+        }
+
+        if (!listeners.Contains(listener))
+            listeners.Add(listener);
+    }
+
+    // Retire un listener d'une cellule logique.
+    public void UnregisterCellListener(Vector2Int cell, ICellListener listener)
+    {
+        if (listener == null) return;
+        if (!cellListeners.TryGetValue(cell, out List<ICellListener> listeners)) return;
+
+        listeners.Remove(listener);
+        if (listeners.Count == 0)
+            cellListeners.Remove(cell);
+    }
+
+    // Retire un listener de toutes les cellules où il était enregistré.
+    public void UnregisterAllCellListeners(ICellListener listener)
+    {
+        if (listener == null) return;
+
+        foreach (Vector2Int cell in new List<Vector2Int>(cellListeners.Keys))
+        {
+            cellListeners[cell].Remove(listener);
+            if (cellListeners[cell].Count == 0)
+                cellListeners.Remove(cell);
+        }
+    }
+
+    // Enregistre un bâtiment sur une cellule logique occupée.
+    public void RegisterBuilding(Vector2Int cell, GameObject building)
+    {
+        if (building == null) return;
+        buildingPositions[cell] = building;
+    }
+
+    // Désenregistre le bâtiment occupant une cellule logique.
+    public void UnregisterBuilding(Vector2Int cell)
+    {
+        buildingPositions.Remove(cell);
+    }
+
+    // Retourne le bâtiment occupant une cellule logique, ou null.
+    public GameObject GetBuildingAtLogicalPosition(Vector2Int cell)
+    {
+        if (buildingPositions.TryGetValue(cell, out GameObject building) && building != null)
+            return building;
+
+        return null;
+    }
+
     // Retourne tous les GameObjects dans un rayon (distance Chebyshev) autour d'un centre de grille
     // Inclut les entités mortes — à filtrer par l'appelant si nécessaire
-    // Performance : O(n) sur les entités enregistrées, zéro appel Physics2D
+    // Performance : O(range²) via l'index des cellules occupées, zéro appel Physics2D
     public List<GameObject> FindEntitiesInRange(Vector2Int center, int range)
     {
         List<GameObject> result = new List<GameObject>();
 
-        foreach (var kvp in entities)
+        for (int dx = -range; dx <= range; dx++)
         {
-            GameObject go = kvp.Key;
-            if (go == null) continue;
-
-            Vector2Int entityPosition = GridManager.Instance.WorldToGrid(go.transform.position);
-            int distance = ChebyshevDistance(center, entityPosition);
-
-            if (distance <= range)
+            for (int dy = -range; dy <= range; dy++)
             {
-                result.Add(go);
+                Vector2Int cell = center + new Vector2Int(dx, dy);
+                if (!cellToUnits.TryGetValue(cell, out HashSet<GameObject> units)) continue;
+
+                foreach (GameObject go in units)
+                {
+                    if (go != null && !result.Contains(go))
+                        result.Add(go);
+                }
             }
         }
 
@@ -224,36 +317,31 @@ public class EntityRegistry : MonoBehaviour
     {
         List<GameObject> result = new List<GameObject>();
 
-        foreach (var kvp in entities)
+        for (int dx = -range; dx <= range; dx++)
         {
-            GameObject go = kvp.Key;
-            IDamageable damageable = kvp.Value;
-
-            // Saute les entrées invalides, mortes ou invulnérables
-            // Les entités invulnérables (ex: Nexus) ne doivent pas être ciblées automatiquement
-            if (go == null || damageable == null) continue;
-            if (damageable.IsDead()) continue;
-            if (damageable.IsInvulnerable()) continue;
-
-            // Vérifie l'équipe via ITeamMember
-            ITeamMember otherTeamMember = go.GetComponent<ITeamMember>();
-            if (otherTeamMember == null) continue;
-
-            int otherTeamID = otherTeamMember.GetTeamID();
-
-            // Neutres (0) ne sont ennemis de personne
-            if (myTeamID == 0 || otherTeamID == 0) continue;
-
-            // Même équipe = allié, pas ennemi
-            if (otherTeamID == myTeamID) continue;
-
-            // Vérifie la distance Chebyshev
-            Vector2Int entityPosition = GridManager.Instance.WorldToGrid(go.transform.position);
-            int distance = ChebyshevDistance(center, entityPosition);
-
-            if (distance <= range)
+            for (int dy = -range; dy <= range; dy++)
             {
-                result.Add(go);
+                if (Mathf.Abs(dx) > range || Mathf.Abs(dy) > range) continue;
+
+                Vector2Int cell = center + new Vector2Int(dx, dy);
+                if (!cellToUnits.TryGetValue(cell, out HashSet<GameObject> units)) continue;
+
+                foreach (GameObject go in units)
+                {
+                    IDamageable damageable = go != null && entities.TryGetValue(go, out var d) ? d : null;
+                    if (go == null || damageable == null) continue;
+                    if (damageable.IsDead() || damageable.IsInvulnerable()) continue;
+
+                    ITeamMember otherTeam = go.GetComponent<ITeamMember>();
+                    if (otherTeam == null) continue;
+
+                    int otherTeamID = otherTeam.GetTeamID();
+                    if (myTeamID == 0 || otherTeamID == 0) continue;
+                    if (otherTeamID == myTeamID) continue;
+
+                    if (!result.Contains(go))
+                        result.Add(go);
+                }
             }
         }
 
@@ -279,6 +367,53 @@ public class EntityRegistry : MonoBehaviour
     private int ChebyshevDistance(Vector2Int a, Vector2Int b)
     {
         return CombatSystem.CalculateChebyshevDistance(a, b);
+    }
+
+    // Notifie les listeners qu'une unité est entrée sur une cellule.
+    private void NotifyCellEntered(Vector2Int cell, GameObject unit)
+    {
+        if (!cellListeners.TryGetValue(cell, out List<ICellListener> listeners)) return;
+
+        foreach (ICellListener listener in new List<ICellListener>(listeners))
+        {
+            listener?.OnUnitEntered(cell, unit);
+        }
+    }
+
+    // Notifie les listeners qu'une unité a quitté une cellule.
+    private void NotifyCellLeft(Vector2Int cell, GameObject unit)
+    {
+        if (!cellListeners.TryGetValue(cell, out List<ICellListener> listeners)) return;
+
+        foreach (ICellListener listener in new List<ICellListener>(listeners))
+        {
+            listener?.OnUnitLeft(cell, unit);
+        }
+    }
+
+    // Ajoute une unité à l'index inversé des cellules occupées.
+    private void AddUnitToCell(Vector2Int cell, GameObject unit)
+    {
+        if (unit == null) return;
+
+        if (!cellToUnits.TryGetValue(cell, out HashSet<GameObject> units))
+        {
+            units = new HashSet<GameObject>();
+            cellToUnits[cell] = units;
+        }
+
+        units.Add(unit);
+    }
+
+    // Retire une unité de l'index inversé et supprime la cellule si elle devient vide.
+    private void RemoveUnitFromCell(Vector2Int cell, GameObject unit)
+    {
+        if (unit == null) return;
+        if (!cellToUnits.TryGetValue(cell, out HashSet<GameObject> units)) return;
+
+        units.Remove(unit);
+        if (units.Count == 0)
+            cellToUnits.Remove(cell);
     }
 
     // Supprime les entrées dont le GameObject a été détruit sans OnDestroy propre
@@ -329,9 +464,14 @@ public class EntityRegistry : MonoBehaviour
         }
 
         positionToUnit.Clear();
+        cellToUnits.Clear();
         foreach (var kvp in logicalPositions)
         {
-            if (kvp.Key != null) positionToUnit[kvp.Value] = kvp.Key;
+            if (kvp.Key != null)
+            {
+                positionToUnit[kvp.Value] = kvp.Key;
+                AddUnitToCell(kvp.Value, kvp.Key);
+            }
         }
 
         leavingPositionToUnit.Clear();
@@ -374,5 +514,35 @@ public class EntityRegistry : MonoBehaviour
         int before = entities.Count;
         CleanupNullEntities();
         GameLogger.Log(GameLogger.Category.Spawn, $"📋 EntityRegistry: Nettoyage — {before} → {entities.Count} entités", null);
+    }
+
+    // Liste les listeners enregistrés par cellule logique.
+    [ContextMenu("Debug: Lister les cell listeners")]
+    private void DebugListCellListeners()
+    {
+        GameLogger.Log(GameLogger.Category.Spawn, $"EntityRegistry: {cellListeners.Count} cellule(s) avec listeners", null);
+
+        foreach (var kvp in cellListeners)
+        {
+            GameLogger.Log(GameLogger.Category.Spawn, $"  {kvp.Key} : {kvp.Value.Count} listener(s)", null);
+        }
+    }
+
+    // Affiche l'état de l'index inversé des unités par cellule.
+    [ContextMenu("Debug: Lister cellToUnits")]
+    private void DebugListCellToUnits()
+    {
+        int unitCount = 0;
+        foreach (var kvp in cellToUnits)
+        {
+            unitCount += kvp.Value.Count;
+        }
+
+        GameLogger.Log(GameLogger.Category.Spawn, $"EntityRegistry: cellToUnits = {cellToUnits.Count} cellule(s), {unitCount} unité(s)", null);
+
+        foreach (var kvp in cellToUnits)
+        {
+            GameLogger.Log(GameLogger.Category.Spawn, $"  {kvp.Key} : {kvp.Value.Count} unité(s)", null);
+        }
     }
 }

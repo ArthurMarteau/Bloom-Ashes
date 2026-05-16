@@ -330,6 +330,16 @@ public class SelectionManager : MonoBehaviour
             }
         }
 
+        if (worldClickPosition.HasValue && state.Single != null)
+        {
+            IMultiTile multiTile = state.Single.GetComponent<IMultiTile>();
+            if (multiTile != null && squares.TryGetValue(state.Single, out SelectionSquare existingSquare))
+            {
+                Vector2Int clickedTile = GridManager.Instance.WorldToGrid(worldClickPosition.Value);
+                existingSquare.AttachToGridPosition(clickedTile);
+            }
+        }
+
         foreach (GameObject selectedEntity in desiredEntities)
         {
             if (selectedEntity != null && !squares.ContainsKey(selectedEntity))
@@ -377,7 +387,8 @@ public class SelectionManager : MonoBehaviour
             return;
         }
 
-        if (state.Type == SelectionType.Building && GridManager.Instance != null && worldClickPosition.HasValue)
+        IMultiTile multiTile = entity.GetComponent<IMultiTile>();
+        if (multiTile != null && worldClickPosition.HasValue)
         {
             Vector2Int clickedTile = GridManager.Instance.WorldToGrid(worldClickPosition.Value);
             selectionSquare.AttachToGridPosition(clickedTile);

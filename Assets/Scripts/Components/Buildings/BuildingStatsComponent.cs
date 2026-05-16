@@ -5,7 +5,7 @@ using UnityEngine.Events;
 // Composant Unity gérant l'état de santé d'un bâtiment
 // Implémente IDamageable pour être ciblable par AttackController
 // L'équipe est gérée par TeamComponent (cohérence avec les unités)
-public class BuildingStatsComponent : MonoBehaviour, IDamageable
+public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile
 {
     [Header("Stats Data")]
     [SerializeField] private BuildingStatsData baseStats; // ScriptableObject avec stats de base
@@ -29,6 +29,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     private bool isDestroyed = false;
     private int currentTier = 1;
     private FoundationStatsData originFoundation;
+    private readonly List<Vector2Int> registeredBuildingCells = new List<Vector2Int>();
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -58,6 +59,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         if (EntityRegistry.Instance != null)
         {
             EntityRegistry.Instance.RegisterEntity(this, gameObject);
+            RegisterOccupiedTilesInRegistry();
         }
         else if (debugStats)
         {
@@ -65,11 +67,19 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
     }
 
+    // Complète l'enregistrement des tiles si GridManager n'était pas prêt en Awake.
+    private void Start()
+    {
+        if (registeredBuildingCells.Count == 0)
+            RegisterOccupiedTilesInRegistry();
+    }
+
     // Désenregistre le bâtiment de l'EntityRegistry lors de la destruction
     private void OnDestroy()
     {
         if (EntityRegistry.Instance != null)
         {
+            UnregisterOccupiedTilesFromRegistry();
             EntityRegistry.Instance.UnregisterEntity(gameObject);
         }
     }
@@ -192,6 +202,8 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
             buildingCollider.enabled = false;
         }
 
+        UnregisterOccupiedTilesFromRegistry();
+
         // Détruit le GameObject après un délai (prépare les animations futures)
         RespawnFoundationIfNeeded();
         EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
@@ -267,6 +279,34 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
 
         return tiles;
+    }
+
+    // Enregistre les tiles occupées par ce bâtiment dans l'index logique des bâtiments.
+    private void RegisterOccupiedTilesInRegistry()
+    {
+        if (EntityRegistry.Instance == null || GridManager.Instance == null)
+            return;
+
+        registeredBuildingCells.Clear();
+        foreach (Vector2Int cell in GetOccupiedTiles())
+        {
+            EntityRegistry.Instance.RegisterBuilding(cell, gameObject);
+            registeredBuildingCells.Add(cell);
+        }
+    }
+
+    // Retire les tiles occupées par ce bâtiment de l'index logique des bâtiments.
+    private void UnregisterOccupiedTilesFromRegistry()
+    {
+        if (EntityRegistry.Instance == null || registeredBuildingCells.Count == 0)
+            return;
+
+        foreach (Vector2Int cell in registeredBuildingCells)
+        {
+            EntityRegistry.Instance.UnregisterBuilding(cell);
+        }
+
+        registeredBuildingCells.Clear();
     }
 
     // Retourne la valeur de défense du bâtiment

@@ -30,6 +30,7 @@ public class ActionPanelUI : MonoBehaviour
 
     private SelectionManager selectionManager;
     private Coroutine showAnimationCoroutine;
+    private Coroutine idleRefreshCoroutine;
     private MovementController trackedMovementController;
     private BuildingStatsComponent trackedBuilding;
     private FoundationComponent trackedFoundation;
@@ -74,6 +75,12 @@ public class ActionPanelUI : MonoBehaviour
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
         UnsubscribeFoundationEvents();
+
+        if (idleRefreshCoroutine != null && selectionManager != null)
+        {
+            selectionManager.StopCoroutine(idleRefreshCoroutine);
+            idleRefreshCoroutine = null;
+        }
     }
 
     // === CONTEXTE PRODUCTION ===
@@ -114,7 +121,7 @@ public class ActionPanelUI : MonoBehaviour
             return;
         }
 
-        FoundationComponent foundation = tc.FindFoundationUnderRootborn();
+        FoundationComponent foundation = FindFoundationUnderSelectedRootborn(unit);
         GameLogger.Log(GameLogger.Category.UI, $"️ Foundation={(foundation != null ? foundation.gameObject.name : "null")}, idleCount={(foundation != null ? foundation.GetIdleRootbornCount() : -1)}", this);
         if (foundation != null && foundation.GetIdleRootbornCount() > 0)
         {
@@ -341,15 +348,15 @@ public class ActionPanelUI : MonoBehaviour
         if (trackedMovementController == null) return;
         try
         {
+            trackedMovementController.OnMovementStarted.RemoveListener(ResetUnitPanelContextOnMovementStarted);
             trackedMovementController.OnMovementStarted.RemoveListener(HidePanel);
-            trackedMovementController.OnArrived.RemoveListener(RefreshPanel);
             trackedMovementController.OnIdleStateChanged.RemoveListener(HandleRootbornIdleChanged);
         }
         catch { }
         trackedMovementController = null;
     }
 
-    // Abonne le panneau au mouvement de l'unité courante pour masquer au départ et refresh à l'arrivée
+    // Abonne le panneau au mouvement de l'unité courante pour masquer au départ et réévaluer au retour idle
     private void SubscribeMovementEvents(GameObject unit)
     {
         UnsubscribeMovementEvents();
@@ -358,9 +365,19 @@ public class ActionPanelUI : MonoBehaviour
         if (movementController != null)
         {
             trackedMovementController = movementController;
+            trackedMovementController.OnMovementStarted.AddListener(ResetUnitPanelContextOnMovementStarted);
             trackedMovementController.OnMovementStarted.AddListener(HidePanel);
-            trackedMovementController.OnArrived.AddListener(RefreshPanel);
             trackedMovementController.OnIdleStateChanged.AddListener(HandleRootbornIdleChanged);
+        }
+    }
+
+    // Réinitialise le contexte unité quand l'unité suivie commence à bouger.
+    private void ResetUnitPanelContextOnMovementStarted()
+    {
+        if (currentContext == PanelContext.Production || currentContext == PanelContext.Foundation)
+        {
+            currentContext = PanelContext.None;
+            UnsubscribeFoundationEvents();
         }
     }
 
@@ -370,7 +387,35 @@ public class ActionPanelUI : MonoBehaviour
         if (!isIdle || currentTransformUnit == null) return;
         if (currentContext == PanelContext.Production || currentContext == PanelContext.Foundation) return;
 
+        if (idleRefreshCoroutine != null)
+            selectionManager.StopCoroutine(idleRefreshCoroutine);
+
+        idleRefreshCoroutine = selectionManager.StartCoroutine(RefreshSelectedUnitAfterIdleEvent());
+    }
+
+    // Attend la fin de frame logique pour laisser les listeners Foundation mettre à jour idleCount.
+    private IEnumerator RefreshSelectedUnitAfterIdleEvent()
+    {
+        yield return null;
+
+        idleRefreshCoroutine = null;
+        if (currentTransformUnit == null) yield break;
+        if (currentContext == PanelContext.Production || currentContext == PanelContext.Foundation) yield break;
+
         HandleUnitsSelected(new List<GameObject> { currentTransformUnit });
+    }
+
+    // Trouve une Foundation statique sous le Rootborn sélectionné pour le clic initial ou le fallback UI.
+    private FoundationComponent FindFoundationUnderSelectedRootborn(GameObject unit)
+    {
+        MovementController movementController = unit.GetComponent<MovementController>();
+        if (movementController == null || GridManager.Instance == null)
+            return null;
+
+        Vector2Int cell = movementController.GetCurrentGridPosition();
+        Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(cell);
+        Collider2D hit = Physics2D.OverlapPoint(cellWorldPosition, LayerMask.GetMask("Environment_Walkable"));
+        return hit != null ? hit.GetComponent<FoundationComponent>() : null;
     }
 
     // Désabonne OnTierUpgraded du bâtiment tracké et efface la référence

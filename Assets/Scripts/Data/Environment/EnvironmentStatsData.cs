@@ -10,6 +10,10 @@ public class EnvironmentStatsData : ScriptableObject
     [Header("Portrait")]
     public Sprite portrait = null;
 
+    [Header("Size")]
+    public int sizeX = 1;
+    public int sizeY = 1;
+
     public enum EnvironmentType
     {
         Obstacle,  // Bloque le passage (layer Obstacle, ex: Tree)

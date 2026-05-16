@@ -50,6 +50,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\AbilityInputHandler.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
+    <Compile Include="Assets\Scripts\Systems\Selection\IMultiTile.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipUI.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\UnitMovementType.cs" />
     <Compile Include="Assets\Scripts\Data\Systems\WatersapData.cs" />
@@ -131,6 +132,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\SelectionManager.cs" />
     <Compile Include="Assets\Scripts\Rendering\OutlineRendererFeature.cs" />
     <Compile Include="Assets\Scripts\Tests\Selection\SelectionStateTests.cs" />
+    <Compile Include="Assets\Scripts\Systems\ICellListener.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionState.cs" />
     <Compile Include="Assets\Scripts\Tests\TestClick.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SacrificeAbility.cs" />
