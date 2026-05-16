@@ -70,6 +70,9 @@ public class MovementController : MonoBehaviour
     // Déclenché quand l'unité atteint sa destination finale avec succès
     public UnityEngine.Events.UnityEvent OnArrived = new();
 
+    // Déclenché quand l'unité entre ou sort de l'état Idle logique
+    public UnityEngine.Events.UnityEvent<bool> OnIdleStateChanged = new();
+
     // Vrai si l'unité est actuellement en mouvement
     public bool IsMoving => currentState == MovementState.Moving;
 
@@ -232,6 +235,7 @@ public class MovementController : MonoBehaviour
         if (debugMovement)
             GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: nouveau chemin {initialPath.Count} cases depuis {currentCell} vers {targetPosition}", this);
 
+        OnIdleStateChanged.Invoke(false);
         OnMovementStarted.Invoke();
         currentState = MovementState.Moving;
         interpolationCoroutine = StartCoroutine(InterpolationLoop());
@@ -616,6 +620,7 @@ public class MovementController : MonoBehaviour
 
         // Reset état pour prochain mouvement
         currentState = MovementState.Idle;
+        OnIdleStateChanged.Invoke(true);
         isFirstMoveOfSession = true;
 
         // Lève le blocage auto-attaque — l'unité est arrivée, elle peut de nouveau auto-attaquer
@@ -747,6 +752,20 @@ public class MovementController : MonoBehaviour
     public MovementState GetCurrentState()
     {
         return currentState;
+    }
+
+    // Force la sortie d'idle logique sans changer l'état de mouvement
+    public void ForceExitIdle()
+    {
+        if (currentState == MovementState.Idle)
+            OnIdleStateChanged.Invoke(false);
+    }
+
+    // Notifie que l'idle logique est restauré si l'unité est toujours idle
+    public void NotifyIdleRestored()
+    {
+        if (currentState == MovementState.Idle)
+            OnIdleStateChanged.Invoke(true);
     }
 
     // Retourne la position de grille LOGIQUE (source de vérité)

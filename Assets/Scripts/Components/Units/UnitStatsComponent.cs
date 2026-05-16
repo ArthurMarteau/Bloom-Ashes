@@ -26,6 +26,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
     // Logique pure de calcul (POCO - testable)
     // Initialisé directement pour éviter NullRef si appelé avant Awake()
     private UnitStatsLogic statsLogic = new UnitStatsLogic();
+    private MovementController cachedMovementController;
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -47,10 +48,10 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         }
 
         // Synchronise la vitesse avec MovementController
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
+        cachedMovementController = GetComponent<MovementController>();
+        if (cachedMovementController != null)
         {
-            movementController.SetMovementSpeed(baseStats.moveSpeed);
+            cachedMovementController.SetMovementSpeed(baseStats.moveSpeed);
         }
 
         // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
@@ -88,6 +89,8 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable
         // Applique les dégâts
         currentHP -= effectiveDamage;
         currentHP = Mathf.Max(0, currentHP);
+
+        cachedMovementController?.ForceExitIdle();
 
         if (debugStats)
         {

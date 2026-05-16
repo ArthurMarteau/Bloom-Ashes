@@ -82,6 +82,34 @@ public class TransformationController : MonoBehaviour
             && WatersapManager.Instance.CanSpend(teamComponent.GetTeamID(), unitData.watersapCost);
     }
 
+    public FoundationComponent FindFoundationUnderRootborn()
+    {
+        MovementController movementController = GetComponent<MovementController>();
+        if (movementController == null)
+        {
+            LogWarning("FindFoundationUnderRootborn - MovementController manquant");
+            return null;
+        }
+
+        if (GridManager.Instance == null)
+        {
+            LogWarning("FindFoundationUnderRootborn - GridManager introuvable");
+            return null;
+        }
+
+        Vector2Int myCell = movementController.GetCurrentGridPosition();
+        Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(myCell);
+        GameLogger.Log(GameLogger.Category.Selection, $" FindFoundationUnderRootborn : myCell={myCell}, worldPos={cellWorldPosition}, layerMask={LayerMask.GetMask("Environment_Walkable")}", this);
+        Collider2D hit = Physics2D.OverlapPoint(cellWorldPosition, LayerMask.GetMask("Environment_Walkable"));
+        GameLogger.Log(GameLogger.Category.Selection, $" OverlapPoint hit={(hit != null ? hit.gameObject.name + " layer=" + hit.gameObject.layer : "NULL")}", this);
+        FoundationComponent foundation = hit != null ? hit.GetComponent<FoundationComponent>() : null;
+
+        if (foundation != null)
+            Log($"FindFoundationUnderRootborn - Foundation trouvee sous {myCell}");
+
+        return foundation;
+    }
+
     public void ExecuteTransform(UnitStatsData unitData)
     {
         StartCoroutine(ExecuteTransformRoutine(unitData));

@@ -56,6 +56,8 @@ public class BuildingStatsData : ScriptableObject
     [Tooltip("Ability de ce bâtiment (null si pas d'ability)")]
     public AbilityData abilityData = null;
 
+    [HideInInspector] public FoundationStatsData originFoundation;
+
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création de l'asset
     private void OnValidate()

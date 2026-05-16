@@ -341,6 +341,8 @@ public class AttackController : MonoBehaviour
             StopAttack();
         }
 
+        movementController?.ForceExitIdle();
+
         currentTarget = target;
         currentState = AttackState.Approaching;  // Sera Ready dès qu'à portée via ProcessAttackLogic
         lastCheckTime = Time.time;
@@ -423,6 +425,8 @@ public class AttackController : MonoBehaviour
                 }
             }
         }
+
+        movementController?.NotifyIdleRestored();
     }
 
     // Logique principale d'attaque appelée périodiquement

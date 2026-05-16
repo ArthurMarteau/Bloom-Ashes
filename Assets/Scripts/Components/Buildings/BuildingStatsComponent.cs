@@ -28,6 +28,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
     private int runtimeMaxHP;
     private bool isDestroyed = false;
     private int currentTier = 1;
+    private FoundationStatsData originFoundation;
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -192,8 +193,33 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable
         }
 
         // Détruit le GameObject après un délai (prépare les animations futures)
+        RespawnFoundationIfNeeded();
         EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
         Destroy(gameObject, 10f);
+    }
+
+    // Stocke la Foundation d'origine pour permettre son respawn à la destruction
+    public void SetOriginFoundation(FoundationStatsData foundation)
+    {
+        originFoundation = foundation;
+    }
+
+    // Respawn la Foundation d'origine quand un bâtiment construit est détruit
+    private void RespawnFoundationIfNeeded()
+    {
+        if (originFoundation == null)
+            return;
+
+        if (originFoundation.prefab == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ BuildingStatsComponent {gameObject.name} : prefab Foundation non assigné dans {originFoundation.name}, respawn impossible", this);
+            return;
+        }
+
+        Vector3 anchorWorldPosition = transform.position;
+        GameObject foundation = Instantiate(originFoundation.prefab, anchorWorldPosition, Quaternion.identity);
+        EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, foundation);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🏗️ BuildingStatsComponent {gameObject.name} : Foundation respawn en {anchorWorldPosition}", this);
     }
 
     // === Getters publics supplémentaires ===

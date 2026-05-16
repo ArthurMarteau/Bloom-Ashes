@@ -1,0 +1,20 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a03555e60e2c49c88b24d66e706e26c8, type: 3}
+  m_Name: Foundation Stats
+  m_EditorClassIdentifier: Assembly-CSharp::FoundationStatsData
+  entityName: Foundation
+  portrait: {fileID: 21300000, guid: fd3c781c53524fd4497b6e3e57a67aaa, type: 3}
+  environmentType: 1
+  prefab: {fileID: 5234916249428048870, guid: 385d05d136c7ad74a908da77b8537e51, type: 3}
+  constructibleBuildings:
+  - {fileID: 11400000, guid: 37bb31b95cbbebe4babd88043abc8380, type: 2}

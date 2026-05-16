@@ -99,12 +99,14 @@
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SpawnRootbornAbility.cs" />
     <Compile Include="Assets\Scripts\Components\UI\UnitPanelUI.cs" />
+    <Compile Include="Assets\Scripts\Data\Environment\FoundationStatsData.cs" />
     <Compile Include="Assets\Scripts\Tests\MinHeapTests.cs" />
     <Compile Include="Assets\Scripts\Components\Units\ChaseController.cs" />
     <Compile Include="Assets\Scripts\Tests\Selection\SelectionResolverTests.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ActionPanelUI.cs" />
     <Compile Include="Assets\Scripts\Systems\EntityRegistry.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BudComponent.cs" />
+    <Compile Include="Assets\Scripts\Components\Environment\FoundationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GridManager.cs" />
     <Compile Include="Assets\Scripts\Systems\WatersapSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />

@@ -32,11 +32,12 @@ public class ActionPanelUI : MonoBehaviour
     private Coroutine showAnimationCoroutine;
     private MovementController trackedMovementController;
     private BuildingStatsComponent trackedBuilding;
+    private FoundationComponent trackedFoundation;
     private GameObject currentTransformUnit;
     private int trackedTeamID;
 
     // Enum interne pour savoir quel contexte est actif
-    private enum PanelContext { None, Production, Upgrade }
+    private enum PanelContext { None, Production, Upgrade, Foundation }
     private PanelContext currentContext = PanelContext.None;
 
     // Trouve le SelectionManager et s'abonne à ses events
@@ -72,6 +73,7 @@ public class ActionPanelUI : MonoBehaviour
 
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
     }
 
     // === CONTEXTE PRODUCTION ===
@@ -80,6 +82,11 @@ public class ActionPanelUI : MonoBehaviour
     // Affiche le panneau uniquement si 1 unité avec TransformationController et un bâtiment compatible est sélectionnée
     private void HandleUnitsSelected(List<GameObject> units)
     {
+        UnsubscribeMovementEvents();
+        UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
+        currentTransformUnit = null;
+
         if (units == null || units.Count != 1)
         {
             HidePanel();
@@ -93,18 +100,32 @@ public class ActionPanelUI : MonoBehaviour
             HidePanel();
             return;
         }
+        GameLogger.Log(GameLogger.Category.UI, $"️ HandleUnitsSelected : tc trouvé sur {unit.name}", this);
 
         currentTransformUnit = unit;
         SubscribeMovementEvents(unit);
 
-        if (tc.FindAdjacentCompatibleBuilding() == null)
+        BuildingStatsComponent adjacentBuilding = tc.FindAdjacentCompatibleBuilding();
+        GameLogger.Log(GameLogger.Category.UI, $"️ AdjacentBuilding={(adjacentBuilding != null ? "trouvé" : "null")}", this);
+        if (adjacentBuilding != null)
         {
-            HidePanel();
+            currentContext = PanelContext.Production;
+            RefreshPanel();
             return;
         }
 
-        currentContext = PanelContext.Production;
-        RefreshPanel();
+        FoundationComponent foundation = tc.FindFoundationUnderRootborn();
+        GameLogger.Log(GameLogger.Category.UI, $"️ Foundation={(foundation != null ? foundation.gameObject.name : "null")}, idleCount={(foundation != null ? foundation.GetIdleRootbornCount() : -1)}", this);
+        if (foundation != null && foundation.GetIdleRootbornCount() > 0)
+        {
+            currentContext = PanelContext.Foundation;
+            trackedFoundation = foundation;
+            trackedFoundation.OnFoundationStateChanged.AddListener(RefreshPanel);
+            RefreshPanel();
+            return;
+        }
+
+        HidePanel();
     }
 
     // Met à jour les slots de transformation selon le bâtiment compatible adjacent
@@ -151,6 +172,10 @@ public class ActionPanelUI : MonoBehaviour
     // Reçoit le bâtiment sélectionné — affiche les slots d'upgrade si ce n'est pas un Nexus
     private void HandleBuildingSelected(GameObject buildingObject)
     {
+        UnsubscribeMovementEvents();
+        UnsubscribeFoundationEvents();
+        currentTransformUnit = null;
+
         if (buildingObject == null) { HidePanel(); return; }
 
         BuildingStatsComponent stats = buildingObject.GetComponent<BuildingStatsComponent>();
@@ -216,6 +241,55 @@ public class ActionPanelUI : MonoBehaviour
         GameLogger.Log(GameLogger.Category.UI, $"🌿 ActionPanelUI : upgrade — tier {trackedBuilding.GetCurrentTier()}/{trackedBuilding.GetMaxTier()} pour {trackedBuilding.GetBuildingName()}", this);
     }
 
+    // === CONTEXTE FOUNDATION ===
+
+    // Met à jour les slots de construction selon l'état des Rootborn sur la Foundation
+    private void RefreshFoundation()
+    {
+        if (trackedFoundation == null || trackedFoundation.GetIdleRootbornCount() == 0)
+        {
+            HidePanel();
+            return;
+        }
+
+        FoundationStatsData foundationStats = trackedFoundation.GetFoundationStats();
+        if (foundationStats == null)
+        {
+            HidePanel();
+            return;
+        }
+
+        List<BuildingStatsData> buildings = foundationStats.constructibleBuildings;
+        bool ready = trackedFoundation.IsReadyToBuild();
+        int teamID = trackedFoundation.GetTeamID();
+
+        ShowPanel();
+
+        for (int i = 0; i < slots.Count; i++)
+        {
+            if (slots[i] == null) continue;
+
+            if (buildings == null || i >= buildings.Count || buildings[i] == null)
+            {
+                slots[i].gameObject.SetActive(false);
+                continue;
+            }
+
+            BuildingStatsData buildingData = buildings[i];
+            ProductionSlotUI.SlotState state = ready
+                ? ProductionSlotUI.SlotState.Available
+                : ProductionSlotUI.SlotState.Locked;
+
+            slots[i].Setup(buildingData, state, (bd) =>
+            {
+                trackedFoundation?.ExecuteBuild(bd, teamID);
+                HidePanel();
+            });
+        }
+
+        GameLogger.Log(GameLogger.Category.UI, $"🌿 ActionPanelUI : foundation — {trackedFoundation.GetIdleRootbornCount()}/4 Rootborn idle, ready={ready}", this);
+    }
+
     // === DISPATCH ===
 
     // Dispatche le refresh selon le contexte actif
@@ -231,6 +305,10 @@ public class ActionPanelUI : MonoBehaviour
                 if (trackedBuilding != null) RefreshUpgrade();
                 else HidePanel();
                 break;
+            case PanelContext.Foundation:
+                if (trackedFoundation != null) RefreshFoundation();
+                else HidePanel();
+                break;
             default:
                 HidePanel();
                 break;
@@ -244,6 +322,7 @@ public class ActionPanelUI : MonoBehaviour
     {
         UnsubscribeMovementEvents();
         UnsubscribeUpgradeEvents();
+        UnsubscribeFoundationEvents();
         currentTransformUnit = null;
         trackedBuilding = null;
         currentContext = PanelContext.None;
@@ -264,6 +343,7 @@ public class ActionPanelUI : MonoBehaviour
         {
             trackedMovementController.OnMovementStarted.RemoveListener(HidePanel);
             trackedMovementController.OnArrived.RemoveListener(RefreshPanel);
+            trackedMovementController.OnIdleStateChanged.RemoveListener(HandleRootbornIdleChanged);
         }
         catch { }
         trackedMovementController = null;
@@ -280,7 +360,17 @@ public class ActionPanelUI : MonoBehaviour
             trackedMovementController = movementController;
             trackedMovementController.OnMovementStarted.AddListener(HidePanel);
             trackedMovementController.OnArrived.AddListener(RefreshPanel);
+            trackedMovementController.OnIdleStateChanged.AddListener(HandleRootbornIdleChanged);
         }
+    }
+
+    // Réévalue le panneau quand le Rootborn sélectionné devient idle après un déplacement
+    private void HandleRootbornIdleChanged(bool isIdle)
+    {
+        if (!isIdle || currentTransformUnit == null) return;
+        if (currentContext == PanelContext.Production || currentContext == PanelContext.Foundation) return;
+
+        HandleUnitsSelected(new List<GameObject> { currentTransformUnit });
     }
 
     // Désabonne OnTierUpgraded du bâtiment tracké et efface la référence
@@ -289,6 +379,14 @@ public class ActionPanelUI : MonoBehaviour
         if (trackedBuilding == null) return;
         trackedBuilding.OnTierUpgraded.RemoveListener(RefreshPanel);
         trackedBuilding = null;
+    }
+
+    // Désabonne les events de la Foundation trackée
+    private void UnsubscribeFoundationEvents()
+    {
+        if (trackedFoundation == null) return;
+        trackedFoundation.OnFoundationStateChanged.RemoveListener(RefreshPanel);
+        trackedFoundation = null;
     }
 
     // === SHOW / HIDE / ANIMATION ===

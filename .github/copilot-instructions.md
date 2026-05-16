@@ -2,7 +2,7 @@
 - Project name: Bloom and Ashes
 - Unity version: Unity 6000.2.14f1
 - Active game object:
-  - Name: VFX_WatersapBeam 1
+  - Name: Shroomhaven_0
   - Tag: Untagged
-  - Layer: Projectiles
+  - Layer: Buildings
 <!-- UNITY CODE ASSIST INSTRUCTIONS END -->

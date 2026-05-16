@@ -99,4 +99,61 @@ public class ProductionSlotUI : MonoBehaviour
                 break;
         }
     }
+
+    // Configure le slot avec un bâtiment constructible depuis une Foundation
+    public void Setup(BuildingStatsData buildingData, SlotState state, System.Action<BuildingStatsData> onClick)
+    {
+        if (buildingData == null)
+        {
+            gameObject.SetActive(false);
+            return;
+        }
+
+        gameObject.SetActive(true);
+
+        string title = buildingData.buildingName;
+        string body = $"{buildingData.description}\n<color=#007A8A>Construction gratuite</color>";
+        tooltipTrigger?.SetContent(title, body);
+
+        GameLogger.Log(GameLogger.Category.UI, $"🌿 ProductionSlotUI Setup bâtiment — état: {state} | slotButton null: {slotButton == null} | portraitImage null: {portraitImage == null}", this);
+
+        if (portraitImage != null)
+            portraitImage.sprite = buildingData.portrait;
+
+        slotButton?.onClick.RemoveAllListeners();
+
+        switch (state)
+        {
+            case SlotState.Available:
+                if (portraitImage != null)
+                    portraitImage.color = Color.white;
+                if (slotBackground != null)
+                    slotBackground.color = Color.white;
+                if (slotButton != null)
+                {
+                    slotButton.interactable = true;
+                    if (onClick != null)
+                        slotButton.onClick.AddListener(() => onClick(buildingData));
+                }
+                break;
+
+            case SlotState.NotEnoughWatersap:
+                if (portraitImage != null)
+                    portraitImage.color = Color.white;
+                if (slotBackground != null)
+                    slotBackground.color = ColorOverlayNotEnoughWatersap;
+                if (slotButton != null)
+                    slotButton.interactable = false;
+                break;
+
+            case SlotState.Locked:
+                if (portraitImage != null)
+                    portraitImage.color = ColorPortraitLocked;
+                if (slotBackground != null)
+                    slotBackground.color = Color.white;
+                if (slotButton != null)
+                    slotButton.interactable = false;
+                break;
+        }
+    }
 }
