@@ -52,6 +52,9 @@ public class BuildingStatsData : ScriptableObject
     [Tooltip("Prefab du bâtiment instancié lors d'un build depuis une Foundation (laisser null si non constructible)")]
     public GameObject buildingPrefab = null;
 
+    [Tooltip("Foundation à spawner à la destruction de ce bâtiment (null = pas de respawn)")]
+    public FoundationStatsData defaultFoundation;
+
     [Header("Ability")]
     [Tooltip("Ability de ce bâtiment (null si pas d'ability)")]
     public AbilityData abilityData = null;

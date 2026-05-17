@@ -2,12 +2,22 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Composant simple exposant les données de base d'une entité d'environnement.
-public class EnvironmentStatsComponent : MonoBehaviour, IMultiTile
+public class EnvironmentStatsComponent : MonoBehaviour, IMultiTile, ISelectable
 {
     [SerializeField] private EnvironmentStatsData baseStats;
 
     // Retourne le ScriptableObject de stats de base.
     public EnvironmentStatsData GetBaseStats() => baseStats;
+
+    public Sprite GetPortrait()
+    {
+        return GetBaseStats()?.portrait;
+    }
+
+    public string GetDisplayName()
+    {
+        return GetBaseStats()?.entityName ?? gameObject.name;
+    }
 
     // Retourne toutes les cellules occupées par cette entité d'environnement.
     public List<Vector2Int> GetOccupiedTiles()

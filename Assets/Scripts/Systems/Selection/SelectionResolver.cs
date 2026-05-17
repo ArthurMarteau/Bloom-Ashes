@@ -16,6 +16,8 @@ public static class SelectionResolver
 
         bool hasUnitStats = hit.GetComponent<UnitStatsComponent>() != null;
         bool hasBuildingStats = hit.GetComponent<BuildingStatsComponent>() != null;
+        bool hasEnvironmentStats = hit.GetComponent<EnvironmentStatsComponent>() != null
+                                || hit.GetComponent<FoundationComponent>() != null;
 
         if (hasUnitStats && !hasBuildingStats)
         {
@@ -25,6 +27,11 @@ public static class SelectionResolver
         if (hasBuildingStats)
         {
             return SelectionType.Building;
+        }
+
+        if (hasEnvironmentStats)
+        {
+            return SelectionType.Environment;
         }
 
         return SelectionType.Obstacle;
@@ -82,6 +89,7 @@ public static class SelectionResolver
                 return 3;
             case SelectionType.Building:
                 return 2;
+            case SelectionType.Environment:
             case SelectionType.Obstacle:
                 return 1;
             default:

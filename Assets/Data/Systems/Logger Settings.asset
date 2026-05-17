@@ -12,4 +12,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e53222a4250cad749adaeb3e4e698bc4, type: 3}
   m_Name: Logger Settings
   m_EditorClassIdentifier: Assembly-CSharp::GameLoggerSettings
-  enabledCategories: 20
+  enabledCategories: 16

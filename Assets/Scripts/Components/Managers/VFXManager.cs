@@ -17,6 +17,10 @@ public class VFXManager : MonoBehaviour
     [Tooltip("VFX joué sur l'unité de combat qui se transforme en Bud (revert vers Rootborn)")]
     [SerializeField] private VFXData unitRevertVFX;
 
+    [Header("VFX Bâtiments")]
+    [Tooltip("VFX joué à la destruction d'un bâtiment")]
+    [SerializeField] private VFXData buildingDeathVFX;
+
     // Initialisation du singleton
     private void Awake()
     {
@@ -102,7 +106,7 @@ public class VFXManager : MonoBehaviour
 
         if (budHatchVFX == null) return;
 
-        // Particules + Light 2D + Son
+        // Particules + Son
         VFXPlayer.PlayAt(budHatchVFX, newEntity.transform.position);
 
         // Flash blanc sur le sprite de l'unité spawnée
@@ -127,7 +131,7 @@ public class VFXManager : MonoBehaviour
     }
 
     // Joue le VFX de spawn Rootborn (utilisé pour Nexus → Rootborn ET annulation Bud → Rootborn)
-    // Applique : particules + Light 2D + flash blanc fade-out + scale up
+    // Applique : particules + son + flash blanc fade-out + scale up
     private void PlayRootbornSpawnVFX(GameObject rootbornEntity)
     {
         if (rootbornEntity == null) return;
@@ -140,7 +144,7 @@ public class VFXManager : MonoBehaviour
 
         GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : VFX spawn Rootborn déclenché sur {rootbornEntity.name}", this);
 
-        // Particules + Light 2D + Son
+        // Particules + Son
         VFXPlayer.PlayAt(rootbornSpawnVFX, rootbornEntity.transform.position);
 
         // Flash blanc sur le sprite
@@ -160,7 +164,7 @@ public class VFXManager : MonoBehaviour
         GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : VFX ability '{abilityData.abilityName}' sur {caster.name}", this);
         VFXPlayer.PlayAt(abilityData.vfxOnExecute, caster.transform.position);
 
-        if (abilityData.vfxOnExecute.useWatersapFill) ApplyWatersapFill(caster, abilityData.vfxOnExecute);
+        if (abilityData.vfxOnExecute.useWaveFill)     ApplyWaveFill(caster, abilityData.vfxOnExecute);
         if (abilityData.vfxOnExecute.useSpriteFlash)  ApplySpawnFlash(caster, abilityData.vfxOnExecute);
         if (abilityData.vfxOnExecute.useScaleUp)      ApplyScaleUp(caster, abilityData.vfxOnExecute);
     }
@@ -201,22 +205,22 @@ public class VFXManager : MonoBehaviour
         GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : scale up sur {entity.name} ({data.scaleUpStartScale} → {data.scaleUpEndScale} sur {scaleDuration}s)", this);
     }
 
-    // Applique l'effet de vague Watersap qui remonte le sprite du bas vers le haut
-    // Le WatersapFillController est ajouté dynamiquement si absent
-    private void ApplyWatersapFill(GameObject entity, VFXData data)
+    // Applique l'effet de vague Wave Fill qui remonte le sprite du bas vers le haut
+    // Le WaveFillController est ajouté dynamiquement si absent
+    private void ApplyWaveFill(GameObject entity, VFXData data)
     {
-        WatersapFillController fillController = entity.GetComponent<WatersapFillController>();
+        WaveFillController fillController = entity.GetComponent<WaveFillController>();
         if (fillController == null)
-            fillController = entity.AddComponent<WatersapFillController>();
+            fillController = entity.AddComponent<WaveFillController>();
 
-        fillController.Configure(data.watersapFillColor, data.watersapFillEdgeWidth);
+        fillController.Configure(data.waveFillColor, data.waveFillEdgeWidth);
         fillController.PlayFillAnimation(
-            data.watersapFillDuration,
-            data.watersapFillHoldDuration,
-            data.watersapFillCurve
+            data.waveFillDuration,
+            data.waveFillHoldDuration,
+            data.waveFillCurve
         );
 
-        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : watersap fill sur {entity.name} ({data.watersapFillDuration}s + hold {data.watersapFillHoldDuration}s)", this);
+        GameLogger.Log(GameLogger.Category.UI, $"✨ VFXManager : wave fill sur {entity.name} ({data.waveFillDuration}s + hold {data.waveFillHoldDuration}s)", this);
     }
 
     // Déclenche le flash fade-in sur le Bud au début de sa phase Hatching
@@ -253,6 +257,7 @@ public class VFXManager : MonoBehaviour
         }
     }
 
+    // Joue un VFXData à une position donnée depuis d'autres systèmes
     public void PlayVFX(VFXData data, Vector3 position, Transform attach = null)
     {
         if (data == null)
@@ -262,5 +267,13 @@ public class VFXManager : MonoBehaviour
         }
 
         VFXPlayer.PlayAt(data, position, attach);
+    }
+
+    // Joue le VFX de destruction de bâtiment à la position donnée
+    public void PlayBuildingDeathVFX(Vector3 position)
+    {
+        if (buildingDeathVFX == null) return;
+
+        VFXPlayer.PlayAt(buildingDeathVFX, position);
     }
 }

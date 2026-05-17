@@ -3,7 +3,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 // Composant de Foundation 2x2 : détecte les Rootborn idle sur ses 4 cellules et construit un bâtiment.
-public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile
+public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISelectable
 {
     [SerializeField] private FoundationStatsData foundationStats;
 
@@ -78,6 +78,16 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile
     public FoundationStatsData GetFoundationStats()
     {
         return foundationStats;
+    }
+
+    public Sprite GetPortrait()
+    {
+        return foundationStats?.portrait;
+    }
+
+    public string GetDisplayName()
+    {
+        return foundationStats?.entityName ?? gameObject.name;
     }
 
     // Retourne les cellules occupées par cette Foundation.

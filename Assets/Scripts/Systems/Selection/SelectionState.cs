@@ -98,9 +98,9 @@ public class SelectionState
     // Remplace la sélection courante par une entité unique
     public void SetSingle(SelectionType type, GameObject entity)
     {
-        if (type != SelectionType.Building && type != SelectionType.Obstacle)
+        if (type != SelectionType.Building && type != SelectionType.Environment && type != SelectionType.Obstacle)
         {
-            throw new System.ArgumentException("SetSingle accepte uniquement Building ou Obstacle.", nameof(type));
+            throw new System.ArgumentException("SetSingle accepte uniquement Building, Environment ou Obstacle.", nameof(type));
         }
 
         selectedUnits.Clear();
@@ -149,7 +149,7 @@ public class SelectionState
             throw new System.InvalidOperationException("Invariant violé : unités et sélection unique simultanées.");
         }
 
-        if (singleEntity != null && (selectedUnits.Count > 0 || (currentType != SelectionType.Building && currentType != SelectionType.Obstacle)))
+        if (singleEntity != null && (selectedUnits.Count > 0 || (currentType != SelectionType.Building && currentType != SelectionType.Environment && currentType != SelectionType.Obstacle)))
         {
             throw new System.InvalidOperationException("Invariant violé : sélection unique incohérente.");
         }

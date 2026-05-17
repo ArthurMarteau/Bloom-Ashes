@@ -153,6 +153,7 @@ public class UnitPanelUI : MonoBehaviour
         selectionManager.OnUnitsSelected.AddListener(HandleUnitsSelected);
         selectionManager.OnGroundSelected.AddListener(HandleGroundSelected);
         selectionManager.OnObstacleSelected.AddListener(HandleObstacleSelected);
+        selectionManager.OnEnvironmentSelected.AddListener(HandleEnvironmentSelected);
         selectionManager.OnBuildingSelected.AddListener(HandleBuildingSelected);
         selectionManager.OnSelectionCleared.AddListener(HandleSelectionCleared);
 
@@ -181,6 +182,7 @@ public class UnitPanelUI : MonoBehaviour
             selectionManager.OnUnitsSelected.RemoveListener(HandleUnitsSelected);
             selectionManager.OnGroundSelected.RemoveListener(HandleGroundSelected);
             selectionManager.OnObstacleSelected.RemoveListener(HandleObstacleSelected);
+            selectionManager.OnEnvironmentSelected.RemoveListener(HandleEnvironmentSelected);
             selectionManager.OnBuildingSelected.RemoveListener(HandleBuildingSelected);
             selectionManager.OnSelectionCleared.RemoveListener(HandleSelectionCleared);
         }
@@ -258,6 +260,20 @@ public class UnitPanelUI : MonoBehaviour
         ShowPanel();
         RefreshObstacle(obstacle);
         GameLogger.Log(GameLogger.Category.UI, $"🖥️ UnitPanelUI: Obstacle sélectionné — {obstacle?.name}", this);
+    }
+
+    // Reçoit l'environnement sélectionné
+    private void HandleEnvironmentSelected(GameObject environment)
+    {
+        ShowPanel();
+        watersapStockUI?.Hide();
+        UntrackUnit();
+        UntrackBuilding();
+        trackedBud = null;
+        currentSelectedEntity = environment;
+        ConfigureVisibility(EntityType.Obstacle);
+        ApplyPortraitAndName(environment);
+        GameLogger.Log(GameLogger.Category.UI, $"🖥️ UnitPanelUI: Environnement sélectionné — {environment?.name}", this);
     }
 
     // Aucune sélection — masque le panneau entier
@@ -368,28 +384,9 @@ public class UnitPanelUI : MonoBehaviour
         // Début du tracking pour mises à jour HP temps réel
         TrackUnit(stats);
 
-        // Portrait : lu depuis le ScriptableObject UnitStatsData, sinon placeholder coloré
         UnitStatsData statsData = stats.GetBaseStats();
-        if (portraitImage != null)
-        {
-            if (statsData != null && statsData.portrait != null)
-            {
-                portraitImage.sprite = statsData.portrait;
-                portraitImage.color  = Color.white;
-                TeamComponent team = unitObject.GetComponent<TeamComponent>();
-                if (team != null && portraitImage.material != null)
-                    portraitImage.material.SetColor("_TeamColor", team.GetTeamColor());
-            }
-            else
-            {
-                portraitImage.sprite = null;
-                portraitImage.color  = new Color(0.20f, 0.30f, 0.45f);
-            }
-        }
-
-        // Nom depuis le SO (évite "Rootborn(1)" etc.)
-        string displayName = (statsData != null && !string.IsNullOrEmpty(statsData.unitName)) ? statsData.unitName : unitObject.name;
-        SetText(unitNameText, displayName);
+        ApplyPortraitAndName(unitObject);
+        ApplyTeamColorToPortrait(unitObject);
 
         // HP
         RefreshHPDisplay(stats);
@@ -539,28 +536,9 @@ public class UnitPanelUI : MonoBehaviour
         ConfigureVisibility(isNexus ? EntityType.Nexus : EntityType.Building);
         currentSelectedEntity = buildingObject;
 
-        // Portrait depuis le SO
         BuildingStatsData statsData = stats.GetBaseStats();
-        if (portraitImage != null)
-        {
-            if (statsData != null && statsData.portrait != null)
-            {
-                portraitImage.sprite = statsData.portrait;
-                portraitImage.color  = Color.white;
-                TeamComponent team = buildingObject.GetComponent<TeamComponent>();
-                if (team != null && portraitImage.material != null)
-                    portraitImage.material.SetColor("_TeamColor", team.GetTeamColor());
-            }
-            else
-            {
-                portraitImage.sprite = null;
-                portraitImage.color  = new Color(0.40f, 0.30f, 0.20f);
-            }
-        }
-
-        // Nom
-        string displayName = (statsData != null && !string.IsNullOrEmpty(statsData.buildingName)) ? statsData.buildingName : buildingObject.name;
-        SetText(unitNameText, displayName);
+        ApplyPortraitAndName(buildingObject);
+        ApplyTeamColorToPortrait(buildingObject);
 
         // Tracking HP temps réel
         TrackBuilding(stats);
@@ -586,21 +564,9 @@ public class UnitPanelUI : MonoBehaviour
         UntrackBuilding();
 
         ConfigureVisibility(EntityType.Obstacle);
+        currentSelectedEntity = obstacle;
 
-        // Utilise les données d'environnement si elles existent, sinon conserve le fallback obstacle.
-        EnvironmentStatsComponent envStats = obstacle?.GetComponent<EnvironmentStatsComponent>();
-        EnvironmentStatsData envData = envStats?.GetBaseStats();
-
-        if (portraitImage != null)
-        {
-            portraitImage.sprite = envData?.portrait ?? null;
-            portraitImage.color  = (envData?.portrait != null) ? Color.white : new Color(0.40f, 0.35f, 0.30f);
-        }
-
-        string displayName = (envData != null && !string.IsNullOrEmpty(envData.entityName))
-            ? envData.entityName
-            : (obstacle != null ? obstacle.name : "Obstacle");
-        SetText(unitNameText, displayName);
+        ApplyPortraitAndName(obstacle);
     }
 
     // Mode Bud : portrait de l'unité en cours, nom, HP bâtiment, DEF, barre de progression
@@ -853,6 +819,33 @@ public class UnitPanelUI : MonoBehaviour
             return unit.GetBaseStats()?.abilityData;
 
         return null;
+    }
+
+    // Applique le portrait et le nom via ISelectable avec fallback robuste.
+    private void ApplyPortraitAndName(GameObject entity)
+    {
+        ISelectable selectable = entity?.GetComponent<ISelectable>();
+        Sprite portrait = selectable?.GetPortrait();
+        string displayName = selectable?.GetDisplayName() ?? entity?.name ?? "Inconnu";
+
+        if (portraitImage != null)
+        {
+            portraitImage.sprite = portrait;
+            portraitImage.color = portrait != null ? Color.white : new Color(0.4f, 0.35f, 0.3f);
+        }
+
+        SetText(unitNameText, displayName);
+    }
+
+    // Applique la couleur d'équipe au portrait uniquement pour les entités avec TeamComponent.
+    private void ApplyTeamColorToPortrait(GameObject entity)
+    {
+        if (portraitImage == null || portraitImage.sprite == null || portraitImage.material == null)
+            return;
+
+        TeamComponent team = entity != null ? entity.GetComponent<TeamComponent>() : null;
+        if (team != null)
+            portraitImage.material.SetColor("_TeamColor", team.GetTeamColor());
     }
 
     // === HELPERS SÉCURISÉS ===

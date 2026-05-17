@@ -16,7 +16,6 @@ GameObject:
   - component: {fileID: -6979360575784206212}
   - component: {fileID: -4627684200783162193}
   - component: {fileID: -3111876274476813253}
-  - component: {fileID: -3423559384024094749}
   m_Layer: 9
   m_Name: Bud
   m_TagString: Untagged
@@ -231,17 +230,3 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::HighlightTarget
   outlineMaterial: {fileID: 0}
   outlineSize: 2
---- !u!114 &-3423559384024094749
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1139703711428364788}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: f8b03989bd795b248918957c6753b744, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BuildingDeathAnimationComponent
-  deathAnimDuration: 1
-  deathAnimName: Death

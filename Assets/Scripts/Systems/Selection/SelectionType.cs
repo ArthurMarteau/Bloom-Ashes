@@ -4,6 +4,7 @@ public enum SelectionType
     None,
     Units,
     Building,
+    Environment,
     Obstacle,
     Ground
 }

@@ -46,6 +46,7 @@
     <Analyzer Include="D:\Logiciel\UnityHub\6000.2.14f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\Scripts\Systems\Selection\ISelectable.cs" />
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityInputHandler.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
@@ -67,7 +68,6 @@
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionResolver.cs" />
-    <Compile Include="Assets\Scripts\Components\Buildings\BuildingDeathAnimationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Shared\GameLogger.cs" />
@@ -82,6 +82,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\CursorManager.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\InputManager.cs" />
     <Compile Include="Assets\Scripts\Shared\UnitProductionStatus.cs" />
+    <Compile Include="Assets\Scripts\Components\Visual\WaveFillController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\ProjectileVisual.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\PathFinding.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitType.cs" />
@@ -91,7 +92,6 @@
     <Compile Include="Assets\Scripts\Components\Units\RootbornStockComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Buildings\BuildingStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\RangeOffsets.cs" />
-    <Compile Include="Assets\Scripts\Components\Visual\WatersapFillController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipTrigger.cs" />

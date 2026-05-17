@@ -2,10 +2,10 @@ using System.Collections;
 using UnityEngine;
 
 // Pilote le shader UnitShader (properties _WatersapFill, _WatersapColor, _WatersapEdgeWidth)
-// pour animer la vague Watersap qui remonte le sprite du bas vers le haut
+// pour animer la vague Wave Fill qui remonte le sprite du bas vers le haut
 // Utilise MaterialPropertyBlock pour éviter toute instanciation de material (perf)
 [RequireComponent(typeof(SpriteRenderer))]
-public class WatersapFillController : MonoBehaviour
+public class WaveFillController : MonoBehaviour
 {
     [Tooltip("SpriteRenderer cible — auto-assigné via GetComponent si non renseigné")]
     [SerializeField] private SpriteRenderer targetRenderer;
@@ -95,18 +95,21 @@ public class WatersapFillController : MonoBehaviour
         activeCoroutine = null;
     }
 
+    // Force le fill à 100% depuis le menu de contexte
     [ContextMenu("Debug: Fill 100%")]
     private void DebugFillFull()
     {
         SetFill(1f);
     }
 
+    // Force le fill à 0% depuis le menu de contexte
     [ContextMenu("Debug: Fill 0%")]
     private void DebugFillZero()
     {
         SetFill(0f);
     }
 
+    // Lance une animation de test depuis le menu de contexte
     [ContextMenu("Debug: Test Animation 1s + 0.2s hold")]
     private void DebugTestAnimation()
     {

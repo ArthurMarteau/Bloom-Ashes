@@ -2397,6 +2397,9 @@ MonoBehaviour:
   OnBuildingSelected:
     m_PersistentCalls:
       m_Calls: []
+  OnEnvironmentSelected:
+    m_PersistentCalls:
+      m_Calls: []
   OnSelectionCleared:
     m_PersistentCalls:
       m_Calls: []
@@ -3152,7 +3155,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8550693501826029426, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
       propertyPath: m_LocalPosition.y
-      value: 1.2415339
+      value: 4.2415338
       objectReference: {fileID: 0}
     - target: {fileID: 8550693501826029426, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
       propertyPath: m_LocalPosition.z
@@ -3576,42 +3579,11 @@ Transform:
   m_CorrespondingSourceObject: {fileID: 1060202383896511432, guid: a9d911e46f5e62c42b8ce8051ac77cbf, type: 3}
   m_PrefabInstance: {fileID: 348301303}
   m_PrefabAsset: {fileID: 0}
---- !u!1 &721935200 stripped
-GameObject:
-  m_CorrespondingSourceObject: {fileID: 5758338455721873252, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
-  m_PrefabInstance: {fileID: 1206020662476519380}
-  m_PrefabAsset: {fileID: 0}
 --- !u!4 &721935202 stripped
 Transform:
   m_CorrespondingSourceObject: {fileID: 8080589296064271329, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
   m_PrefabInstance: {fileID: 1206020662476519380}
   m_PrefabAsset: {fileID: 0}
---- !u!114 &721935206
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 721935200}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 23490e2253c9b39408ac527bf102b908, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::BuildingStatsComponent
-  baseStats: {fileID: 11400000, guid: 37bb31b95cbbebe4babd88043abc8380, type: 2}
-  OnDamaged:
-    m_PersistentCalls:
-      m_Calls: []
-  OnHealed:
-    m_PersistentCalls:
-      m_Calls: []
-  OnBuildingDestroyed:
-    m_PersistentCalls:
-      m_Calls: []
-  OnTierUpgraded:
-    m_PersistentCalls:
-      m_Calls: []
-  debugStats: 1
 --- !u!1 &727350202
 GameObject:
   m_ObjectHideFlags: 0
@@ -3659,6 +3631,7 @@ MonoBehaviour:
   budHatchVFX: {fileID: 11400000, guid: 80267f3d829a2d74bad770c572834315, type: 2}
   rootbornSpawnVFX: {fileID: 11400000, guid: 7ee8a5f9e238db5499b7ee43400a33d7, type: 2}
   unitRevertVFX: {fileID: 11400000, guid: 80267f3d829a2d74bad770c572834315, type: 2}
+  buildingDeathVFX: {fileID: 0}
 --- !u!1 &728335731 stripped
 GameObject:
   m_CorrespondingSourceObject: {fileID: 271172713617413787, guid: 1378708c66f9da549920fc31d522b244, type: 3}
@@ -13803,10 +13776,6 @@ PrefabInstance:
       value: Shroomhaven_0
       objectReference: {fileID: 0}
     - target: {fileID: 8080589296064271329, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
-      propertyPath: m_LocalScale.x
-      value: 1.0051
-      objectReference: {fileID: 0}
-    - target: {fileID: 8080589296064271329, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
       propertyPath: m_LocalPosition.x
       value: 4.3450947
       objectReference: {fileID: 0}
@@ -13846,17 +13815,10 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
       objectReference: {fileID: 0}
-    - target: {fileID: 8357381731539483030, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
-      propertyPath: teamID
-      value: 1
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
     m_AddedGameObjects: []
-    m_AddedComponents:
-    - targetCorrespondingSourceObject: {fileID: 5758338455721873252, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
-      insertIndex: -1
-      addedObject: {fileID: 721935206}
+    m_AddedComponents: []
   m_SourcePrefab: {fileID: 100100000, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
 --- !u!1001 &3780172580542051078
 PrefabInstance:

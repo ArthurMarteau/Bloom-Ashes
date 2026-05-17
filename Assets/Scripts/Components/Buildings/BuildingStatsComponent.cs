@@ -1,11 +1,12 @@
 ﻿using System.Collections.Generic;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.Events;
 
 // Composant Unity gérant l'état de santé d'un bâtiment
 // Implémente IDamageable pour être ciblable par AttackController
 // L'équipe est gérée par TeamComponent (cohérence avec les unités)
-public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile
+public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, ISelectable
 {
     [Header("Stats Data")]
     [SerializeField] private BuildingStatsData baseStats; // ScriptableObject avec stats de base
@@ -194,20 +195,34 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile
         }
 
         OnBuildingDestroyed?.Invoke();
+        StartCoroutine(DestroySequence());
+    }
 
-        // Désactive le collider pour libérer la case sur la grille
-        Collider2D buildingCollider = GetComponent<Collider2D>();
-        if (buildingCollider != null)
-        {
-            buildingCollider.enabled = false;
-        }
+    private IEnumerator DestroySequence()
+    {
+        // Désactive le collider immédiatement pour libérer la tile côté pathfinding.
+        Collider2D col = GetComponent<Collider2D>();
+        if (col != null)
+            col.enabled = false;
 
+        // Retire les tiles occupées de l'index logique des bâtiments.
         UnregisterOccupiedTilesFromRegistry();
 
-        // Détruit le GameObject après un délai (prépare les animations futures)
+        // Joue le VFX de mort si un VFXManager est présent.
+        VFXManager.Instance?.PlayBuildingDeathVFX(transform.position);
+
+        // Joue l'animation Death si un Animator est présent (ex: Bud).
+        Animator animator = GetComponent<Animator>();
+        if (animator != null)
+            animator.Play("Death");
+
+        // Laisse le VFX ou l'animation de mort se jouer avant le respawn et la destruction.
+        float destroyDelay = GetComponent<BudComponent>() != null ? 10f : 1f;
+        yield return new WaitForSeconds(destroyDelay);
+
         RespawnFoundationIfNeeded();
         EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
-        Destroy(gameObject, 10f);
+        Destroy(gameObject);
     }
 
     // Stocke la Foundation d'origine pour permettre son respawn à la destruction
@@ -216,22 +231,32 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile
         originFoundation = foundation;
     }
 
-    // Respawn la Foundation d'origine quand un bâtiment construit est détruit
+    // Respawn une Foundation à la destruction du bâtiment si une data est disponible.
     private void RespawnFoundationIfNeeded()
     {
-        if (originFoundation == null)
-            return;
+        // Priorité : Foundation d'origine (construite en jeu) > Foundation par défaut du SO.
+        FoundationStatsData foundationToSpawn = originFoundation ?? baseStats?.defaultFoundation;
 
-        if (originFoundation.prefab == null)
+        if (foundationToSpawn == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ BuildingStatsComponent {gameObject.name} : prefab Foundation non assigné dans {originFoundation.name}, respawn impossible", this);
+            GameLogger.Log(GameLogger.Category.Spawn,
+                $"️ {gameObject.name} : aucune Foundation à spawner (originFoundation et defaultFoundation null)", this);
             return;
         }
 
-        Vector3 anchorWorldPosition = transform.position;
-        GameObject foundation = Instantiate(originFoundation.prefab, anchorWorldPosition, Quaternion.identity);
+        if (foundationToSpawn.prefab == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn,
+                $"️ {gameObject.name} : prefab Foundation non assigné dans {foundationToSpawn.name}", this);
+            return;
+        }
+
+        Vector3 position = transform.position;
+        GameObject foundation = Instantiate(foundationToSpawn.prefab, position, Quaternion.identity);
+        foundation.name = foundationToSpawn.entityName;
         EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, foundation);
-        GameLogger.Log(GameLogger.Category.Spawn, $"🏗️ BuildingStatsComponent {gameObject.name} : Foundation respawn en {anchorWorldPosition}", this);
+        GameLogger.Log(GameLogger.Category.Spawn,
+            $"️ {gameObject.name} : Foundation '{foundationToSpawn.name}' spawnée en {position}", this);
     }
 
     // === Getters publics supplémentaires ===
@@ -373,6 +398,16 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile
     public BuildingStatsData GetBaseStats()
     {
         return baseStats;
+    }
+
+    public Sprite GetPortrait()
+    {
+        return GetBaseStats()?.portrait;
+    }
+
+    public string GetDisplayName()
+    {
+        return GetBaseStats()?.buildingName ?? gameObject.name;
     }
 
     // Remplace les HP courants par une valeur externe (utilisé par BudComponent pour hériter des HP du Rootborn)

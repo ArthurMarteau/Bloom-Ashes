@@ -36,6 +36,7 @@ public class SelectionManager : MonoBehaviour
     public UnityEvent<Vector2Int>          OnGroundSelected     = new UnityEvent<Vector2Int>();
     public UnityEvent<GameObject>          OnObstacleSelected   = new UnityEvent<GameObject>();
     public UnityEvent<GameObject>          OnBuildingSelected   = new UnityEvent<GameObject>();
+    public UnityEvent<GameObject>          OnEnvironmentSelected = new UnityEvent<GameObject>();
     public UnityEvent                      OnSelectionCleared   = new UnityEvent();
 
     // Initialise les références, masks et composants visuels
@@ -258,6 +259,9 @@ public class SelectionManager : MonoBehaviour
             case SelectionType.Building:
                 state.SetSingle(SelectionType.Building, entity);
                 break;
+            case SelectionType.Environment:
+                state.SetSingle(SelectionType.Environment, entity);
+                break;
             case SelectionType.Obstacle:
                 state.SetSingle(SelectionType.Obstacle, entity);
                 break;
@@ -370,7 +374,7 @@ public class SelectionManager : MonoBehaviour
                 desiredEntities.Add(unit);
             }
         }
-        else if (state.Type == SelectionType.Building || state.Type == SelectionType.Obstacle)
+        else if (state.Type == SelectionType.Building || state.Type == SelectionType.Environment || state.Type == SelectionType.Obstacle)
         {
             desiredEntities.Add(state.Single);
         }
@@ -553,6 +557,10 @@ public class SelectionManager : MonoBehaviour
             case SelectionType.Building:
                 OnBuildingSelected.Invoke(state.Single);
                 GameLogger.Log(GameLogger.Category.Selection, $"🏛️ Bâtiment sélectionné : {state.Single.name}", this);
+                break;
+            case SelectionType.Environment:
+                OnEnvironmentSelected.Invoke(state.Single);
+                GameLogger.Log(GameLogger.Category.Selection, $"🌿 Environnement sélectionné : {state.Single.name}", this);
                 break;
             case SelectionType.Obstacle:
                 OnObstacleSelected.Invoke(state.Single);

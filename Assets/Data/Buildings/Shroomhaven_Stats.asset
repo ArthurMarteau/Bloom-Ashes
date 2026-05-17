@@ -27,4 +27,6 @@ MonoBehaviour:
   - {fileID: 11400000, guid: 48e2283247d0a5d46865952762e64be0, type: 2}
   maxTier: 1
   buildingPrefab: {fileID: 5758338455721873252, guid: 754797a0145523f4a9600fea31aa7f16, type: 3}
+  defaultFoundation: {fileID: 11400000, guid: 1089a95e060a71748a1b12633c8f9285, type: 2}
   abilityData: {fileID: 0}
+  originFoundation: {fileID: 0}
