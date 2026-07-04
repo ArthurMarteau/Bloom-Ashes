@@ -59,8 +59,7 @@ public class ChaseController : MonoBehaviour
         }
 
         // Si cible n'a pas bougé, vérifie seulement si on est à l'arrêt
-        MovementController movementCtrl = GetComponent<MovementController>();
-        if (movementCtrl != null && movementCtrl.GetCurrentState() == MovementController.MovementState.Moving)
+        if (movementController != null && movementController.GetCurrentState() == MovementController.MovementState.Moving)
         {
             // En mouvement vers la bonne destination, on attend
             return;
@@ -194,7 +193,7 @@ public class ChaseController : MonoBehaviour
             return;
         }
 
-        // NOUVEAU : Trouve la case accessible la plus proche de la cible (pas forcément adjacente)
+        // Trouve la case adjacente walkable la plus proche sans lancer de calcul A*
         Vector2Int bestCell = FindClosestAccessibleCell(targetPosition, myPosition);
 
         if (bestCell == Vector2Int.zero)
@@ -216,18 +215,17 @@ public class ChaseController : MonoBehaviour
         }
     }
 
-    // Trouve la case accessible à portée avec le chemin le plus court
-    // Utilise PathFinding pour calculer le chemin réel vers chaque case adjacente
-    // Prend en compte les obstacles pour trouver la vraie case optimale
+    // Trouve la première case adjacente walkable triée par distance Chebyshev depuis l'unité
     private Vector2Int FindClosestAccessibleCell(Vector2Int targetPosition, Vector2Int myPosition)
     {
         // Toutes les 8 directions adjacentes via RangeOffsets (source unique de vérité)
         Vector2Int[] adjacentOffsets = RangeOffsets.GetOffsets(1);
 
         Vector2Int bestAdjacentCell = Vector2Int.zero;
-        int shortestPathLength = int.MaxValue;
+        int bestDistance = int.MaxValue;
+        bool foundWalkableCell = false;
 
-        // Cherche la case adjacente avec le chemin le plus court
+        // Sélectionne la case walkable la plus proche sans déclencher d'A* intermédiaire
         foreach (Vector2Int offset in adjacentOffsets)
         {
             Vector2Int adjacentCell = targetPosition + offset;
@@ -244,29 +242,21 @@ public class ChaseController : MonoBehaviour
                 continue;
             }
 
-            // Calcule le chemin réel depuis notre position actuelle
-            List<Vector2Int> path = PathFinding.FindPath(myPosition, adjacentCell, unitGameObject);
-
-            // Si pas de chemin trouvé, ignore cette case
-            if (path == null || path.Count == 0)
+            int distance = CombatSystem.CalculateChebyshevDistance(myPosition, adjacentCell);
+            if (distance < bestDistance)
             {
-                continue;
-            }
-
-            // Compare la longueur du chemin
-            if (path.Count < shortestPathLength)
-            {
-                shortestPathLength = path.Count;
+                bestDistance = distance;
                 bestAdjacentCell = adjacentCell;
+                foundWalkableCell = true;
             }
         }
 
         // Si case adjacente trouvée, c'est la meilleure option
-        if (bestAdjacentCell != Vector2Int.zero)
+        if (foundWalkableCell)
         {
             if (debugChase)
             {
-                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Meilleure case trouvée {bestAdjacentCell} avec chemin de {shortestPathLength} cases", this);
+                GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Meilleure case adjacente {bestAdjacentCell} à distance {bestDistance}", this);
             }
             return bestAdjacentCell;
         }

@@ -49,6 +49,7 @@
     <Compile Include="Assets\Scripts\Systems\Selection\ISelectable.cs" />
     <Compile Include="Assets\Scripts\Components\Units\TeamComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityInputHandler.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\PathFindingManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\IMultiTile.cs" />
@@ -78,6 +79,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
     <Compile Include="Assets\Scripts\Data\VFX\VFXData.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\WatersapTransferExecutor.cs" />
+    <Compile Include="Assets\Scripts\Systems\Grid\PathFindingScheduler.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\SacrificeExecutor.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\CursorManager.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\InputManager.cs" />

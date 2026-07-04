@@ -15,6 +15,8 @@ public class EntityRegistry : MonoBehaviour
     // Stockage central : GameObject → IDamageable
     // Dictionary pour accès O(1) à l'enregistrement/désenregistrement
     private Dictionary<GameObject, IDamageable> entities = new Dictionary<GameObject, IDamageable>();
+    private Dictionary<GameObject, ITeamMember> teamMembers = new Dictionary<GameObject, ITeamMember>();
+    private HashSet<GameObject> movingUnits = new HashSet<GameObject>();
 
     // Registre des positions logiques : position grille source de vérité, indépendante du Lerp visuel
     // Mis à jour par MovementController à chaque étape logique
@@ -58,7 +60,7 @@ public class EntityRegistry : MonoBehaviour
 
     // Enregistre une entité IDamageable dans le registre
     // Appelé dans Awake() de UnitStatsComponent et BuildingStatsComponent
-    public void RegisterEntity(IDamageable entity, GameObject go)
+    public void RegisterEntity(IDamageable entity, GameObject go, ITeamMember teamMember)
     {
         if (go == null || entity == null)
         {
@@ -68,6 +70,7 @@ public class EntityRegistry : MonoBehaviour
 
         // Écrase silencieusement si déjà présent (re-activation d'objet poolé par ex.)
         entities[go] = entity;
+        teamMembers[go] = teamMember;
 
         if (debugRegistry)
         {
@@ -82,6 +85,8 @@ public class EntityRegistry : MonoBehaviour
         if (go == null) return;
 
         entities.Remove(go);
+        teamMembers.Remove(go);
+        movingUnits.Remove(go);
         if (logicalPositions.TryGetValue(go, out var lp))
         {
             RemoveUnitFromCell(lp, go);
@@ -120,7 +125,8 @@ public class EntityRegistry : MonoBehaviour
         logicalPositions[go] = position;
         AddUnitToCell(position, go);
 
-        if (positionToUnit.TryGetValue(position, out var existing) && existing != go && existing != null)
+        if (positionToUnit.TryGetValue(position, out var existing) && existing != go && existing != null
+            && debugRegistry && GameLogger.IsEnabled(GameLogger.Category.Spawn))
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $" EntityRegistry: collision logique sur {position} entre {existing.name} et {go.name}", null);
         }
@@ -183,6 +189,23 @@ public class EntityRegistry : MonoBehaviour
             leavingPositionToUnit.Remove(leftPos);
         }
         leavingPositions.Remove(go);
+    }
+
+    // Met à jour l'état de déplacement d'une unité pour les lectures O(1) du pathfinding
+    public void SetMoving(GameObject go, bool isMoving)
+    {
+        if (go == null) return;
+
+        if (isMoving)
+            movingUnits.Add(go);
+        else
+            movingUnits.Remove(go);
+    }
+
+    // Retourne si une unité est actuellement en mouvement
+    public bool IsMoving(GameObject go)
+    {
+        return go != null && movingUnits.Contains(go);
     }
 
     // Libère la position logique d'une entité sans la désenregistrer du registry
@@ -268,12 +291,14 @@ public class EntityRegistry : MonoBehaviour
     {
         if (building == null) return;
         buildingPositions[cell] = building;
+        GridManager.Instance?.SetStaticBlocked(cell, true);
     }
 
     // Désenregistre le bâtiment occupant une cellule logique.
     public void UnregisterBuilding(Vector2Int cell)
     {
         buildingPositions.Remove(cell);
+        GridManager.Instance?.SetStaticBlocked(cell, false);
     }
 
     // Retourne le bâtiment occupant une cellule logique, ou null.
@@ -291,6 +316,7 @@ public class EntityRegistry : MonoBehaviour
     public List<GameObject> FindEntitiesInRange(Vector2Int center, int range)
     {
         List<GameObject> result = new List<GameObject>();
+        HashSet<GameObject> addedEntities = new HashSet<GameObject>();
 
         for (int dx = -range; dx <= range; dx++)
         {
@@ -301,7 +327,7 @@ public class EntityRegistry : MonoBehaviour
 
                 foreach (GameObject go in units)
                 {
-                    if (go != null && !result.Contains(go))
+                    if (go != null && addedEntities.Add(go))
                         result.Add(go);
                 }
             }
@@ -316,13 +342,12 @@ public class EntityRegistry : MonoBehaviour
     public List<GameObject> FindEnemiesInRange(Vector2Int center, int range, int myTeamID)
     {
         List<GameObject> result = new List<GameObject>();
+        HashSet<GameObject> addedEnemies = new HashSet<GameObject>();
 
         for (int dx = -range; dx <= range; dx++)
         {
             for (int dy = -range; dy <= range; dy++)
             {
-                if (Mathf.Abs(dx) > range || Mathf.Abs(dy) > range) continue;
-
                 Vector2Int cell = center + new Vector2Int(dx, dy);
                 if (!cellToUnits.TryGetValue(cell, out HashSet<GameObject> units)) continue;
 
@@ -332,14 +357,13 @@ public class EntityRegistry : MonoBehaviour
                     if (go == null || damageable == null) continue;
                     if (damageable.IsDead() || damageable.IsInvulnerable()) continue;
 
-                    ITeamMember otherTeam = go.GetComponent<ITeamMember>();
-                    if (otherTeam == null) continue;
+                    if (!teamMembers.TryGetValue(go, out ITeamMember otherTeam) || otherTeam == null) continue;
 
                     int otherTeamID = otherTeam.GetTeamID();
                     if (myTeamID == 0 || otherTeamID == 0) continue;
                     if (otherTeamID == myTeamID) continue;
 
-                    if (!result.Contains(go))
+                    if (addedEnemies.Add(go))
                         result.Add(go);
                 }
             }

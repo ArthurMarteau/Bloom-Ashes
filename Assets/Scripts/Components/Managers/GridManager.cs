@@ -16,6 +16,7 @@ public class GridManager : MonoBehaviour
 
     [Header("Ground Type Configuration")]
     [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
+    private bool[,] staticBlockedGrid;
 
     // Instance singleton
     public static GridManager Instance { get; private set; }
@@ -30,6 +31,7 @@ public class GridManager : MonoBehaviour
         {
             Instance = this;
             InitializeGroundTypeGrid();
+            InitializeStaticBlockedGrid();
             GameLogger.Log(GameLogger.Category.Grid, $"Grille créée : {gridWidth}x{gridHeight}", this);
         }
         else
@@ -76,6 +78,23 @@ public class GridManager : MonoBehaviour
         }
 
         GameLogger.Log(GameLogger.Category.Grid, "Grille de terrain initialisée avec terrain normal", this);
+    }
+
+    // Construit une fois la grille des obstacles et bâtiments statiques présents dans la scène
+    private void InitializeStaticBlockedGrid()
+    {
+        staticBlockedGrid = new bool[gridWidth, gridHeight];
+        LayerMask staticBlockingLayers = obstacleLayer | buildingLayer;
+
+        for (int x = 0; x < gridWidth; x++)
+        {
+            for (int y = 0; y < gridHeight; y++)
+            {
+                Vector2Int gridPosition = new Vector2Int(x, y);
+                Vector3 worldPosition = GridToWorld(gridPosition);
+                staticBlockedGrid[x, y] = Physics2D.OverlapPoint(worldPosition, staticBlockingLayers) != null;
+            }
+        }
     }
 
     // Recalcule l'origine de la grille pour centrer la grille sur le monde
@@ -133,25 +152,14 @@ public class GridManager : MonoBehaviour
                 return true;
 
             // Si l'unité est en mouvement (elle lerpe vers cette case), la case est contestable
-            MovementController mc = unitAtPosition.GetComponent<MovementController>();
-            if (mc != null && mc.GetCurrentState() == MovementController.MovementState.Moving)
+            if (EntityRegistry.Instance != null && EntityRegistry.Instance.IsMoving(unitAtPosition))
                 return true;
 
             return false;
         }
 
         // Règle obstacles : bloquent selon les capacités de vol de l'unité
-        if (GetObstacleAt(gridPosition))
-        {
-            if (!UnitTypeHelper.CanFlyOverObstacles(unit))
-            {
-                return false;
-            }
-        }
-
-        // Règle bâtiments de faction : bloquent le passage sauf pour les unités volantes
-        // Le Nexus (layer Environment_Walkable) n'est PAS détecté ici → les unités passent dessus
-        if (GetBuildingAt(gridPosition))
+        if (staticBlockedGrid != null && staticBlockedGrid[gridPosition.x, gridPosition.y])
         {
             if (!UnitTypeHelper.CanFlyOverObstacles(unit))
             {
@@ -168,6 +176,17 @@ public class GridManager : MonoBehaviour
 
         // Case libre et accessible
         return true;
+    }
+
+    // Met à jour l'occupation statique d'une case lors de la construction ou destruction d'un bâtiment
+    public void SetStaticBlocked(Vector2Int gridPosition, bool isBlocked)
+    {
+        if (!IsInBounds(gridPosition) || staticBlockedGrid == null)
+        {
+            return;
+        }
+
+        staticBlockedGrid[gridPosition.x, gridPosition.y] = isBlocked;
     }
 
     // Retourne le type de terrain d'une position de grille

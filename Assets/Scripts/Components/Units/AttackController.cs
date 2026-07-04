@@ -37,6 +37,7 @@ public class AttackController : MonoBehaviour
     private Coroutine damageCoroutine;
     private Coroutine approachRetryCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
+    private ChaseController chaseController;
     private AttackState currentState = AttackState.Idle;
 
     // Initialise les références
@@ -45,6 +46,7 @@ public class AttackController : MonoBehaviour
         unitGameObject = gameObject;
         unitStatsComponent = GetComponent<UnitStatsComponent>();
         teamMember = GetComponent<ITeamMember>();
+        chaseController = GetComponent<ChaseController>();
 
         if (unitStatsComponent == null)
         {
@@ -109,14 +111,14 @@ public class AttackController : MonoBehaviour
                 // Ne pas interrompre une attaque en cours d'exécution
                 if (currentState == AttackState.Performing)
                 {
-                    if (debugAttack)
+                    if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
                         GameLogger.Log(GameLogger.Category.Combat, $"🔄 Update {gameObject.name}: Attaque en cours, on attend", this);
                     }
                     return;
                 }
 
-                if (debugAttack)
+                if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 {
                     GameLogger.Log(GameLogger.Category.Combat, $"🔄 Update {gameObject.name}: État Idle/Arrived → Appel ProcessAttackLogic", this);
                 }
@@ -179,7 +181,6 @@ public class AttackController : MonoBehaviour
         }
 
         // Autorise l'auto-attaque pendant la chase : c'est un mouvement automatique interruptible
-        ChaseController chaseController = GetComponent<ChaseController>();
         if (chaseController != null && chaseController.IsChasing())
         {
             GameObject chaseTarget = chaseController.GetCurrentTarget();
@@ -230,7 +231,6 @@ public class AttackController : MonoBehaviour
     // Interrompt une chase automatique pour attaquer une cible prioritaire
     public void InterruptChaseAndAttack(GameObject enemy)
     {
-        ChaseController chaseController = GetComponent<ChaseController>();
         if (chaseController != null && chaseController.IsChasing())
         {
             GameObject chaseTarget = chaseController.GetCurrentTarget();
@@ -417,7 +417,7 @@ public class AttackController : MonoBehaviour
             IDamageable resumeDamageable = resumeTarget.GetComponent<IDamageable>();
             if (resumeDamageable == null || !resumeDamageable.IsDead())
             {
-                GetComponent<ChaseController>()?.StartChase(resumeTarget);
+                chaseController?.StartChase(resumeTarget);
 
                 if (debugAttack)
                 {
@@ -436,7 +436,7 @@ public class AttackController : MonoBehaviour
         // Vérifie que la cible est toujours valide
         if (!IsTargetValid())
         {
-            if (debugAttack)
+            if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
             {
                 GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible invalide, arrêt attaque", this);
             }
@@ -461,7 +461,7 @@ public class AttackController : MonoBehaviour
                 // Si en mouvement, on attend d'être centré
                 if (state == MovementController.MovementState.Moving)
                 {
-                    if (debugAttack)
+                    if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
                         GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: En mouvement, attend d'être centré avant AttackIdle", this);
                     }
@@ -477,7 +477,7 @@ public class AttackController : MonoBehaviour
                 if (!animatorController.HasPlayedIdleReversedThisSession())
                 {
                     // Ne joue pas AttackIdle, laisse PerformAttack() gérer IdleReversed d'abord
-                    if (debugAttack)
+                    if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
                         GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Rootborn attend IdleReversed avant AttackIdle", this);
                     }
@@ -516,7 +516,7 @@ public class AttackController : MonoBehaviour
                 PerformAttack();
                 lastAttackTime = Time.time; // Enregistre le temps de cette attaque
 
-                if (debugAttack)
+                if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 {
                     GameLogger.Log(GameLogger.Category.Combat, $"⚔️ AttackController {gameObject.name}: Attaque lancée, prochain cooldown dans {attackSpeed}s", this);
                 }
@@ -536,7 +536,7 @@ public class AttackController : MonoBehaviour
                     StopCoroutine(damageCoroutine);
                     damageCoroutine = null;
 
-                    if (debugAttack)
+                    if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
                         GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible hors portée, annulation des dégâts en cours", this);
                     }

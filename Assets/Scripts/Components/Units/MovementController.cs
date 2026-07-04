@@ -86,6 +86,8 @@ public class MovementController : MonoBehaviour
     private Coroutine interpolationCoroutine;
     private Coroutine retryCoroutine;
     private bool isFirstMoveOfSession = true; // Reset quand mouvement s'arrête
+    private bool isWaitingPath = false;
+    private long activePathRequestId = 0;
 
     private void Start()
     {
@@ -116,6 +118,12 @@ public class MovementController : MonoBehaviour
         attackController = GetComponent<AttackController>();
     }
 
+    // Annule la requête en attente si l'unité est détruite avant son callback
+    private void OnDestroy()
+    {
+        CancelPendingPathRequest();
+    }
+
     // Interface publique principale pour demander un déplacement vers une destination
     // Calcule l'A* sur cellules et adapte le step en cours selon la phase ancrage/centre.
     public bool MoveTo(Vector2Int targetPosition)
@@ -137,6 +145,8 @@ public class MovementController : MonoBehaviour
             GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Destination {targetPosition} hors limites", this);
             return false;
         }
+
+        CancelPendingPathRequest();
 
         if (!IsReadyForMovement())
         {
@@ -165,29 +175,9 @@ public class MovementController : MonoBehaviour
             // Phase ToAnchor : bifurcation libre dans currentCell.
             if (!hasCrossedAnchor)
             {
-                List<Vector2Int> path = PathFinding.FindPath(currentCell, targetPosition, unitGameObject);
-                if (path == null || path.Count == 0)
-                {
-                    if (debugMovement) GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pas de chemin, ordre ignoré", this);
-                    return false;
-                }
-
-                logicalPath.Clear();
-                foreach (var c in path) logicalPath.Enqueue(c);
-                finalDestination = targetPosition;
-                if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/ToAnchor", this);
-
-                Vector2Int newFirstCell = logicalPath.Peek();
-                logicalPath.Dequeue();
-                Vector2Int dir = GetDirection(currentCell, newFirstCell);
-                targetCell = newFirstCell;
-                anchorWorldPos = ComputeAnchor(currentCell, dir);
-
-                if (animatorController != null)
-                    animatorController.PlayWalkAnimation(currentCell, newFirstCell);
-
-                if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bifurcation ToAnchor → {newFirstCell}", this);
-                return true;
+                Vector2Int requestStartCell = currentCell;
+                return QueuePathRequest(requestStartCell, targetPosition,
+                    path => HandleBifurcationPathResult(path, requestStartCell, targetPosition));
             }
 
             // Phase ToCenter : ancrage franchi. Le centre cible est obligatoire avant nouvel ordre.
@@ -210,36 +200,125 @@ public class MovementController : MonoBehaviour
         }
 
         // ===== HORS STEP =====
-        List<Vector2Int> initialPath = PathFinding.FindPath(currentCell, targetPosition, unitGameObject);
-        if (initialPath != null && initialPath.Count > 0 && IsPathAbsurd(initialPath, targetPosition))
+        finalDestination = targetPosition;
+        Vector2Int initialStartCell = currentCell;
+        return QueuePathRequest(initialStartCell, targetPosition,
+            path => HandleInitialPathResult(path, initialStartCell, targetPosition));
+    }
+
+    // Applique le résultat d'une demande initiale puis démarre le déplacement ou le retry existant
+    private void HandleInitialPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int targetPosition)
+    {
+        if (currentCell != requestStartCell)
         {
-            if (debugMovement)
-                GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({initialPath.Count} steps / Chebyshev {Mathf.Max(Mathf.Abs(currentCell.x - targetPosition.x), Mathf.Abs(currentCell.y - targetPosition.y))}), ordre ignoré", this);
-            return false;
+            MoveTo(targetPosition);
+            return;
         }
 
-        if (initialPath == null || initialPath.Count == 0)
+        if (path != null && path.Count > 0 && IsPathAbsurd(path, targetPosition))
+        {
+            finalDestination = null;
+            if (debugMovement)
+                GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({path.Count} steps / Chebyshev {Mathf.Max(Mathf.Abs(currentCell.x - targetPosition.x), Mathf.Abs(currentCell.y - targetPosition.y))}), ordre ignoré", this);
+            return;
+        }
+
+        if (path == null || path.Count == 0)
         {
             finalDestination = targetPosition;
             if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep/noPath", this);
             GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pas de chemin vers {targetPosition} — retry", this);
             StartRetryToDestination(targetPosition);
-            return false;
+            return;
         }
 
         logicalPath.Clear();
         finalDestination = targetPosition;
         if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/horsStep", this);
-        foreach (var c in initialPath) logicalPath.Enqueue(c);
+        foreach (Vector2Int cell in path) logicalPath.Enqueue(cell);
 
         if (debugMovement)
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: nouveau chemin {initialPath.Count} cases depuis {currentCell} vers {targetPosition}", this);
+            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: nouveau chemin {path.Count} cases depuis {currentCell} vers {targetPosition}", this);
 
         OnIdleStateChanged.Invoke(false);
         OnMovementStarted.Invoke();
         currentState = MovementState.Moving;
         interpolationCoroutine = StartCoroutine(InterpolationLoop());
-        return true;
+    }
+
+    // Applique une bifurcation si l'ancrage n'est pas franchi, sinon la convertit en destination pending
+    private void HandleBifurcationPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int targetPosition)
+    {
+        if (!isInterpolating || currentCell != requestStartCell || hasCrossedAnchor || isReceding)
+        {
+            pendingDestination = targetPosition;
+            finalDestination = targetPosition;
+
+            if (!isInterpolating)
+                MoveTo(targetPosition);
+            return;
+        }
+
+        if (path == null || path.Count == 0)
+        {
+            pendingDestination = targetPosition;
+            finalDestination = targetPosition;
+            return;
+        }
+
+        logicalPath.Clear();
+        foreach (Vector2Int cell in path) logicalPath.Enqueue(cell);
+        finalDestination = targetPosition;
+        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/ToAnchor", this);
+
+        Vector2Int newFirstCell = logicalPath.Peek();
+        logicalPath.Dequeue();
+        Vector2Int direction = GetDirection(currentCell, newFirstCell);
+        targetCell = newFirstCell;
+        anchorWorldPos = ComputeAnchor(currentCell, direction);
+
+        if (animatorController != null)
+            animatorController.PlayWalkAnimation(currentCell, newFirstCell);
+
+        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bifurcation ToAnchor → {newFirstCell}", this);
+    }
+
+    // Place une demande dans le scheduler et ignore tout callback devenu obsolète
+    private bool QueuePathRequest(Vector2Int startPosition, Vector2Int endPosition, System.Action<List<Vector2Int>> callback)
+    {
+        if (PathFindingManager.Instance == null)
+        {
+            GameLogger.Error($"MovementController {gameObject.name}: PathFindingManager introuvable", this);
+            return false;
+        }
+
+        CancelPendingPathRequest();
+
+        long requestId = 0;
+        requestId = PathFindingManager.Instance.RequestPath(startPosition, endPosition, unitGameObject, path =>
+        {
+            if (!isWaitingPath || activePathRequestId != requestId)
+                return;
+
+            isWaitingPath = false;
+            activePathRequestId = 0;
+            callback(path);
+        });
+
+        activePathRequestId = requestId;
+        isWaitingPath = requestId > 0;
+        return isWaitingPath;
+    }
+
+    // Annule la demande de chemin encore en attente pour cette unité
+    private void CancelPendingPathRequest()
+    {
+        if (!isWaitingPath)
+            return;
+
+        PathFindingManager.Instance?.CancelRequest(activePathRequestId);
+        activePathRequestId = 0;
+        isWaitingPath = false;
     }
 
     // Boucle principale d'interpolation en steps ancrage -> centre.
@@ -247,7 +326,8 @@ public class MovementController : MonoBehaviour
     private IEnumerator InterpolationLoop()
     {
         isInterpolating = true;
-        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: début boucle interpolation", this);
+        EntityRegistry.Instance?.SetMoving(unitGameObject, true);
+        if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: début boucle interpolation", this);
 
         while (logicalPath.Count > 0)
         {
@@ -261,7 +341,7 @@ public class MovementController : MonoBehaviour
 
             if (!GridManager.Instance.IsWalkableFor(nextCell, unitGameObject))
             {
-                if (debugMovement) GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: case {nextCell} inaccessible", this);
+                if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: case {nextCell} inaccessible", this);
                 HandlePathBlocked();
                 yield break;
             }
@@ -275,7 +355,7 @@ public class MovementController : MonoBehaviour
             if (animatorController != null)
                 animatorController.PlayWalkAnimation(currentCell, targetCell);
 
-            if (debugMovement)
+            if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
                 GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: step {currentCell} → {targetCell} via ancrage", this);
 
             yield return StartCoroutine(ExecuteStep());
@@ -284,9 +364,35 @@ public class MovementController : MonoBehaviour
             {
                 if (!finalDestination.HasValue) yield break;
                 Vector2Int dest = finalDestination.Value;
-                List<Vector2Int> retryPath = PathFinding.FindPath(currentCell, dest, unitGameObject);
+                List<Vector2Int> retryPath = null;
+                bool retryPathCompleted = false;
+
+                isInterpolating = false;
+                EntityRegistry.Instance?.SetMoving(unitGameObject, false);
+                if (!QueuePathRequest(currentCell, dest, path =>
+                    {
+                        retryPath = path;
+                        retryPathCompleted = true;
+                    }))
+                {
+                    HandlePathBlocked();
+                    yield break;
+                }
+
+                long collisionRequestId = activePathRequestId;
+                while (!retryPathCompleted)
+                {
+                    if (!isWaitingPath || activePathRequestId != collisionRequestId)
+                        yield break;
+
+                    yield return null;
+                }
+
                 if (retryPath != null && retryPath.Count > 0)
                 {
+                    isInterpolating = true;
+                    EntityRegistry.Instance?.SetMoving(unitGameObject, true);
+
                     // Reset compteur car A* propose un chemin (peut-être contournement implicite)
                     if (targetCell == lastCollisionCell)
                         consecutiveCollisions++;
@@ -302,10 +408,35 @@ public class MovementController : MonoBehaviour
                         Vector2Int? detour = FindDetourCell(targetCell);
                         if (detour.HasValue)
                         {
-                            if (debugMovement)
+                            if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
                                 GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: boucle sur {targetCell} ({consecutiveCollisions}×), détour vers {detour.Value}", this);
                             consecutiveCollisions = 0;
-                            List<Vector2Int> detourPath = PathFinding.FindPath(detour.Value, dest, unitGameObject);
+                            List<Vector2Int> detourPath = null;
+                            bool detourPathCompleted = false;
+
+                            isInterpolating = false;
+                            EntityRegistry.Instance?.SetMoving(unitGameObject, false);
+                            if (!QueuePathRequest(detour.Value, dest, path =>
+                                {
+                                    detourPath = path;
+                                    detourPathCompleted = true;
+                                }))
+                            {
+                                HandlePathBlocked();
+                                yield break;
+                            }
+
+                            long detourRequestId = activePathRequestId;
+                            while (!detourPathCompleted)
+                            {
+                                if (!isWaitingPath || activePathRequestId != detourRequestId)
+                                    yield break;
+
+                                yield return null;
+                            }
+
+                            isInterpolating = true;
+                            EntityRegistry.Instance?.SetMoving(unitGameObject, true);
                             logicalPath.Clear();
                             logicalPath.Enqueue(detour.Value);
                             if (detourPath != null)
@@ -314,7 +445,7 @@ public class MovementController : MonoBehaviour
                         }
                     }
 
-                    if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: recalcul après collision réussi vers {dest}", this);
+                    if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: recalcul après collision réussi vers {dest}", this);
                     logicalPath.Clear();
                     foreach (var c in retryPath) logicalPath.Enqueue(c);
                     continue;
@@ -326,9 +457,9 @@ public class MovementController : MonoBehaviour
                     GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
                     if (nearestEnemy != null)
                     {
-                        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bloquée + ennemi à portée → auto-attaque", this);
+                        if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bloquée + ennemi à portée → auto-attaque", this);
                         finalDestination = null;
-                        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = HandlePathBlocked/autoAttack", this);
+                        if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = HandlePathBlocked/autoAttack", this);
                         attackController.InterruptChaseAndAttack(nearestEnemy);
                         isInterpolating = false;
                         currentState = MovementState.Idle;
@@ -355,14 +486,39 @@ public class MovementController : MonoBehaviour
             {
                 Vector2Int dest = pendingDestination.Value;
                 pendingDestination = null;
-                List<Vector2Int> newPath = PathFinding.FindPath(currentCell, dest, unitGameObject);
+                List<Vector2Int> newPath = null;
+                bool pendingPathCompleted = false;
+
+                isInterpolating = false;
+                EntityRegistry.Instance?.SetMoving(unitGameObject, false);
+                if (!QueuePathRequest(currentCell, dest, path =>
+                    {
+                        newPath = path;
+                        pendingPathCompleted = true;
+                    }))
+                {
+                    HandlePathBlocked();
+                    yield break;
+                }
+
+                long pendingRequestId = activePathRequestId;
+                while (!pendingPathCompleted)
+                {
+                    if (!isWaitingPath || activePathRequestId != pendingRequestId)
+                        yield break;
+
+                    yield return null;
+                }
+
+                isInterpolating = true;
+                EntityRegistry.Instance?.SetMoving(unitGameObject, true);
                 if (newPath != null && newPath.Count > 0)
                 {
                     logicalPath.Clear();
                     foreach (var c in newPath) logicalPath.Enqueue(c);
                     finalDestination = dest;
-                    if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/pendingConsumed", this);
-                    if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pending consommé → {dest}", this);
+                    if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = {finalDestination} | caller = MoveTo/pendingConsumed", this);
+                    if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pending consommé → {dest}", this);
                 }
             }
 
@@ -445,7 +601,7 @@ public class MovementController : MonoBehaviour
             if (occupant != null && occupant != unitGameObject)
             {
                 RegisterCollision(targetCell);
-                if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: collision targetCell {targetCell} occupée par {occupant.name}, recede", this);
+                if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: collision targetCell {targetCell} occupée par {occupant.name}, recede", this);
                 yield return StartCoroutine(RecedeToCurrentCenter());
                 lastStepResult = StepResult.CollisionReturned;
                 yield break;
@@ -557,6 +713,7 @@ public class MovementController : MonoBehaviour
     // Change l'état et démarre la coroutine de retry périodique
     private void HandlePathBlocked()
     {
+        EntityRegistry.Instance?.SetMoving(unitGameObject, false);
         currentState = MovementState.Idle;
         isInterpolating = false;
         logicalPath.Clear();
@@ -587,6 +744,7 @@ public class MovementController : MonoBehaviour
     // Nettoie l'état et déclenche animations de fin
     private void OnMovementCompleted()
     {
+        EntityRegistry.Instance?.SetMoving(unitGameObject, false);
         finalDestination = null;
         if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = OnMovementCompleted", this);
         consecutiveCollisions = 0;
@@ -641,6 +799,8 @@ public class MovementController : MonoBehaviour
     // Nettoie l'état, arrête toutes les coroutines
     public void StopMovement()
     {
+        CancelPendingPathRequest();
+        EntityRegistry.Instance?.SetMoving(unitGameObject, false);
         finalDestination = null;
         if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = StopMovement", this);
         pendingDestination = null;
@@ -696,6 +856,8 @@ public class MovementController : MonoBehaviour
     // Utilisé pour freeze en place : mort, sacrifice — l'unité reste là où elle est physiquement
     public void FreezeInPlace()
     {
+        CancelPendingPathRequest();
+        EntityRegistry.Instance?.SetMoving(unitGameObject, false);
         finalDestination = null;
         if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"[FinalDest] {gameObject.name}: finalDestination = null | caller = FreezeInPlace", this);
         pendingDestination = null;
@@ -843,8 +1005,14 @@ public class MovementController : MonoBehaviour
         {
             yield return new WaitForSeconds(retryInterval);
 
-            // Cherche une case accessible autour de la destination en rayon croissant (1→2→3)
-            Vector2Int? reachableTarget = FindReachableNearDestination(destination);
+            // Conserve la destination exacte tant qu'une autre unité l'occupe
+            GameObject destinationOccupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(destination);
+            bool destinationOccupiedByUnit = destinationOccupant != null && destinationOccupant != unitGameObject;
+
+            // Une substitution voisine reste autorisée uniquement pour un blocage statique
+            Vector2Int? reachableTarget = destinationOccupiedByUnit
+                ? destination
+                : FindReachableNearDestination(destination);
             if (!reachableTarget.HasValue)
             {
                 if (debugMovement)
@@ -852,7 +1020,32 @@ public class MovementController : MonoBehaviour
                 continue;
             }
 
-            List<Vector2Int> newPath = PathFinding.FindPath(currentCell, reachableTarget.Value, unitGameObject);
+            List<Vector2Int> newPath = null;
+            bool retryPathCompleted = false;
+            if (!QueuePathRequest(currentCell, reachableTarget.Value, path =>
+                {
+                    newPath = path;
+                    retryPathCompleted = true;
+                }))
+            {
+                yield break;
+            }
+
+            long retryRequestId = activePathRequestId;
+            while (!retryPathCompleted)
+            {
+                if (!isWaitingPath || activePathRequestId != retryRequestId)
+                    yield break;
+
+                yield return null;
+            }
+
+            // Retente la destination exacte au prochain cycle sans déclencher de détour
+            if (destinationOccupiedByUnit)
+            {
+                continue;
+            }
+
             if (newPath != null && newPath.Count > 0 && IsPathAbsurd(newPath, destination))
             {
                 if (debugMovement)

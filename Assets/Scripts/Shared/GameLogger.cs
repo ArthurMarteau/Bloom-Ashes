@@ -20,6 +20,12 @@ public static class GameLogger
 
     public static Category EnabledCategories = Category.None;
 
+    // Indique si une catégorie de logs est active sans construire le message associé
+    public static bool IsEnabled(Category category)
+    {
+        return (EnabledCategories & category) != 0;
+    }
+
     [Conditional("UNITY_EDITOR")]
     [Conditional("DEVELOPMENT_BUILD")]
     public static void Log(Category category, string message, Object context = null)

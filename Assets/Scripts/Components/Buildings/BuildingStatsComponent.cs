@@ -59,7 +59,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
         if (EntityRegistry.Instance != null)
         {
-            EntityRegistry.Instance.RegisterEntity(this, gameObject);
+            EntityRegistry.Instance.RegisterEntity(this, gameObject, teamComponent);
             RegisterOccupiedTilesInRegistry();
         }
         else if (debugStats)

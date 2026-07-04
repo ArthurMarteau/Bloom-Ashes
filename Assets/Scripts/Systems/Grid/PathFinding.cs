@@ -11,6 +11,25 @@ public static class PathFinding
     private const int MOVEMENT_COST_STRAIGHT = 10;
     private const int MOVEMENT_COST_DIAGONAL = 14;
 
+    // Directions partagées entre tous les calculs pour éviter une allocation par nœud exploré
+    private static readonly Vector2Int[] directions = {
+        new Vector2Int(-1, 0),
+        new Vector2Int(1, 0),
+        new Vector2Int(0, 1),
+        new Vector2Int(0, -1),
+        new Vector2Int(-1, 1),
+        new Vector2Int(1, 1),
+        new Vector2Int(-1, -1),
+        new Vector2Int(1, -1)
+    };
+
+    // Conteneurs réutilisés : le scheduler garantit qu'un seul calcul s'exécute à la fois
+    private static readonly Stack<PathNode> nodePool = new Stack<PathNode>();
+    private static readonly List<PathNode> rentedNodes = new List<PathNode>();
+    private static readonly MinHeap<PathNode> openList = new MinHeap<PathNode>();
+    private static readonly Dictionary<Vector2Int, PathNode> openDict = new Dictionary<Vector2Int, PathNode>();
+    private static readonly HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
+
     // Structure de données représentant une case pendant le calcul A*
     // Contient les coûts et le lien vers le parent pour reconstitution du chemin
     // IComparable<PathNode> requis par MinHeap : compare par fCost, puis hCost en égalité
@@ -23,9 +42,10 @@ public static class PathFinding
         public int fCost => gCost + hCost; // Coût total pour priorisation
         public PathNode parent; // Nœud précédent pour reconstitution
 
-        public PathNode(Vector2Int pos, int seed)
+        // Réinitialise entièrement un nœud loué avant sa réutilisation
+        public void Reset(Vector2Int newPosition, int seed)
         {
-            position = pos;
+            position = newPosition;
             gCost = 0;
             hCost = 0;
             parent = null;
@@ -53,18 +73,27 @@ public static class PathFinding
     // Utilise GridManager et système de tags pour vérifier accessibilité des cases
     public static List<Vector2Int> FindPath(Vector2Int startPosition, Vector2Int endPosition, GameObject unit)
     {
-        // Valide les paramètres avant calcul
-        if (!IsValidPathRequest(startPosition, endPosition, unit))
+        try
         {
-            GameLogger.Warn(GameLogger.Category.Movement, $"Demande de chemin invalide : {startPosition} -> {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
-            return new List<Vector2Int>();
+            // Valide les paramètres avant calcul
+            if (!IsValidPathRequest(startPosition, endPosition, unit))
+            {
+                if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+                    GameLogger.Warn(GameLogger.Category.Movement, $"Demande de chemin invalide : {startPosition} -> {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
+                return new List<Vector2Int>();
+            }
+
+            // Lance le calcul A* et retourne le résultat
+            List<Vector2Int> calculatedPath = ExecuteAStar(startPosition, endPosition, unit);
+
+            if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+                GameLogger.Log(GameLogger.Category.Movement, $"Chemin calculé pour {UnitTypeHelper.GetDisplayName(unit)} : {startPosition} -> {endPosition}, {calculatedPath.Count} étapes", null);
+            return calculatedPath;
         }
-
-        // Lance le calcul A* et retourne le résultat
-        List<Vector2Int> calculatedPath = ExecuteAStar(startPosition, endPosition, unit);
-
-        GameLogger.Log(GameLogger.Category.Movement, $"Chemin calculé pour {UnitTypeHelper.GetDisplayName(unit)} : {startPosition} -> {endPosition}, {calculatedPath.Count} étapes", null);
-        return calculatedPath;
+        finally
+        {
+            ReleaseAll();
+        }
     }
 
     // Implémentation A* avec MinHeap pour extraction O(log n) du nœud optimal
@@ -74,14 +103,8 @@ public static class PathFinding
     {
         int tieBreakSeed = unit != null ? unit.GetInstanceID() : 0;
 
-        // MinHeap pour extraire le nœud de coût minimal en O(log n)
-        MinHeap<PathNode> openList = new MinHeap<PathNode>();
-        // Dictionnaire pour retrouver un nœud par position en O(1) (remplace openList.Find)
-        Dictionary<Vector2Int, PathNode> openDict = new Dictionary<Vector2Int, PathNode>();
-        HashSet<Vector2Int> closedSet = new HashSet<Vector2Int>();
-
         // Crée le nœud de départ et l'ajoute aux deux structures
-        PathNode startNode = CreateNode(startPosition, tieBreakSeed);
+        PathNode startNode = Rent(startPosition, tieBreakSeed);
         startNode.hCost = CalculateHCost(startPosition, endPosition);
         openList.Insert(startNode);
         openDict[startNode.position] = startNode;
@@ -97,30 +120,36 @@ public static class PathFinding
             // Vérifie si la destination est atteinte
             if (currentNode.position == endPosition)
             {
-                GameLogger.Log(GameLogger.Category.Movement, "Destination atteinte, reconstitution du chemin", null);
+                if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+                    GameLogger.Log(GameLogger.Category.Movement, "Destination atteinte, reconstitution du chemin", null);
                 return ReconstructPath(currentNode);
             }
 
-            // Explore tous les voisins accessibles du nœud actuel
-            List<PathNode> neighborNodes = GetNeighbors(currentNode, unit, tieBreakSeed);
-            foreach (PathNode neighborNode in neighborNodes)
+            // Explore directement les 8 voisins sans créer de liste temporaire
+            foreach (Vector2Int direction in directions)
             {
+                Vector2Int neighborPosition = currentNode.position + direction;
+
+                if (!GridManager.Instance.IsWalkableFor(neighborPosition, unit))
+                    continue;
+
                 // Ignore les nœuds déjà traités définitivement
-                if (closedSet.Contains(neighborNode.position))
+                if (closedSet.Contains(neighborPosition))
                     continue;
 
                 // Calcule le nouveau coût pour atteindre ce voisin
-                int tentativeGCost = currentNode.gCost + CalculateGCost(currentNode, neighborNode.position);
+                int tentativeGCost = currentNode.gCost + CalculateGCost(currentNode, neighborPosition);
 
                 // Cherche un nœud existant dans openDict en O(1) (remplace openList.Find O(n))
-                if (!openDict.TryGetValue(neighborNode.position, out PathNode existingNode))
+                if (!openDict.TryGetValue(neighborPosition, out PathNode existingNode))
                 {
                     // Nouveau nœud : configure et ajoute aux deux structures
+                    PathNode neighborNode = Rent(neighborPosition, tieBreakSeed);
                     neighborNode.gCost = tentativeGCost;
-                    neighborNode.hCost = CalculateHCost(neighborNode.position, endPosition);
+                    neighborNode.hCost = CalculateHCost(neighborPosition, endPosition);
                     neighborNode.parent = currentNode;
                     openList.Insert(neighborNode);
-                    openDict[neighborNode.position] = neighborNode;
+                    openDict[neighborPosition] = neighborNode;
                 }
                 else if (tentativeGCost < existingNode.gCost)
                 {
@@ -134,44 +163,9 @@ public static class PathFinding
         }
 
         // Aucun chemin trouvé après exploration complète
-        GameLogger.Warn(GameLogger.Category.Movement, $"Aucun chemin trouvé entre {startPosition} et {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
+        if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+            GameLogger.Warn(GameLogger.Category.Movement, $"Aucun chemin trouvé entre {startPosition} et {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
         return new List<Vector2Int>();
-    }
-
-    // Trouve tous les voisins accessibles dans les 8 directions
-    // Détermine les mouvements possibles depuis la position actuelle
-    // Utilise GridManager et système de tags pour vérifier l'accessibilité selon le type d'unité
-    private static List<PathNode> GetNeighbors(PathNode currentNode, GameObject unit, int seed)
-    {
-        List<PathNode> neighbors = new List<PathNode>();
-        Vector2Int currentPosition = currentNode.position;
-
-        // Définit les 8 directions possibles (4 cardinales + 4 diagonales)
-        Vector2Int[] directions = {
-            new Vector2Int(-1, 0),  // Gauche
-            new Vector2Int(1, 0),   // Droite
-            new Vector2Int(0, 1),   // Haut
-            new Vector2Int(0, -1),  // Bas
-            new Vector2Int(-1, 1),  // Haut-Gauche
-            new Vector2Int(1, 1),   // Haut-Droite
-            new Vector2Int(-1, -1), // Bas-Gauche
-            new Vector2Int(1, -1)   // Bas-Droite
-        };
-
-        // Vérifie chaque direction pour trouver les voisins accessibles
-        foreach (Vector2Int direction in directions)
-        {
-            Vector2Int neighborPosition = currentPosition + direction;
-
-            // Vérifie si la position est accessible pour cette unité via son tag
-            if (GridManager.Instance.IsWalkableFor(neighborPosition, unit))
-            {
-                PathNode neighborNode = CreateNode(neighborPosition, seed);
-                neighbors.Add(neighborNode);
-            }
-        }
-
-        return neighbors;
     }
 
     // Calcule la distance heuristique Manhattan avec support des diagonales
@@ -229,15 +223,36 @@ public static class PathFinding
         // Supprime la case de départ — l'unité y est déjà, inutile de l'inclure
         if (path.Count > 0) path.RemoveAt(0);
 
-        GameLogger.Log(GameLogger.Category.Movement, $"Chemin reconstitué : {path.Count} étapes", null);
+        if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+            GameLogger.Log(GameLogger.Category.Movement, $"Chemin reconstitué : {path.Count} étapes", null);
         return path;
     }
 
-    // Crée un nouveau nœud temporaire pour ce calcul
-    // Factory simple pour instancier des nœuds pendant l'exploration
-    private static PathNode CreateNode(Vector2Int position, int seed)
+    // Loue et réinitialise un nœud temporaire pour le calcul courant
+    private static PathNode Rent(Vector2Int position, int seed)
     {
-        return new PathNode(position, seed);
+        PathNode node = nodePool.Count > 0 ? nodePool.Pop() : new PathNode();
+        node.Reset(position, seed);
+        rentedNodes.Add(node);
+        return node;
+    }
+
+    // Rend tous les nœuds et vide les conteneurs réutilisables après chaque calcul
+    private static void ReleaseAll()
+    {
+        while (openList.Count > 0)
+            openList.ExtractMin();
+
+        openDict.Clear();
+        closedSet.Clear();
+
+        foreach (PathNode node in rentedNodes)
+        {
+            node.parent = null;
+            nodePool.Push(node);
+        }
+
+        rentedNodes.Clear();
     }
 
     // Vérifie la validité des paramètres avant de lancer le calcul
@@ -254,7 +269,8 @@ public static class PathFinding
 
         if (!UnitTypeHelper.IsValidUnit(unit))
         {
-            GameLogger.Warn(GameLogger.Category.Movement, $"GameObject {unit.name} n'a pas de tag d'unité valide : {unit.tag}", null);
+            if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+                GameLogger.Warn(GameLogger.Category.Movement, $"GameObject {unit.name} n'a pas de tag d'unité valide : {unit.tag}", null);
             return false;
         }
 
@@ -269,7 +285,8 @@ public static class PathFinding
         // Vérifie que la destination est accessible pour cette unité
         if (!GridManager.Instance.IsWalkableFor(endPosition, unit))
         {
-            GameLogger.Warn(GameLogger.Category.Movement, $"Destination {endPosition} inaccessible pour {UnitTypeHelper.GetDisplayName(unit)}", null);
+            if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+                GameLogger.Warn(GameLogger.Category.Movement, $"Destination {endPosition} inaccessible pour {UnitTypeHelper.GetDisplayName(unit)}", null);
             return false;
         }
 

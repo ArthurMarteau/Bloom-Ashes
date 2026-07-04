@@ -27,6 +27,10 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
     // Initialisé directement pour éviter NullRef si appelé avant Awake()
     private UnitStatsLogic statsLogic = new UnitStatsLogic();
     private MovementController cachedMovementController;
+    private AnimatorController cachedAnimatorController;
+    private ITeamMember cachedTeamMember;
+    private AttackController cachedAttackController;
+    private ChaseController cachedChaseController;
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -49,6 +53,10 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
 
         // Synchronise la vitesse avec MovementController
         cachedMovementController = GetComponent<MovementController>();
+        cachedAnimatorController = GetComponent<AnimatorController>();
+        cachedTeamMember = GetComponent<ITeamMember>();
+        cachedAttackController = GetComponent<AttackController>();
+        cachedChaseController = GetComponent<ChaseController>();
         if (cachedMovementController != null)
         {
             cachedMovementController.SetMovementSpeed(baseStats.moveSpeed);
@@ -57,7 +65,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
         if (EntityRegistry.Instance != null)
         {
-            EntityRegistry.Instance.RegisterEntity(this, gameObject);
+            EntityRegistry.Instance.RegisterEntity(this, gameObject, cachedTeamMember);
         }
         else if (debugStats)
         {
@@ -123,12 +131,11 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         // Joue l'animation Hit si attaquant fourni
         if (attacker != null)
         {
-            AnimatorController animatorController = GetComponent<AnimatorController>();
-            if (animatorController != null)
+            if (cachedAnimatorController != null)
             {
                 Vector2Int attackerPos = GridManager.Instance.WorldToGrid(attacker.transform.position);
                 Vector2Int victimPos = GridManager.Instance.WorldToGrid(transform.position);
-                animatorController.PlayHitAnimation(attackerPos, victimPos);
+                cachedAnimatorController.PlayHitAnimation(attackerPos, victimPos);
             }
         }
 
@@ -144,40 +151,36 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
             return;
         }
 
-        ITeamMember localTeamMember = GetComponent<ITeamMember>();
         ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
-        if (localTeamMember == null || attackerTeamMember == null || !localTeamMember.IsEnemy(attackerTeamMember))
+        if (cachedTeamMember == null || attackerTeamMember == null || !cachedTeamMember.IsEnemy(attackerTeamMember))
         {
             return;
         }
 
-        AttackController attackController = GetComponent<AttackController>();
-        if (attackController == null || !attackController.enabled)
+        if (cachedAttackController == null || !cachedAttackController.enabled)
         {
             return;
         }
 
-        if (attackController.IsAttacking())
+        if (cachedAttackController.IsAttacking())
         {
             return;
         }
 
-        if (attackController.HasManualOrder())
+        if (cachedAttackController.HasManualOrder())
         {
             return;
         }
 
-        ChaseController chaseController = GetComponent<ChaseController>();
-        bool isChasing = chaseController != null && chaseController.IsChasing();
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null &&
-            movementController.GetCurrentState() == MovementController.MovementState.Moving &&
+        bool isChasing = cachedChaseController != null && cachedChaseController.IsChasing();
+        if (cachedMovementController != null &&
+            cachedMovementController.GetCurrentState() == MovementController.MovementState.Moving &&
             !isChasing)
         {
             return;
         }
 
-        attackController.InterruptChaseAndAttack(attacker);
+        cachedAttackController.InterruptChaseAndAttack(attacker);
 
         if (debugStats)
         {
@@ -268,10 +271,9 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         }
 
         // Joue l'animation de mort
-        AnimatorController animatorController = GetComponent<AnimatorController>();
-        if (animatorController != null)
+        if (cachedAnimatorController != null)
         {
-            animatorController.PlayDeathAnimation();
+            cachedAnimatorController.PlayDeathAnimation();
         }
 
         // Détruit l'unité après l'animation
