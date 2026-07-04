@@ -30,3 +30,8 @@ MonoBehaviour:
   defaultFoundation: {fileID: 11400000, guid: 1089a95e060a71748a1b12633c8f9285, type: 2}
   abilityData: {fileID: 0}
   originFoundation: {fileID: 0}
+  onSpawnVFX: {fileID: 11400000, guid: bfbffe854c7dea0439e3d43e86c027d2, type: 2}
+  onDeathVFX: {fileID: 11400000, guid: 5ae5f3050ef50f34cbb21c21b29b44fd, type: 2}
+  deathDelay: 1
+  onHatchVFX: {fileID: 0}
+  hatchingDuration: 1

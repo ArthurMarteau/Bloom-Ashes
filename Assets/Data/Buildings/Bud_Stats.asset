@@ -25,4 +25,11 @@ MonoBehaviour:
   producibleUnits: []
   maxTier: 1
   buildingPrefab: {fileID: 0}
+  defaultFoundation: {fileID: 0}
   abilityData: {fileID: 0}
+  originFoundation: {fileID: 0}
+  onSpawnVFX: {fileID: 0}
+  onDeathVFX: {fileID: 0}
+  deathDelay: 10
+  onHatchVFX: {fileID: 11400000, guid: 0469325bcdb77214aa051e430fa78c1b, type: 2}
+  hatchingDuration: 1

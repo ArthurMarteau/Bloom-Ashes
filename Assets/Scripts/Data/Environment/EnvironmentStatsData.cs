@@ -23,4 +23,8 @@ public class EnvironmentStatsData : ScriptableObject
     [Header("Type")]
     [Tooltip("Obstacle = bloque le passage / Walkable = traversable")]
     public EnvironmentType environmentType = EnvironmentType.Obstacle;
+
+    [Header("VFX Lifecycle")]
+    [Tooltip("VFX joué au spawn de l'entité d'environnement")]
+    public VFXData onSpawnVFX;
 }

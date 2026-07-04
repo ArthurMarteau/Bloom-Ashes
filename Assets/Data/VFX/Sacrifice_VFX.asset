@@ -12,15 +12,10 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b3960d2690da7794ca22d2dc56f19981, type: 3}
   m_Name: Sacrifice_VFX
   m_EditorClassIdentifier: Assembly-CSharp::VFXData
+  soundEffect: {fileID: 0}
   particlesPrefab: {fileID: 8450520131109981464, guid: 91e89d2ce5772974193d849dcf6288d6, type: 3}
-  particlesLifetime: 1
-  useLight2D: 1
-  lightColor: {r: 1, g: 1, b: 1, a: 1}
-  lightIntensity: 1.5
-  lightInnerRadius: 0.3
-  lightOuterRadius: 1.2
-  lightPulseDuration: 0.5
   useSpriteFlash: 1
+  flashDirection: 0
   flashFadeDuration: 1
   flashFadeCurve:
     serializedVersion: 2
@@ -52,12 +47,12 @@ MonoBehaviour:
   scaleUpEndScale: 1
   scaleUpUseFlashDuration: 1
   scaleUpCustomDuration: 2
-  useWatersapFill: 0
-  watersapFillDuration: 1
-  watersapFillHoldDuration: 0.2
-  watersapFillColor: {r: 1, g: 0, b: 0, a: 1}
-  watersapFillEdgeWidth: 0.1
-  watersapFillCurve:
+  useWaveFill: 0
+  waveFillDuration: 1
+  waveFillHoldDuration: 0.2
+  waveFillColor: {r: 1, g: 0, b: 0, a: 1}
+  waveFillEdgeWidth: 0.1
+  waveFillCurve:
     serializedVersion: 2
     m_Curve:
     - serializedVersion: 3
@@ -81,4 +76,3 @@ MonoBehaviour:
     m_PreInfinity: 2
     m_PostInfinity: 2
     m_RotationOrder: 4
-  soundEffect: {fileID: 0}

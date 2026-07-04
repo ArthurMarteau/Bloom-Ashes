@@ -39,6 +39,38 @@ public class VFXPlayer : MonoBehaviour
             maxDuration = Mathf.Max(maxDuration, GetParticleSystemDuration(particles));
         }
 
+        // Sprite
+        if (data.spritePrefab != null)
+        {
+            GameObject spriteGO = Instantiate(data.spritePrefab, transform.position, Quaternion.identity, transform);
+            spriteGO.transform.localScale = data.spriteScale;
+            Animator animator = spriteGO.GetComponentInChildren<Animator>();
+
+            float clipDuration = data.spriteDuration;
+            if (animator != null)
+            {
+                yield return null;
+                AnimatorClipInfo[] clips = animator.GetCurrentAnimatorClipInfo(0);
+                float clipLength = clips.Length > 0 ? clips[0].clip.length : 3f;
+
+                if (data.spriteDuration > 0f)
+                    animator.speed = clipLength / data.spriteDuration;
+
+                clipDuration = data.spriteDuration > 0f ? data.spriteDuration : clipLength;
+            }
+
+            if (animator != null)
+            {
+                if (data.spritePlayReverse)
+                    StartCoroutine(PlayReverseManual(animator, data.spriteDuration));
+                else
+                    StartCoroutine(PlayForwardNextFrame(animator));
+            }
+
+            StartCoroutine(DestroyAfter(spriteGO, clipDuration));
+            maxDuration = Mathf.Max(maxDuration, clipDuration);
+        }
+
         // Son
         if (data.soundEffect != null)
             AudioSource.PlayClipAtPoint(data.soundEffect, transform.position);
@@ -46,6 +78,33 @@ public class VFXPlayer : MonoBehaviour
         yield return new WaitForSeconds(maxDuration);
 
         Destroy(gameObject);
+    }
+
+    private IEnumerator PlayReverseManual(Animator animator, float duration)
+    {
+        animator.speed = 0f;
+        animator.Play("Transformation", 0, 1f);
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.deltaTime;
+            float t = 1f - Mathf.Clamp01(elapsed / duration);
+            animator.Play("Transformation", 0, t);
+            yield return null;
+        }
+        animator.Play("Transformation", 0, 0f);
+    }
+
+    private IEnumerator PlayForwardNextFrame(Animator animator)
+    {
+        if (animator == null) yield break;
+        animator.Play("Transformation", 0, 0f);
+    }
+
+    private IEnumerator DestroyAfter(GameObject go, float delay)
+    {
+        yield return new WaitForSeconds(delay);
+        if (go != null) Destroy(go);
     }
 
     // Calcule la durée de vie attendue du ParticleSystem instancié

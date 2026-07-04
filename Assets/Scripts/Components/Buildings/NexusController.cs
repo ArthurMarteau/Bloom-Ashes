@@ -150,7 +150,7 @@ public class NexusController : MonoBehaviour
         else
             GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : TeamComponent manquant sur le Rootborn spawné — équipe non assignée", this);
 
-        // 🔊 Hook SFX/VFX spawn Rootborn ici
+        spawnedUnit.GetComponent<UnitStatsComponent>()?.NotifySpawned();
 
         if (debugNexus)
             GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)", this);

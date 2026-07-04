@@ -45,4 +45,36 @@ public static class UnitFreezer
         }
 
     }
+
+    public static void Unfreeze(GameObject unit, bool enableComponents, bool unfreezeAnimator)
+    {
+        if (unit == null)
+            return;
+
+        if (enableComponents)
+        {
+            MovementController movementController = unit.GetComponent<MovementController>();
+            if (movementController != null)
+                movementController.enabled = true;
+
+            AttackController attackController = unit.GetComponent<AttackController>();
+            if (attackController != null)
+                attackController.enabled = true;
+
+            ChaseController chaseController = unit.GetComponent<ChaseController>();
+            if (chaseController != null)
+                chaseController.enabled = true;
+
+            Collider2D collider = unit.GetComponent<Collider2D>();
+            if (collider != null)
+                collider.enabled = true;
+        }
+
+        if (unfreezeAnimator)
+        {
+            Animator animator = unit.GetComponent<Animator>();
+            if (animator != null)
+                animator.speed = 1f;
+        }
+    }
 }

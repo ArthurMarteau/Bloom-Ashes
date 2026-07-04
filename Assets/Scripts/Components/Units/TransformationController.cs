@@ -7,7 +7,6 @@ using UnityEngine;
 public class TransformationController : MonoBehaviour
 {
     [SerializeField] private GameObject budPrefab;
-    [SerializeField] private float transformAnimDuration = 1f;
     [SerializeField] private bool debugTransform = true;
 
     public BuildingStatsComponent FindAdjacentCompatibleBuilding()
@@ -166,14 +165,15 @@ public class TransformationController : MonoBehaviour
 
         UnitFreezer.Freeze(gameObject, disableComponents: true, freezeAnimator: false);
 
-        GetComponent<Animator>()?.Play("Idle_Transform");
+        float transformDelay = selfData?.transformDelay ?? 1f;
+        if (selfData?.onTransformVFX != null && selfData.onTransformVFX.spriteDuration > transformDelay)
+            transformDelay = selfData.onTransformVFX.spriteDuration;
 
-        bool isRootborn = GetComponent<RootbornStockComponent>() != null;
-        if (!isRootborn && VFXManager.Instance != null)
-            VFXManager.Instance.PlayUnitRevertStartVFX(gameObject);
+        if (selfData?.onTransformVFX != null)
+            VFXApplier.Apply(selfData.onTransformVFX, gameObject);
 
-        Log($"ExecuteTransform - animation Idle_Transform, attente {transformAnimDuration}s");
-        yield return new WaitForSeconds(transformAnimDuration);
+        Log($"ExecuteTransform - animation Idle_Transform, attente {transformDelay}s");
+        yield return new WaitForSeconds(transformDelay);
 
         UnitStatsComponent unitStatsComponent = GetComponent<UnitStatsComponent>();
         int currentHP = unitStatsComponent?.GetCurrentHP() ?? 0;
@@ -193,8 +193,15 @@ public class TransformationController : MonoBehaviour
         }
 
         budComponent.Initialize(unitData, selfData, currentHP, maxHP, teamID);
+        budObject.GetComponent<BuildingStatsComponent>()?.NotifySpawned();
 
         Log($"ExecuteTransform - Bud cree vers {unitData.unitName} (equipe {teamID}, cout {unitData.watersapCost}, HP herites {currentHP}/{maxHP})");
+
+        if (EntityRegistry.Instance != null && GridManager.Instance != null)
+        {
+            Vector2Int budCell = GridManager.Instance.WorldToGrid(budObject.transform.position);
+            EntityRegistry.Instance.UpdateLogicalPosition(budObject, budCell);
+        }
 
         if (EntitySpawnManager.Instance != null)
             EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, budObject);

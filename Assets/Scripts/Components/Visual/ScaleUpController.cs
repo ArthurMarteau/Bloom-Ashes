@@ -2,7 +2,7 @@ using System.Collections;
 using UnityEngine;
 
 // Anime linéairement le localScale d'un transform de startScale vers endScale sur une durée donnée
-// Component utilitaire utilisé par le VFXManager pour l'effet "pop" au spawn d'une unité
+// Component utilitaire utilisé par VFXApplier pour l'effet "pop" au spawn d'une unité
 public class ScaleUpController : MonoBehaviour
 {
     [SerializeField] private Transform targetTransform;

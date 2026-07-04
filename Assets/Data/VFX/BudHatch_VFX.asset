@@ -21,6 +21,7 @@ MonoBehaviour:
   lightOuterRadius: 1.2
   lightPulseDuration: 0.5
   useSpriteFlash: 1
+  flashDirection: 1
   flashFadeDuration: 2
   flashFadeCurve:
     serializedVersion: 2

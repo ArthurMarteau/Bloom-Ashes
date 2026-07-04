@@ -442,7 +442,7 @@ public class ActionPanelUI : MonoBehaviour
         gameObject.SetActive(true);
 
         if (showAnimationCoroutine != null)
-            StopCoroutine(showAnimationCoroutine);
+            selectionManager.StopCoroutine(showAnimationCoroutine);
 
         showAnimationCoroutine = selectionManager.StartCoroutine(AnimateShow());
     }
@@ -452,7 +452,7 @@ public class ActionPanelUI : MonoBehaviour
     {
         if (showAnimationCoroutine != null)
         {
-            StopCoroutine(showAnimationCoroutine);
+            selectionManager.StopCoroutine(showAnimationCoroutine);
             showAnimationCoroutine = null;
         }
 

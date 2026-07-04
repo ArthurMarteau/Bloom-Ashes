@@ -85,7 +85,7 @@ SpriteRenderer:
   m_SortingLayerID: 2016719739
   m_SortingLayer: 4
   m_SortingOrder: 0
-  m_Sprite: {fileID: 2071365464, guid: 2a244fa558934d84d8a046c0feae0be0, type: 3}
+  m_Sprite: {fileID: -630707200, guid: 7a26a1f7732b97b4a8d213f86fd59abf, type: 3}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
   m_FlipX: 0
   m_FlipY: 0
@@ -156,7 +156,7 @@ BoxCollider2D:
   m_SpriteTilingProperty:
     border: {x: 0, y: 0, z: 0, w: 0}
     pivot: {x: 0.5, y: 0.5}
-    oldSize: {x: 1.4628571, y: 1.4635713}
+    oldSize: {x: 1.4628571, y: 1.4628571}
     newSize: {x: 1.4628571, y: 1.4635713}
     adaptiveTilingThreshold: 0.5
     drawMode: 0
@@ -200,6 +200,9 @@ MonoBehaviour:
   OnBuildingDestroyed:
     m_PersistentCalls:
       m_Calls: []
+  OnTierUpgraded:
+    m_PersistentCalls:
+      m_Calls: []
   debugStats: 1
 --- !u!114 &-4627684200783162193
 MonoBehaviour:
@@ -213,9 +216,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: db2ebb2796511264c94935195ffffc02, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::BudComponent
-  rootbornPrefab: {fileID: 41387421219258777, guid: 3870ffdf1a989b34dbca27aa3f03c9e3, type: 3}
-  hatchingDuration: 1
-  selectionManager: {fileID: 0}
 --- !u!114 &-3111876274476813253
 MonoBehaviour:
   m_ObjectHideFlags: 0

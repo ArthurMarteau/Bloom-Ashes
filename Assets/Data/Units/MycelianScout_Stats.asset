@@ -12,6 +12,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d59665e35dd07f046b1c186845d44e83, type: 3}
   m_Name: MycelianScout_Stats
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsData
+  unitName: Unit
+  description: 
+  portrait: {fileID: 0}
   maxHP: 20
   attackDamage: 3
   attackRange: 3
@@ -19,3 +22,15 @@ MonoBehaviour:
   attackSpeed: 2
   moveSpeed: 1.2
   isRootborn: 0
+  movementType: 0
+  abilityData: {fileID: 0}
+  unitPrefab: {fileID: 0}
+  watersapCost: 0
+  buildTime: 0
+  tierRequired: 1
+  productionIcon: {fileID: 0}
+  onSpawnVFX: {fileID: 11400000, guid: bfbffe854c7dea0439e3d43e86c027d2, type: 2}
+  onTransformVFX: {fileID: 11400000, guid: 4d64b2a55f245114b8fbc7d10ad9d27f, type: 2}
+  onDeathVFX: {fileID: 0}
+  deathDelay: 2
+  transformDelay: 1

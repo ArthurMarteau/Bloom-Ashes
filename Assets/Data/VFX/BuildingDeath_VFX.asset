@@ -15,6 +15,7 @@ MonoBehaviour:
   soundEffect: {fileID: 0}
   particlesPrefab: {fileID: 0}
   useSpriteFlash: 1
+  flashDirection: 0
   flashFadeDuration: 1
   flashFadeCurve:
     serializedVersion: 2
@@ -41,7 +42,7 @@ MonoBehaviour:
     m_PostInfinity: 2
     m_RotationOrder: 4
   flashColor: {r: 0.923304, g: 0.9748427, b: 0, a: 1}
-  useScaleUp: 1
+  useScaleUp: 0
   scaleUpStartScale: 1
   scaleUpEndScale: 0.5
   scaleUpUseFlashDuration: 0

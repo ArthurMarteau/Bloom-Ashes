@@ -1,0 +1,82 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b3960d2690da7794ca22d2dc56f19981, type: 3}
+  m_Name: OnSpawnBuilding_VFX (After)
+  m_EditorClassIdentifier: Assembly-CSharp::VFXData
+  soundEffect: {fileID: 0}
+  particlesPrefab: {fileID: 0}
+  spritePrefab: {fileID: 7857895850591177013, guid: 07c58fa3bdf0caa4e8aba2d097e2b8f9, type: 3}
+  spriteDuration: 2
+  spriteScale: {x: 3.2, y: 3.2, z: 3.2}
+  spritePlayReverse: 1
+  useSpriteFlash: 0
+  flashDirection: 0
+  flashFadeDuration: 2
+  flashFadeCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  flashColor: {r: 1, g: 1, b: 1, a: 1}
+  useScaleUp: 0
+  scaleUpStartScale: 0.1
+  scaleUpEndScale: 1
+  scaleUpUseFlashDuration: 0
+  scaleUpCustomDuration: 0.5
+  useWaveFill: 0
+  waveFillDuration: 1
+  waveFillHoldDuration: 0.2
+  waveFillColor: {r: 0.2, g: 0.7, b: 1, a: 1}
+  waveFillEdgeWidth: 0.1
+  waveFillCurve:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4

@@ -1,6 +1,5 @@
 ﻿using System.Collections;
 using UnityEngine;
-using UnityEngine.Events;
 
 // Unité intermédiaire statique entre le Rootborn et l'unité de combat finale
 // Spawné par TransformationController.ExecuteTransform, remplacé par l'unité finale à la fin du buildTime
@@ -8,10 +7,6 @@ using UnityEngine.Events;
 public class BudComponent : MonoBehaviour
 {
     private const float FallbackBuildTime = 10f;
-
-    [Header("Animation")]
-    [Tooltip("Durée de l'animation Hatching avant le spawn de l'unité finale (secondes)")]
-    [SerializeField] private float hatchingDuration = 1f;
 
     // Unité en cours de production — assignée via Initialize
     private UnitStatsData unitInProduction;
@@ -28,10 +23,6 @@ public class BudComponent : MonoBehaviour
     // Vrai si Cancel() a été appelé — empêche la coroutine de continuer
     private bool isCancelled;
 
-    [Header("Events")]
-    [Tooltip("Déclenché au début de la phase Hatching (juste avant le SpawnFinalUnit)")]
-    public UnityEvent<BudComponent> OnHatchingStarted;
-
     // Retourne la progression de la production (0.0 → 1.0), clampée, pour les barres de progression UI
     public float Progress
     {
@@ -47,9 +38,6 @@ public class BudComponent : MonoBehaviour
     // Retourne le ScriptableObject de l'unité en production, pour l'affichage du portrait UI
     public UnitStatsData UnitInProduction => unitInProduction;
 
-    // Durée de l'animation Hatching — exposée pour synchronisation des VFX
-    public float HatchingDuration => hatchingDuration;
-
     // Initialise le Bud avec l'unité finale à produire, les stats à restituer si annulé, les HP hérités et l'équipe propriétaire
     public void Initialize(UnitStatsData unitData, UnitStatsData respawnStatsData, int currentHP, int maxHP, int team)
     {
@@ -61,7 +49,16 @@ public class BudComponent : MonoBehaviour
         isCancelled = false;
 
         PrepareBud(currentHP, maxHP);
+
+        TeamComponent budTeam = GetComponent<TeamComponent>();
+        if (budTeam != null)
+            budTeam.SetTeamID(team);
+
         StartCoroutine(ProductionRoutine());
+
+        BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
+        if (buildingStats != null)
+            buildingStats.OnBuildingDestroyed.AddListener(OnBudKilled);
     }
 
     // Coroutine principale : incrémente le timer frame par frame puis déclenche l'éclosion
@@ -77,17 +74,6 @@ public class BudComponent : MonoBehaviour
         }
 
         if (isCancelled) yield break;
-
-        // Déclenchement de l'animation d'éclosion si un Animator est présent
-        Animator animator = GetComponent<Animator>();
-        if (animator != null)
-            animator.Play("Hatching");
-
-        // Notifie les systèmes externes (VFX, audio, etc.) que le Hatching commence
-        // Passe la référence de ce Bud pour que les listeners puissent accéder à hatchingDuration via une méthode publique
-        OnHatchingStarted?.Invoke(this);
-
-        yield return new WaitForSeconds(hatchingDuration);
 
         if (isCancelled) yield break;
 
@@ -123,7 +109,26 @@ public class BudComponent : MonoBehaviour
         if (spawnedTeam != null)
             spawnedTeam.SetTeamID(teamID);
 
+        spawnedUnit.GetComponent<UnitStatsComponent>()?.NotifySpawned();
+
+        float freezeDuration = 0f;
+        UnitStatsComponent spawnedStats = spawnedUnit.GetComponent<UnitStatsComponent>();
+        if (spawnedStats != null)
+        {
+            UnitStatsData spawnedData = spawnedStats.GetBaseStats();
+            if (spawnedData?.onSpawnVFX != null && spawnedData.onSpawnVFX.spriteDuration > 0f)
+                freezeDuration = spawnedData.onSpawnVFX.spriteDuration;
+        }
+        if (freezeDuration > 0f)
+            StartCoroutine(FreezeFor(spawnedUnit, freezeDuration));
+
         GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})", this);
+
+        if (EntityRegistry.Instance != null && GridManager.Instance != null)
+        {
+            Vector2Int spawnedCell = GridManager.Instance.WorldToGrid(spawnedUnit.transform.position);
+            EntityRegistry.Instance.UpdateLogicalPosition(spawnedUnit, spawnedCell);
+        }
 
         // Notifie le système de remplacement AVANT destruction
         if (EntitySpawnManager.Instance != null)
@@ -168,7 +173,21 @@ public class BudComponent : MonoBehaviour
         if (stats != null)
             stats.SetCurrentHP(budCurrentHP);
 
+        stats?.NotifySpawned();
+
+        float freezeDuration = 0f;
+        if (respawnStatsData?.onSpawnVFX != null && respawnStatsData.onSpawnVFX.spriteDuration > 0f)
+            freezeDuration = respawnStatsData.onSpawnVFX.spriteDuration;
+        if (freezeDuration > 0f)
+            StartCoroutine(FreezeFor(respawned, freezeDuration));
+
         GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)", this);
+
+        if (EntityRegistry.Instance != null && GridManager.Instance != null)
+        {
+            Vector2Int respawnCell = GridManager.Instance.WorldToGrid(respawned.transform.position);
+            EntityRegistry.Instance.UpdateLogicalPosition(respawned, respawnCell);
+        }
 
         // Étape 7 : Notifie le système de remplacement
         if (EntitySpawnManager.Instance != null)
@@ -176,6 +195,22 @@ public class BudComponent : MonoBehaviour
 
         // Étape 8 : Destruction Bud
         Destroy(gameObject);
+    }
+
+    private IEnumerator FreezeFor(GameObject unit, float duration)
+    {
+        yield return null; // attendre Start() de MovementController
+        if (unit == null) yield break;
+        UnitFreezer.Freeze(unit, disableComponents: true, freezeAnimator: false);
+        yield return new WaitForSeconds(duration);
+        if (unit == null) yield break;
+        UnitFreezer.Unfreeze(unit, enableComponents: true, unfreezeAnimator: false);
+    }
+
+    private void OnBudKilled()
+    {
+        isCancelled = true;
+        StopAllCoroutines();
     }
 
     private void PrepareBud(int currentHP, int maxHP)

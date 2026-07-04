@@ -1,3 +1,4 @@
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Events;
@@ -27,6 +28,12 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
     {
         InitializeCells();
         RegisterCellListeners();
+        StartCoroutine(SynchronizeInitialRootbornsNextFrame());
+    }
+
+    private IEnumerator SynchronizeInitialRootbornsNextFrame()
+    {
+        yield return null;
         SynchronizeInitialRootborns();
     }
 
@@ -128,10 +135,30 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
             return;
         }
 
+        StartCoroutine(BuildSequence(buildingData, teamID));
+    }
+
+    private IEnumerator BuildSequence(BuildingStatsData buildingData, int teamID)
+    {
         isBuildInProgress = true;
+        OnFoundationStateChanged.RemoveAllListeners();
+
+        List<GameObject> rootbornsToDestroy = GetIdleRootborns();
+        foreach (GameObject rootborn in rootbornsToDestroy)
+        {
+            if (rootborn != null)
+                UnitFreezer.Freeze(rootborn, disableComponents: true, freezeAnimator: true);
+        }
+
+        if (foundationStats.onBuildVFX != null)
+            VFXApplier.Apply(foundationStats.onBuildVFX, gameObject);
+
+        float delay = foundationStats.buildDelay;
+        if (foundationStats.onBuildVFX != null && foundationStats.onBuildVFX.spriteDuration > delay)
+            delay = foundationStats.onBuildVFX.spriteDuration;
+        yield return new WaitForSeconds(delay);
 
         Vector3 buildPosition = transform.position;
-        List<GameObject> rootbornsToDestroy = GetIdleRootborns();
 
         foreach (GameObject rootborn in rootbornsToDestroy)
         {
@@ -149,7 +176,10 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
 
         BuildingStatsComponent buildingStats = buildingObject.GetComponent<BuildingStatsComponent>();
         if (buildingStats != null)
+        {
             buildingStats.SetOriginFoundation(foundationStats);
+            buildingStats.NotifySpawned();
+        }
 
         EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, buildingObject);
         EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);

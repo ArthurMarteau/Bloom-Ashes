@@ -109,6 +109,7 @@
     <Compile Include="Assets\Scripts\Components\Buildings\BudComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Environment\FoundationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GridManager.cs" />
+    <Compile Include="Assets\Scripts\Systems\VFX\VFXApplier.cs" />
     <Compile Include="Assets\Scripts\Systems\WatersapSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />
     <Compile Include="Assets\Scripts\Components\Units\MovementController.cs" />
@@ -126,7 +127,6 @@
     <Compile Include="Assets\Scripts\Components\Managers\PlayerManager.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\IDamageable.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ProductionSlotUI.cs" />
-    <Compile Include="Assets\Scripts\Components\Managers\VFXManager.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\CameraController.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\IAbility.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\SelectionManager.cs" />

@@ -11,6 +11,10 @@ public class FoundationStatsData : EnvironmentStatsData
     [Header("Construction")]
     [Tooltip("Bâtiments constructibles depuis cette Foundation (5 slots maximum, entrées null autorisées)")]
     public List<BuildingStatsData> constructibleBuildings = new List<BuildingStatsData>(5);
+    [Tooltip("Délai en secondes entre le clic construction et le spawn du bâtiment")]
+    public float buildDelay = 1f;
+    [Tooltip("VFX joué pendant le délai (bulbe qui se constitue)")]
+    public VFXData onBuildVFX;
 
     private void OnValidate()
     {

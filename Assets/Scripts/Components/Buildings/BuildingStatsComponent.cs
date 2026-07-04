@@ -73,6 +73,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
     {
         if (registeredBuildingCells.Count == 0)
             RegisterOccupiedTilesInRegistry();
+
     }
 
     // Désenregistre le bâtiment de l'EntityRegistry lors de la destruction
@@ -83,6 +84,13 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
             UnregisterOccupiedTilesFromRegistry();
             EntityRegistry.Instance.UnregisterEntity(gameObject);
         }
+    }
+
+    // Déclenche le VFX de spawn — appelé uniquement après un Instantiate dynamique
+    public void NotifySpawned()
+    {
+        if (baseStats?.onSpawnVFX != null)
+            VFXApplier.Apply(baseStats.onSpawnVFX, gameObject);
     }
 
     // === IDamageable ===
@@ -208,8 +216,8 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         // Retire les tiles occupées de l'index logique des bâtiments.
         UnregisterOccupiedTilesFromRegistry();
 
-        // Joue le VFX de mort si un VFXManager est présent.
-        VFXManager.Instance?.PlayBuildingDeathVFX(transform.position);
+        if (baseStats.onDeathVFX != null)
+            VFXApplier.Apply(baseStats.onDeathVFX, gameObject);
 
         // Joue l'animation Death si un Animator est présent (ex: Bud).
         Animator animator = GetComponent<Animator>();
@@ -217,7 +225,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
             animator.Play("Death");
 
         // Laisse le VFX ou l'animation de mort se jouer avant le respawn et la destruction.
-        float destroyDelay = GetComponent<BudComponent>() != null ? 10f : 1f;
+        float destroyDelay = baseStats.deathDelay;
         yield return new WaitForSeconds(destroyDelay);
 
         RespawnFoundationIfNeeded();
@@ -254,6 +262,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         Vector3 position = transform.position;
         GameObject foundation = Instantiate(foundationToSpawn.prefab, position, Quaternion.identity);
         foundation.name = foundationToSpawn.entityName;
+        foundation.GetComponent<BuildingStatsComponent>()?.NotifySpawned();
         EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, foundation);
         GameLogger.Log(GameLogger.Category.Spawn,
             $"️ {gameObject.name} : Foundation '{foundationToSpawn.name}' spawnée en {position}", this);

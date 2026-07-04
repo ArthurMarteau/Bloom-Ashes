@@ -61,6 +61,22 @@ public class BuildingStatsData : ScriptableObject
 
     [HideInInspector] public FoundationStatsData originFoundation;
 
+    [Header("VFX Lifecycle")]
+    [Tooltip("VFX joué au spawn du bâtiment")]
+    public VFXData onSpawnVFX;
+
+    [Tooltip("VFX joué au début de la séquence de mort")]
+    public VFXData onDeathVFX;
+
+    [Tooltip("Durée d'attente avant Destroy après la destruction (remplace le 1f hardcodé dans DestroySequence)")]
+    public float deathDelay = 1f;
+
+    [Tooltip("VFX joué au début de la phase Hatching du Bud (null pour les vrais bâtiments)")]
+    public VFXData onHatchVFX;
+
+    [Tooltip("Durée de l'animation Hatching avant spawn de l'unité finale (remplace hatchingDuration dans BudComponent)")]
+    public float hatchingDuration = 1f;
+
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création de l'asset
     private void OnValidate()
@@ -70,5 +86,7 @@ public class BuildingStatsData : ScriptableObject
         sizeX = Mathf.Max(1, sizeX);
         sizeY = Mathf.Max(1, sizeY);
         maxTier = Mathf.Clamp(maxTier, 1, 4);
+        deathDelay = Mathf.Max(0f, deathDelay);
+        hatchingDuration = Mathf.Max(0f, hatchingDuration);
     }
 }

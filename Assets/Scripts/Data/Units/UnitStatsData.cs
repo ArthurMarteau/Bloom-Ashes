@@ -67,6 +67,22 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("Icône affichée dans l'UI de production (peut être null si non produisible)")]
     public Sprite productionIcon = null;
 
+    [Header("VFX Lifecycle")]
+    [Tooltip("VFX joué au spawn de l'unité")]
+    public VFXData onSpawnVFX;
+
+    [Tooltip("VFX joué au début de la transformation en Bud (ignoré si isRootborn = true)")]
+    public VFXData onTransformVFX;
+
+    [Tooltip("VFX joué au début de la séquence de mort")]
+    public VFXData onDeathVFX;
+
+    [Tooltip("Durée d'attente avant Destroy après la mort (remplace le 10f hardcodé)")]
+    public float deathDelay = 2f;
+
+    [Tooltip("Durée de l'animation de transformation avant spawn du Bud")]
+    public float transformDelay = 1f;
+
     // Validation dans l'inspecteur Unity
     // Empêche des valeurs incohérentes lors de la création
     private void OnValidate()
@@ -80,5 +96,7 @@ public class UnitStatsData : ScriptableObject
         watersapCost = Mathf.Max(0, watersapCost);
         buildTime = Mathf.Max(0f, buildTime);
         tierRequired = Mathf.Clamp(tierRequired, 1, 4);
+        deathDelay = Mathf.Max(0f, deathDelay);
+        transformDelay = Mathf.Max(0f, transformDelay);
     }
 }

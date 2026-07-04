@@ -1,8 +1,8 @@
 using UnityEngine;
 
 // ScriptableObject de configuration pour un effet VFX réutilisable (particules, flash, scale up, wave fill, son)
-// Utilisé par VFXPlayer et VFXManager pour piloter les effets de manière data-driven
-[CreateAssetMenu(fileName = "New VFX", menuName = "Bloom and Ashes/VFX/VFX Data")]
+// Utilisé par VFXPlayer et VFXApplier pour piloter les effets de manière data-driven
+[CreateAssetMenu(fileName = "New VFX", menuName = "Bloom and Ashes/Data/VFX")]
 public class VFXData : ScriptableObject
 {
     [Header("Audio")]
@@ -13,9 +13,27 @@ public class VFXData : ScriptableObject
     [Tooltip("Prefab contenant un ParticleSystem à instancier au point de spawn")]
     [SerializeField] public GameObject particlesPrefab;
 
+    [Header("Sprite")]
+    [Tooltip("Prefab contenant un Animator à instancier au point de spawn")]
+    [SerializeField] public GameObject spritePrefab;
+
+    [Tooltip("Durée de vie override du sprite animé")]
+    [SerializeField] public float spriteDuration = 1f;
+
+    [Tooltip("Scale appliqué au sprite GO au spawn (Vector3.one = taille inchangée)")]
+    public Vector3 spriteScale = Vector3.one;
+
+    [Tooltip("Joue l'Animator du sprite en reverse")]
+    [SerializeField] public bool spritePlayReverse = false;
+
     [Header("Flash")]
     [Tooltip("Active l'effet de flash blanc sur le SpriteRenderer de l'entité spawnée")]
     [SerializeField] public bool useSpriteFlash = false;
+
+    public enum FlashDirection { FadeOut, FadeIn }
+
+    [Tooltip("FadeOut = flash instantané qui disparaît (1→0). FadeIn = monte progressivement (0→1).")]
+    public FlashDirection flashDirection = FlashDirection.FadeOut;
 
     [Tooltip("Durée de la décroissance du flash (1 → 0), en secondes")]
     [SerializeField] public float flashFadeDuration = 2f;
@@ -31,11 +49,11 @@ public class VFXData : ScriptableObject
     [SerializeField] public bool useScaleUp = false;
 
     [Tooltip("Scale de départ de l'unité (1 = taille normale, 0.3 = très petit)")]
-    [Range(0.05f, 1f)]
-    public float scaleUpStartScale = 0.3f;
+    [Range(0.1f, 1f)]
+    public float scaleUpStartScale = 0.1f;
 
     [Tooltip("Scale final cible (devrait rester à 1.0 sauf cas particulier)")]
-    [Range(0.5f, 2f)]
+    [Range(0.1f, 1f)]
     public float scaleUpEndScale = 1f;
 
     [Tooltip("Si true, utilise la même durée que le flash fade. Sinon, durée custom ci-dessous.")]

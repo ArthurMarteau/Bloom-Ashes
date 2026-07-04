@@ -17,6 +17,9 @@ MonoBehaviour:
   sizeX: 2
   sizeY: 2
   environmentType: 1
+  onSpawnVFX: {fileID: 0}
   prefab: {fileID: 5234916249428048870, guid: 385d05d136c7ad74a908da77b8537e51, type: 3}
   constructibleBuildings:
   - {fileID: 11400000, guid: 37bb31b95cbbebe4babd88043abc8380, type: 2}
+  buildDelay: 1
+  onBuildVFX: {fileID: 11400000, guid: 24c51ec9ca3e9494c8d0869e51db0b92, type: 2}

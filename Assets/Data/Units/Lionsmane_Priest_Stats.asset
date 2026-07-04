@@ -29,3 +29,8 @@ MonoBehaviour:
   buildTime: 5
   tierRequired: 1
   productionIcon: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
+  onSpawnVFX: {fileID: 11400000, guid: cc04436be5e81c64dbbb48f45dd960ad, type: 2}
+  onTransformVFX: {fileID: 11400000, guid: 4d64b2a55f245114b8fbc7d10ad9d27f, type: 2}
+  onDeathVFX: {fileID: 0}
+  deathDelay: 10
+  transformDelay: 1

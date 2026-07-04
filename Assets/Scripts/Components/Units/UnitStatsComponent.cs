@@ -63,6 +63,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         {
             GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ UnitStatsComponent {gameObject.name}: EntityRegistry introuvable, enregistrement ignoré", this);
         }
+
     }
 
     // Désenregistre l'unité de l'EntityRegistry lors de la destruction
@@ -72,6 +73,13 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         {
             EntityRegistry.Instance.UnregisterEntity(gameObject);
         }
+    }
+
+    // Déclenche le VFX de spawn — appelé uniquement après un Instantiate dynamique
+    public void NotifySpawned()
+    {
+        if (baseStats?.onSpawnVFX != null)
+            VFXApplier.Apply(baseStats.onSpawnVFX, gameObject);
     }
 
     // Applique des dégâts à l'unité avec formule damage - defense
@@ -235,6 +243,9 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         // Déclenche l'événement de mort
         OnDeath?.Invoke();
 
+        if (baseStats.onDeathVFX != null)
+            VFXApplier.Apply(baseStats.onDeathVFX, gameObject);
+
         // Désactive les composants de gameplay
         DisableGameplayComponents();
 
@@ -265,7 +276,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
 
         // Détruit l'unité après l'animation
         EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
-        Destroy(gameObject, 10f);
+        Destroy(gameObject, baseStats.deathDelay);
     }
 
     // Désactive tous les composants de gameplay lors de la mort
