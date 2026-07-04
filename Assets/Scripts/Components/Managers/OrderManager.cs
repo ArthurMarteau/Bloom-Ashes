@@ -57,13 +57,13 @@ public class OrderManager : MonoBehaviour
         }
 
         // Clic droit = ordre de mouvement, d'attaque ou de chase selon la cible
-        inputManager.OnRightClickDown.AddListener(HandleMovementOrder);
+        inputManager.OnRightClickDown.AddListener(HandleRightClickOrder);
     }
 
     // Traite les ordres de mouvement, chase ou attaque via clic droit
     // Reçoit la position monde depuis InputManager (Z=0 pour la grille 2D)
     // Détecte automatiquement : ennemi = attaque, allié/neutre = chase, case vide = mouvement
-    private void HandleMovementOrder(Vector3 worldPosition)
+    private void HandleRightClickOrder(Vector3 worldPosition)
     {
         // Vérifie qu'il y a des unités sélectionnées
         if (selectionManager == null || !selectionManager.HasUnitsSelected())
@@ -286,7 +286,7 @@ public class OrderManager : MonoBehaviour
     }
 
     // Gère l'ordre de mouvement simple vers une position monde
-    // Reçoit directement la position monde depuis HandleMovementOrder
+    // Reçoit directement la position monde depuis HandleRightClickOrder
     private void HandleSimpleMovementOrder(Vector3 worldPosition)
     {
         // Convertit la position monde en coordonnées de grille
@@ -389,7 +389,7 @@ public class OrderManager : MonoBehaviour
     {
         if (inputManager != null)
         {
-            inputManager.OnRightClickDown.RemoveListener(HandleMovementOrder);
+            inputManager.OnRightClickDown.RemoveListener(HandleRightClickOrder);
         }
     }
 }

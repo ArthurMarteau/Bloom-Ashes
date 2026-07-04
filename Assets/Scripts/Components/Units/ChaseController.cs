@@ -286,6 +286,27 @@ public class ChaseController : MonoBehaviour
         return isChasing;
     }
 
+    // Retourne si la chase est satisfaite par l'adjacence ou par un blocage au plus proche
+    public bool IsSatisfied()
+    {
+        if (!isChasing)
+            return true;
+
+        if (movementController == null || currentTarget == null)
+            return false;
+
+        MovementController.MovementState movementState = movementController.GetCurrentState();
+        if (movementState == MovementController.MovementState.Blocked)
+            return true;
+
+        if (movementState == MovementController.MovementState.Moving)
+            return false;
+
+        Vector2Int myPosition = movementController.GetCurrentGridPosition();
+        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        return IsAdjacentTo(myPosition, targetPosition);
+    }
+
     // Retourne la cible actuelle (peut être null)
     public GameObject GetCurrentTarget()
     {

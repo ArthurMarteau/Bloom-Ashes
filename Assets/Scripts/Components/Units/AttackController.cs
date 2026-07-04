@@ -25,9 +25,12 @@ public class AttackController : MonoBehaviour
     // État de l'attaque
     private GameObject currentTarget;
     private float lastAttackTime;      // Temps de la dernière attaque (pour cooldown)
-    private float lastCheckTime;  
+    private float lastAutoAttackCheckTime;
+    private float lastAttackLogicCheckTime;
     private bool hasManualOrder = false; // Bloque l'auto-attaque pendant un ordre manuel en cours
     private GameObject pendingChaseTarget;
+    private IDamageable pendingChaseTargetDamageable;
+    private Vector2Int lastPendingChaseTargetPos;
 
     // Références
     private MovementController movementController;
@@ -83,12 +86,20 @@ public class AttackController : MonoBehaviour
         if (currentState == AttackState.Idle || currentTarget == null)
         {
             // Si aucune attaque en cours, vérifie automatiquement les ennemis à portée
-            if (autoAttackEnabled && Time.time - lastCheckTime >= checkInterval)
+            if (autoAttackEnabled && Time.time - lastAutoAttackCheckTime >= checkInterval)
             {
-                lastCheckTime = Time.time;
+                lastAutoAttackCheckTime = Time.time;
                 CheckForAutoAttack();
             }
             return;
+        }
+
+        // La chase en attente reste prioritaire si sa cible change de case pendant l'attaque auto
+        if (Time.time - lastAutoAttackCheckTime >= checkInterval)
+        {
+            lastAutoAttackCheckTime = Time.time;
+            if (CheckPendingChaseTargetMovement())
+                return;
         }
 
         // Vérifie l'état du mouvement
@@ -124,15 +135,15 @@ public class AttackController : MonoBehaviour
                 }
                 // Force ProcessAttackLogic immédiatement sans attendre checkInterval
                 ProcessAttackLogic();
-                lastCheckTime = Time.time;
+                lastAttackLogicCheckTime = Time.time;
                 return;
             }
         }
 
         // Vérifie périodiquement l'état de la cible (fallback)
-        if (Time.time - lastCheckTime >= checkInterval)
+        if (Time.time - lastAttackLogicCheckTime >= checkInterval)
         {
-            lastCheckTime = Time.time;
+            lastAttackLogicCheckTime = Time.time;
             ProcessAttackLogic();
         }
     }
@@ -180,18 +191,10 @@ public class AttackController : MonoBehaviour
             return false;
         }
 
-        // Autorise l'auto-attaque pendant la chase : c'est un mouvement automatique interruptible
+        // Autorise l'auto-attaque uniquement quand l'approche de chase est satisfaite
         if (chaseController != null && chaseController.IsChasing())
         {
-            GameObject chaseTarget = chaseController.GetCurrentTarget();
-            if (chaseTarget == null) return true;
-
-            MovementController targetMovement = chaseTarget.GetComponent<MovementController>();
-            if (targetMovement != null && targetMovement.GetCurrentState() == MovementController.MovementState.Moving)
-            {
-                return false; // Cible chase en mouvement → on la poursuit, pas d'auto-attack
-            }
-            return true;
+            return chaseController.IsSatisfied();
         }
 
         // Vérifie MovementController
@@ -226,6 +229,42 @@ public class AttackController : MonoBehaviour
     public void SetPendingChaseTarget(GameObject target)
     {
         pendingChaseTarget = target;
+        pendingChaseTargetDamageable = null;
+
+        if (target == null)
+            return;
+
+        lastPendingChaseTargetPos = GridManager.Instance.WorldToGrid(target.transform.position);
+        pendingChaseTargetDamageable = target.GetComponent<IDamageable>();
+    }
+
+    // Surveille au tick périodique la cible de chase suspendue pendant une attaque automatique
+    // Retourne true si l'attaque a été interrompue pour reprendre la chase
+    private bool CheckPendingChaseTargetMovement()
+    {
+        if (pendingChaseTarget == null)
+        {
+            pendingChaseTarget = null;
+            pendingChaseTargetDamageable = null;
+            return false;
+        }
+
+        IDamageable damageable = pendingChaseTargetDamageable ?? pendingChaseTarget.GetComponent<IDamageable>();
+        if (damageable != null && damageable.IsDead())
+        {
+            pendingChaseTarget = null;
+            pendingChaseTargetDamageable = null;
+            return false;
+        }
+
+        pendingChaseTargetDamageable = damageable;
+        Vector2Int currentPendingTargetPos = GridManager.Instance.WorldToGrid(pendingChaseTarget.transform.position);
+        if (currentPendingTargetPos == lastPendingChaseTargetPos)
+            return false;
+
+        lastPendingChaseTargetPos = currentPendingTargetPos;
+        StopAttack();
+        return true;
     }
 
     // Interrompt une chase automatique pour attaquer une cible prioritaire
@@ -345,7 +384,7 @@ public class AttackController : MonoBehaviour
 
         currentTarget = target;
         currentState = AttackState.Approaching;  // Sera Ready dès qu'à portée via ProcessAttackLogic
-        lastCheckTime = Time.time;
+        lastAttackLogicCheckTime = Time.time;
 
         // Vide la queue de mouvement pour attaquer après la case actuelle
         // L'unité termine son interpolation en cours de manière fluide
@@ -384,6 +423,7 @@ public class AttackController : MonoBehaviour
 
         GameObject resumeTarget = pendingChaseTarget;
         pendingChaseTarget = null;
+        pendingChaseTargetDamageable = null;
 
         if (approachRetryCoroutine != null)
         {

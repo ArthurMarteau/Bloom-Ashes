@@ -65,7 +65,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         // Auto-enregistrement dans EntityRegistry (initialisé avant via [DefaultExecutionOrder(-100)])
         if (EntityRegistry.Instance != null)
         {
-            EntityRegistry.Instance.RegisterEntity(this, gameObject, cachedTeamMember);
+            EntityRegistry.Instance.RegisterEntity(this, gameObject, cachedTeamMember, cachedMovementController);
         }
         else if (debugStats)
         {
@@ -173,6 +173,11 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         }
 
         bool isChasing = cachedChaseController != null && cachedChaseController.IsChasing();
+        if (isChasing && !cachedChaseController.IsSatisfied())
+        {
+            return;
+        }
+
         if (cachedMovementController != null &&
             cachedMovementController.GetCurrentState() == MovementController.MovementState.Moving &&
             !isChasing)

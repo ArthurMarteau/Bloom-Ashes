@@ -51,10 +51,13 @@
     <Compile Include="Assets\Scripts\Components\Managers\AbilityInputHandler.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\PathFindingManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\MinHeap.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\SimulationClockManager.cs" />
+    <Compile Include="Assets\Scripts\Systems\IEvictable.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\IMultiTile.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipUI.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\UnitMovementType.cs" />
+    <Compile Include="Assets\Scripts\Systems\SimulationClock.cs" />
     <Compile Include="Assets\Scripts\Data\Systems\WatersapData.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\VFXPlayer.cs" />

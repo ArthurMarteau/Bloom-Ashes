@@ -16,6 +16,7 @@ public class EntityRegistry : MonoBehaviour
     // Dictionary pour accès O(1) à l'enregistrement/désenregistrement
     private Dictionary<GameObject, IDamageable> entities = new Dictionary<GameObject, IDamageable>();
     private Dictionary<GameObject, ITeamMember> teamMembers = new Dictionary<GameObject, ITeamMember>();
+    private Dictionary<GameObject, IEvictable> evictables = new Dictionary<GameObject, IEvictable>();
     private HashSet<GameObject> movingUnits = new HashSet<GameObject>();
 
     // Registre des positions logiques : position grille source de vérité, indépendante du Lerp visuel
@@ -26,6 +27,7 @@ public class EntityRegistry : MonoBehaviour
     // Permet à une autre unité de s'y engager sans attendre la fin du Lerp
     private Dictionary<GameObject, Vector2Int> leavingPositions = new Dictionary<GameObject, Vector2Int>();
     private Dictionary<Vector2Int, GameObject> positionToUnit = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, long> claimTicks = new Dictionary<Vector2Int, long>();
     private Dictionary<Vector2Int, HashSet<GameObject>> cellToUnits = new Dictionary<Vector2Int, HashSet<GameObject>>();
     private Dictionary<Vector2Int, GameObject> leavingPositionToUnit = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<Vector2Int, List<ICellListener>> cellListeners = new Dictionary<Vector2Int, List<ICellListener>>();
@@ -60,7 +62,7 @@ public class EntityRegistry : MonoBehaviour
 
     // Enregistre une entité IDamageable dans le registre
     // Appelé dans Awake() de UnitStatsComponent et BuildingStatsComponent
-    public void RegisterEntity(IDamageable entity, GameObject go, ITeamMember teamMember)
+    public void RegisterEntity(IDamageable entity, GameObject go, ITeamMember teamMember, IEvictable evictable)
     {
         if (go == null || entity == null)
         {
@@ -71,6 +73,7 @@ public class EntityRegistry : MonoBehaviour
         // Écrase silencieusement si déjà présent (re-activation d'objet poolé par ex.)
         entities[go] = entity;
         teamMembers[go] = teamMember;
+        evictables[go] = evictable;
 
         if (debugRegistry)
         {
@@ -86,6 +89,7 @@ public class EntityRegistry : MonoBehaviour
 
         entities.Remove(go);
         teamMembers.Remove(go);
+        evictables.Remove(go);
         movingUnits.Remove(go);
         if (logicalPositions.TryGetValue(go, out var lp))
         {
@@ -93,6 +97,7 @@ public class EntityRegistry : MonoBehaviour
             if (positionToUnit.TryGetValue(lp, out var rl) && rl == go)
             {
                 positionToUnit.Remove(lp);
+                claimTicks.Remove(lp);
                 NotifyCellLeft(lp, go);
             }
         }
@@ -119,7 +124,10 @@ public class EntityRegistry : MonoBehaviour
         {
             RemoveUnitFromCell(oldPos, go);
             if (positionToUnit.TryGetValue(oldPos, out var registered) && registered == go)
+            {
                 positionToUnit.Remove(oldPos);
+                claimTicks.Remove(oldPos);
+            }
         }
 
         logicalPositions[go] = position;
@@ -130,43 +138,57 @@ public class EntityRegistry : MonoBehaviour
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $" EntityRegistry: collision logique sur {position} entre {existing.name} et {go.name}", null);
         }
+        claimTicks.Remove(position);
         positionToUnit[position] = go;
     }
 
-    // Enregistre qu'une unité est en train de quitter une case (Lerp pas encore terminé)
-    // Tente de reserver une position de maniere atomique. Arbitre par InstanceID si conflit meme frame.
-    // Le plus petit InstanceID gagne. Retourne true si la reservation est acquise.
-    public bool TryClaimPosition(GameObject go, Vector2Int cell)
+    // Tente de réserver une cellule avec arbitrage déterministe par tick puis joueur
+    // Une unité immobile ou un occupant sans claim comparable ne peut jamais être évincé
+    public bool TryClaimPosition(GameObject go, Vector2Int cell, long orderTick, int playerID)
     {
         if (go == null) return false;
         bool hadOldPos = logicalPositions.TryGetValue(go, out var previousPosition);
         if (positionToUnit.TryGetValue(cell, out var existing) && existing != null && existing != go)
         {
-            if (go.GetInstanceID() < existing.GetInstanceID())
+            if (!IsMoving(existing) || !claimTicks.TryGetValue(cell, out long existingOrderTick))
+                return false;
+
+            int existingPlayerID = teamMembers.TryGetValue(existing, out ITeamMember existingTeamMember) && existingTeamMember != null
+                ? existingTeamMember.GetTeamID()
+                : 0;
+            bool incomingClaimWins = orderTick < existingOrderTick
+                || (orderTick == existingOrderTick && playerID < existingPlayerID);
+            if (!incomingClaimWins)
+                return false;
+
+            if (logicalPositions.TryGetValue(existing, out var existingPos) && existingPos == cell)
             {
-                if (logicalPositions.TryGetValue(existing, out var existingPos) && existingPos == cell)
-                {
-                    logicalPositions.Remove(existing);
-                    RemoveUnitFromCell(existingPos, existing);
-                    NotifyCellLeft(existingPos, existing);
-                }
-                if (logicalPositions.TryGetValue(go, out var oldPos) && oldPos != cell
-                    && positionToUnit.TryGetValue(oldPos, out var rl) && rl == go)
-                {
-                    positionToUnit.Remove(oldPos);
-                    RemoveUnitFromCell(oldPos, go);
-                }
-                logicalPositions[go] = cell;
-                AddUnitToCell(cell, go);
-                positionToUnit[cell] = go;
-                NotifyCellEntered(cell, go);
-                if (hadOldPos && previousPosition != cell)
-                    NotifyCellLeft(previousPosition, go);
-                return true;
+                logicalPositions.Remove(existing);
+                RemoveUnitFromCell(existingPos, existing);
+                NotifyCellLeft(existingPos, existing);
             }
-            return false;
+            if (logicalPositions.TryGetValue(go, out var oldPos) && oldPos != cell
+                && positionToUnit.TryGetValue(oldPos, out var rl) && rl == go)
+            {
+                positionToUnit.Remove(oldPos);
+                claimTicks.Remove(oldPos);
+                RemoveUnitFromCell(oldPos, go);
+            }
+            logicalPositions[go] = cell;
+            AddUnitToCell(cell, go);
+            positionToUnit[cell] = go;
+            claimTicks[cell] = orderTick;
+            NotifyCellEntered(cell, go);
+            if (hadOldPos && previousPosition != cell)
+                NotifyCellLeft(previousPosition, go);
+
+            if (evictables.TryGetValue(existing, out IEvictable evictable) && evictable != null)
+                evictable.OnEvicted(cell);
+
+            return true;
         }
         UpdateLogicalPosition(go, cell);
+        claimTicks[cell] = orderTick;
         NotifyCellEntered(cell, go);
         if (hadOldPos && previousPosition != cell)
             NotifyCellLeft(previousPosition, go);
@@ -221,6 +243,7 @@ public class EntityRegistry : MonoBehaviour
             if (positionToUnit.TryGetValue(lp, out var rl) && rl == go)
             {
                 positionToUnit.Remove(lp);
+                claimTicks.Remove(lp);
                 NotifyCellLeft(lp, go);
             }
         }
@@ -475,6 +498,9 @@ public class EntityRegistry : MonoBehaviour
         foreach (GameObject go in toRemove)
         {
             entities.Remove(go);
+            teamMembers.Remove(go);
+            evictables.Remove(go);
+            movingUnits.Remove(go);
         }
 
         foreach (GameObject go in logicalPositionsToRemove)
@@ -488,6 +514,7 @@ public class EntityRegistry : MonoBehaviour
         }
 
         positionToUnit.Clear();
+        claimTicks.Clear();
         cellToUnits.Clear();
         foreach (var kvp in logicalPositions)
         {
