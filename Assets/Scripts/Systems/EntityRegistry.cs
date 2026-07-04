@@ -91,22 +91,7 @@ public class EntityRegistry : MonoBehaviour
         teamMembers.Remove(go);
         evictables.Remove(go);
         movingUnits.Remove(go);
-        if (logicalPositions.TryGetValue(go, out var lp))
-        {
-            RemoveUnitFromCell(lp, go);
-            if (positionToUnit.TryGetValue(lp, out var rl) && rl == go)
-            {
-                positionToUnit.Remove(lp);
-                claimTicks.Remove(lp);
-                NotifyCellLeft(lp, go);
-            }
-        }
-        logicalPositions.Remove(go);
-        if (leavingPositions.TryGetValue(go, out var leP) && leavingPositionToUnit.TryGetValue(leP, out var reL) && reL == go)
-        {
-            leavingPositionToUnit.Remove(leP);
-        }
-        leavingPositions.Remove(go);
+        ReleasePositionInternal(go);
 
         if (debugRegistry)
         {
@@ -237,6 +222,12 @@ public class EntityRegistry : MonoBehaviour
     {
         if (go == null) return;
 
+        ReleasePositionInternal(go);
+    }
+
+    // Libère tous les index de position logique et de cellule en cours d'abandon
+    private void ReleasePositionInternal(GameObject go)
+    {
         if (logicalPositions.TryGetValue(go, out var lp))
         {
             RemoveUnitFromCell(lp, go);
@@ -409,12 +400,6 @@ public class EntityRegistry : MonoBehaviour
     }
 
     // === Utilitaires ===
-
-    // Distance Chebyshev : délègue à CombatSystem — source unique de vérité
-    private int ChebyshevDistance(Vector2Int a, Vector2Int b)
-    {
-        return CombatSystem.CalculateChebyshevDistance(a, b);
-    }
 
     // Notifie les listeners qu'une unité est entrée sur une cellule.
     private void NotifyCellEntered(Vector2Int cell, GameObject unit)

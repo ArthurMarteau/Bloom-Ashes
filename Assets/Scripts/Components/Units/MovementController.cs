@@ -359,7 +359,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         if (path != null && path.Count > 0 && IsPathAbsurd(path, targetPosition))
         {
             if (debugMovement)
-                GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({path.Count} steps / Chebyshev {Mathf.Max(Mathf.Abs(currentCell.x - targetPosition.x), Mathf.Abs(currentCell.y - targetPosition.y))}), ordre ignoré", this);
+                GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({path.Count} steps / Chebyshev {CombatSystem.CalculateChebyshevDistance(currentCell, targetPosition)}), ordre ignoré", this);
             HandleInitialPathFailure(targetPosition);
             return;
         }
@@ -1432,9 +1432,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
     {
         if (path == null || path.Count == 0) return false;
 
-        int chebyshev = Mathf.Max(
-            Mathf.Abs(currentCell.x - destination.x),
-            Mathf.Abs(currentCell.y - destination.y));
+        int chebyshev = CombatSystem.CalculateChebyshevDistance(currentCell, destination);
 
         if (chebyshev == 0) return false;
 
@@ -1465,7 +1463,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
             GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
             if (occupant != null && occupant != unitGameObject) continue;
 
-            int dist = Mathf.Max(Mathf.Abs(cell.x - target.x), Mathf.Abs(cell.y - target.y));
+            int dist = CombatSystem.CalculateChebyshevDistance(cell, target);
             if (dist < bestDistance)
             {
                 bestDistance = dist;

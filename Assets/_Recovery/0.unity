@@ -4662,6 +4662,7 @@ MonoBehaviour:
   buildingLayer:
     serializedVersion: 2
     m_Bits: 256
+  terrainMap: {fileID: 11400000, guid: ed8cd552f33b2444facad65cf33bd3b6, type: 2}
 --- !u!1 &956326251
 GameObject:
   m_ObjectHideFlags: 0

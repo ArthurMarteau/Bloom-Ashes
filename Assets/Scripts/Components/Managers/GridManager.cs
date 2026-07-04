@@ -15,7 +15,8 @@ public class GridManager : MonoBehaviour
                                                                 // Le Nexus reste sur Environment_Walkable et N'EST PAS dans ce mask
 
     [Header("Ground Type Configuration")]
-    [SerializeField] private GroundType[,] groundTypeGrid;      // Configuration terrain statique
+    [SerializeField] private TerrainMapData terrainMap;
+    private GroundType[,] groundTypeGrid;                       // Copie runtime de la configuration terrain
     private bool[,] staticBlockedGrid;
 
     // Instance singleton
@@ -23,14 +24,21 @@ public class GridManager : MonoBehaviour
 
     private void Awake()
     {
-        // Initialise l'origine de la grille
-        CalculateGridOrigin();
-
         // Configure le singleton
         if (Instance == null)
         {
             Instance = this;
-            InitializeGroundTypeGrid();
+
+            if (terrainMap != null)
+            {
+                LoadTerrainMap();
+            }
+            else
+            {
+                InitializeGroundTypeGrid();
+            }
+
+            CalculateGridOrigin();
             InitializeStaticBlockedGrid();
             GameLogger.Log(GameLogger.Category.Grid, $"Grille créée : {gridWidth}x{gridHeight}", this);
         }
@@ -52,6 +60,14 @@ public class GridManager : MonoBehaviour
     // Recalcule l'origine de la grille à chaque modification dans l'inspecteur (initialisation et édition)
     private void OnValidate()
     {
+        if (terrainMap != null)
+        {
+            gridWidth = terrainMap.Width;
+            gridHeight = terrainMap.Height;
+            CalculateGridOrigin();
+            return;
+        }
+
         CalculateGridOrigin();
 
         // Réinitialise la grille de terrain si les dimensions changent
@@ -78,6 +94,22 @@ public class GridManager : MonoBehaviour
         }
 
         GameLogger.Log(GameLogger.Category.Grid, "Grille de terrain initialisée avec terrain normal", this);
+    }
+
+    // Charge le ScriptableObject dans le tableau 2D runtime et adopte ses dimensions
+    private void LoadTerrainMap()
+    {
+        gridWidth = terrainMap.Width;
+        gridHeight = terrainMap.Height;
+        groundTypeGrid = new GroundType[gridWidth, gridHeight];
+
+        for (int x = 0; x < gridWidth; x++)
+        {
+            for (int y = 0; y < gridHeight; y++)
+            {
+                groundTypeGrid[x, y] = terrainMap.GetCell(x, y);
+            }
+        }
     }
 
     // Construit une fois la grille des obstacles et bâtiments statiques présents dans la scène

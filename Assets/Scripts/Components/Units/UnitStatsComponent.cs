@@ -17,6 +17,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
     [Header("Events")]
     // Initialisation directe pour éviter NullRef lors des AddListener
     public UnityEvent OnDamaged = new UnityEvent();    // Déclenché quand l'unité prend des dégâts
+    public UnityEvent<GameObject> OnDamagedBy = new UnityEvent<GameObject>(); // Transmet l'attaquant aux systèmes de réaction
     public UnityEvent OnHealed = new UnityEvent();     // Déclenché quand l'unité est soignée
     public UnityEvent OnDeath = new UnityEvent();      // Déclenché quand l'unité meurt
 
@@ -29,8 +30,6 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
     private MovementController cachedMovementController;
     private AnimatorController cachedAnimatorController;
     private ITeamMember cachedTeamMember;
-    private AttackController cachedAttackController;
-    private ChaseController cachedChaseController;
 
     // Initialise les HP au maximum au démarrage
     private void Awake()
@@ -55,8 +54,6 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         cachedMovementController = GetComponent<MovementController>();
         cachedAnimatorController = GetComponent<AnimatorController>();
         cachedTeamMember = GetComponent<ITeamMember>();
-        cachedAttackController = GetComponent<AttackController>();
-        cachedChaseController = GetComponent<ChaseController>();
         if (cachedMovementController != null)
         {
             cachedMovementController.SetMovementSpeed(baseStats.moveSpeed);
@@ -121,6 +118,11 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
             GameLogger.Log(GameLogger.Category.Combat, $"🔔 UnitStatsComponent {gameObject.name}: Event OnDamaged déclenché, {OnDamaged.GetPersistentEventCount()} listeners", this);
         }
 
+        if (attacker != null)
+        {
+            OnDamagedBy?.Invoke(attacker);
+        }
+
         // Vérifie si l'unité meurt
         if (statsLogic.ShouldDie(currentHP))
         {
@@ -139,58 +141,6 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
             }
         }
 
-        // Déclenche une riposte automatique si l'attaquant est une cible ennemie valide
-        if (attacker == null)
-        {
-            return;
-        }
-
-        IDamageable attackerDamageable = attacker.GetComponent<IDamageable>();
-        if (attackerDamageable == null || attackerDamageable.IsDead() || attackerDamageable.IsInvulnerable())
-        {
-            return;
-        }
-
-        ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
-        if (cachedTeamMember == null || attackerTeamMember == null || !cachedTeamMember.IsEnemy(attackerTeamMember))
-        {
-            return;
-        }
-
-        if (cachedAttackController == null || !cachedAttackController.enabled)
-        {
-            return;
-        }
-
-        if (cachedAttackController.IsAttacking())
-        {
-            return;
-        }
-
-        if (cachedAttackController.HasManualOrder())
-        {
-            return;
-        }
-
-        bool isChasing = cachedChaseController != null && cachedChaseController.IsChasing();
-        if (isChasing && !cachedChaseController.IsSatisfied())
-        {
-            return;
-        }
-
-        if (cachedMovementController != null &&
-            cachedMovementController.GetCurrentState() == MovementController.MovementState.Moving &&
-            !isChasing)
-        {
-            return;
-        }
-
-        cachedAttackController.InterruptChaseAndAttack(attacker);
-
-        if (debugStats)
-        {
-            GameLogger.Log(GameLogger.Category.Combat, $"⚔️ Riposte auto sur {attacker.name}", this);
-        }
     }
 
     // Soigne l'unité d'un certain montant

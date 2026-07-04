@@ -34,7 +34,7 @@ public static class DispatchHelper
                 for (int dy = -ring; dy <= ring; dy++)
                 {
                     // Ne garde que le bord de l'anneau (Chebyshev = ring)
-                    if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != ring) continue;
+                    if (CombatSystem.CalculateChebyshevDistance(Vector2Int.zero, new Vector2Int(dx, dy)) != ring) continue;
 
                     Vector2Int cell = center + new Vector2Int(dx, dy);
                     if (!GridManager.Instance.IsInBounds(cell)) continue;
@@ -59,7 +59,7 @@ public static class DispatchHelper
         {
             for (int dy = -range; dy <= range; dy++)
             {
-                if (Mathf.Max(Mathf.Abs(dx), Mathf.Abs(dy)) != range) continue;
+                if (CombatSystem.CalculateChebyshevDistance(Vector2Int.zero, new Vector2Int(dx, dy)) != range) continue;
 
                 Vector2Int cell = center + new Vector2Int(dx, dy);
                 if (!GridManager.Instance.IsInBounds(cell)) continue;
@@ -112,7 +112,8 @@ public static class DispatchHelper
         // Trie les cases par distance Chebyshev à la destination (spirale : centre d'abord)
         List<Vector2Int> sortedCells = new List<Vector2Int>(cells);
         sortedCells.Sort((a, b) =>
-            ChebyshevDistance(a, destination).CompareTo(ChebyshevDistance(b, destination)));
+            CombatSystem.CalculateChebyshevDistance(a, destination)
+                .CompareTo(CombatSystem.CalculateChebyshevDistance(b, destination)));
 
         HashSet<GameObject> assignedUnits = new HashSet<GameObject>();
 
@@ -133,7 +134,7 @@ public static class DispatchHelper
                     ? mc.GetCurrentGridPosition()
                     : GridManager.Instance.WorldToGrid(unit.transform.position);
 
-                int dist = ChebyshevDistance(unitPos, cell);
+                int dist = CombatSystem.CalculateChebyshevDistance(unitPos, cell);
                 if (dist < bestDist)
                 {
                     bestDist = dist;
@@ -149,10 +150,5 @@ public static class DispatchHelper
         }
 
         return assignment;
-    }
-    // Distance Chebyshev (8-direction grid)
-    private static int ChebyshevDistance(Vector2Int a, Vector2Int b)
-    {
-        return Mathf.Max(Mathf.Abs(a.x - b.x), Mathf.Abs(a.y - b.y));
     }
 }

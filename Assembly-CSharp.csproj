@@ -141,6 +141,7 @@
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionState.cs" />
     <Compile Include="Assets\Scripts\Tests\TestClick.cs" />
     <Compile Include="Assets\Scripts\Data\Abilities\SacrificeAbility.cs" />
+    <Compile Include="Assets\Scripts\Data\Environment\TerrainMapData.cs" />
     <Compile Include="Assets\Scripts\Components\UI\WatersapBarUI.cs" />
     <Compile Include="Assets\Scripts\Systems\VFX\FlashCurveSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Environment\EnvironmentStatsComponent.cs" />

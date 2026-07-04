@@ -72,6 +72,66 @@ public class AttackController : MonoBehaviour
         {
             GameLogger.Error($"AttackController sur {gameObject.name}: MovementController non trouvé !", this);
         }
+
+        if (unitStatsComponent != null)
+        {
+            unitStatsComponent.OnDamagedBy.AddListener(HandleDamagedBy);
+        }
+    }
+
+    // Retire l'abonnement de riposte lors de la destruction du contrôleur
+    private void OnDestroy()
+    {
+        if (unitStatsComponent != null)
+        {
+            unitStatsComponent.OnDamagedBy.RemoveListener(HandleDamagedBy);
+        }
+    }
+
+    // Déclenche une riposte automatique avec les mêmes gardes que l'ancien flux de UnitStatsComponent
+    private void HandleDamagedBy(GameObject attacker)
+    {
+        if (attacker == null || unitStatsComponent == null || unitStatsComponent.GetCurrentHP() <= 0)
+        {
+            return;
+        }
+
+        IDamageable attackerDamageable = attacker.GetComponent<IDamageable>();
+        if (attackerDamageable == null || attackerDamageable.IsDead() || attackerDamageable.IsInvulnerable())
+        {
+            return;
+        }
+
+        ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
+        if (teamMember == null || attackerTeamMember == null || !teamMember.IsEnemy(attackerTeamMember))
+        {
+            return;
+        }
+
+        if (!enabled || IsAttacking() || HasManualOrder())
+        {
+            return;
+        }
+
+        bool isChasing = chaseController != null && chaseController.IsChasing();
+        if (isChasing && !chaseController.IsSatisfied())
+        {
+            return;
+        }
+
+        if (movementController != null
+            && movementController.GetCurrentState() == MovementController.MovementState.Moving
+            && !isChasing)
+        {
+            return;
+        }
+
+        InterruptChaseAndAttack(attacker);
+
+        if (debugAttack)
+        {
+            GameLogger.Log(GameLogger.Category.Combat, $"⚔️ Riposte auto sur {attacker.name}", this);
+        }
     }
 
     private void Update()
@@ -317,8 +377,7 @@ public class AttackController : MonoBehaviour
 
             // Trouve le plus proche par distance Chebyshev
             Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(enemy.transform.position);
-            int distance = Mathf.Max(Mathf.Abs(myPosition.x - enemyPosition.x),
-                                     Mathf.Abs(myPosition.y - enemyPosition.y));
+            int distance = CombatSystem.CalculateChebyshevDistance(myPosition, enemyPosition);
 
             if (distance < shortestDistance)
             {
