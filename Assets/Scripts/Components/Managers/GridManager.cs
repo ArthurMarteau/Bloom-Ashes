@@ -19,6 +19,9 @@ public class GridManager : MonoBehaviour
     private GroundType[,] groundTypeGrid;                       // Copie runtime de la configuration terrain
     private bool[,] staticBlockedGrid;
 
+    [Header("Debug")]
+    [SerializeField] private Vector2Int debugCell;
+
     // Instance singleton
     public static GridManager Instance { get; private set; }
 
@@ -39,7 +42,6 @@ public class GridManager : MonoBehaviour
             }
 
             CalculateGridOrigin();
-            InitializeStaticBlockedGrid();
             GameLogger.Log(GameLogger.Category.Grid, $"Grille créée : {gridWidth}x{gridHeight}", this);
         }
         else
@@ -110,6 +112,13 @@ public class GridManager : MonoBehaviour
                 groundTypeGrid[x, y] = terrainMap.GetCell(x, y);
             }
         }
+    }
+
+    // Construit le snapshot statique après synchronisation des Transforms et colliders de la scène.
+    private void Start()
+    {
+        Physics2D.SyncTransforms();
+        InitializeStaticBlockedGrid();
     }
 
     // Construit une fois la grille des obstacles et bâtiments statiques présents dans la scène
@@ -219,6 +228,16 @@ public class GridManager : MonoBehaviour
         }
 
         staticBlockedGrid[gridPosition.x, gridPosition.y] = isBlocked;
+    }
+
+    // Retourne si le GameObject appartient à un layer qui bloque le déplacement au sol.
+    public bool IsOnBlockingLayer(GameObject target)
+    {
+        if (target == null)
+            return false;
+
+        int blockingMask = obstacleLayer.value | buildingLayer.value;
+        return (blockingMask & (1 << target.layer)) != 0;
     }
 
     // Retourne le type de terrain d'une position de grille
@@ -363,6 +382,78 @@ public class GridManager : MonoBehaviour
         GameLogger.Log(GameLogger.Category.Grid, $"(0,0) dans les limites : {IsInBounds(new Vector2Int(0, 0))}", this);
         GameLogger.Log(GameLogger.Category.Grid, $"({gridWidth - 1},{gridHeight - 1}) dans les limites : {IsInBounds(new Vector2Int(gridWidth - 1, gridHeight - 1))}", this);
         GameLogger.Log(GameLogger.Category.Grid, $"({gridWidth},{gridHeight}) dans les limites : {IsInBounds(new Vector2Int(gridWidth, gridHeight))}", this);
+    }
+
+    // Détaille chaque source de walkability pour la cellule configurée dans l'inspecteur.
+    [ContextMenu("Debug: Walkability At debugCell")]
+    private void DebugWalkabilityAtDebugCell()
+    {
+        DebugWalkabilityAt(debugCell);
+    }
+
+    // Détecte le Nexus actif, mémorise sa cellule et lance le diagnostic partagé.
+    [ContextMenu("Debug: Walkability At Nexus")]
+    private void DebugWalkabilityAtNexus()
+    {
+        NexusController nexus = FindFirstObjectByType<NexusController>();
+        if (nexus == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Grid, "Walkability Nexus : aucun NexusController actif trouvé", this);
+            return;
+        }
+
+        Vector3 nexusWorldPosition = nexus.transform.position;
+        debugCell = WorldToGrid(nexusWorldPosition);
+        GameLogger.Log(GameLogger.Category.Grid,
+            $"Walkability Nexus : position monde {nexusWorldPosition} → cellule {debugCell}", this);
+        DebugWalkabilityAt(debugCell);
+    }
+
+    // Détaille les cinq sources de walkability pour une cellule donnée.
+    private void DebugWalkabilityAt(Vector2Int cell)
+    {
+        bool isInBounds = IsInBounds(cell);
+        EntityRegistry registry = EntityRegistry.Instance;
+        GameObject occupant = registry?.GetUnitAtLogicalPosition(cell);
+        bool occupantIsMoving = occupant != null && registry != null && registry.IsMoving(occupant);
+        bool cellIsBeingLeft = registry != null && registry.IsBeingLeft(cell);
+
+        string staticBlocked = !isInBounds
+            ? "N/A (hors limites)"
+            : staticBlockedGrid == null
+                ? "N/A (grille non initialisée)"
+                : staticBlockedGrid[cell.x, cell.y].ToString();
+        string groundType = !isInBounds
+            ? "N/A (hors limites)"
+            : groundTypeGrid == null
+                ? "N/A (grille non initialisée)"
+                : groundTypeGrid[cell.x, cell.y].ToString();
+
+        Vector3 worldPosition = GridToWorld(cell);
+        Collider2D obstacleCollider = Physics2D.OverlapPoint(worldPosition, obstacleLayer);
+        Collider2D buildingCollider = Physics2D.OverlapPoint(worldPosition, buildingLayer);
+        LayerMask environmentWalkableLayer = LayerMask.GetMask("Environment_Walkable");
+        Collider2D environmentCollider = Physics2D.OverlapPoint(worldPosition, environmentWalkableLayer);
+
+        GameLogger.Log(GameLogger.Category.Grid, $"=== Walkability debug {cell} | monde {worldPosition} ===", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"[1/5] Limites : {isInBounds}", this);
+        GameLogger.Log(GameLogger.Category.Grid,
+            $"[2/5] Occupant logique : {(occupant != null ? occupant.name : "aucun")} | IsMoving={occupantIsMoving} | IsBeingLeft={cellIsBeingLeft}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"[3/5] staticBlockedGrid[{cell.x},{cell.y}] : {staticBlocked}", this);
+        GameLogger.Log(GameLogger.Category.Grid, $"[4/5] GroundType : {groundType}", this);
+        GameLogger.Log(GameLogger.Category.Grid,
+            $"[5/5] Physics2D.OverlapPoint : obstacleLayer={FormatColliderDiagnostic(obstacleCollider)} | buildingLayer={FormatColliderDiagnostic(buildingCollider)} | Environment_Walkable={FormatColliderDiagnostic(environmentCollider)}",
+            this);
+    }
+
+    // Formate le collider et son layer pour les diagnostics de walkability.
+    private string FormatColliderDiagnostic(Collider2D collider)
+    {
+        if (collider == null)
+            return "aucun";
+
+        string layerName = LayerMask.LayerToName(collider.gameObject.layer);
+        return $"{collider.gameObject.name} (layer={layerName}, id={collider.gameObject.layer})";
     }
 
     // Méthode de test pour la logique de PathFinding avec système de tags

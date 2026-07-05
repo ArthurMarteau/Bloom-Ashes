@@ -5,7 +5,7 @@ using UnityEngine;
 // Gère l'attaque persistante d'une cible ennemie
 // L'unité poursuit et attaque sa cible tant que l'ordre persiste
 // S'intègre avec MovementController pour se positionner à portée
-public class AttackController : MonoBehaviour
+public class AttackController : MonoBehaviour, ITickable
 {
     [Header("Attack Settings")]
     [SerializeField] private float checkInterval = 0.2f;       // Intervalle vérification position/état cible
@@ -24,9 +24,26 @@ public class AttackController : MonoBehaviour
 
     // État de l'attaque
     private GameObject currentTarget;
-    private float lastAttackTime;      // Temps de la dernière attaque (pour cooldown)
-    private float lastAutoAttackCheckTime;
-    private float lastAttackLogicCheckTime;
+    private int checkIntervalTicks;
+    private long lastAttackTick;
+    private long lastAutoAttackCheckTick;
+    private long lastAttackLogicCheckTick;
+    private long cooldownUntilTick;
+    private long damageAtTick;
+    private long projectileAtTick;
+    private long performingUntilTick;
+    private long approachRetryAtTick;
+    private long preAttackUntilTick;
+    private long simulationEntityID = -1;
+    private IDamageable performingTargetDamageable;
+    private IDamageable preAttackTargetDamageable;
+    private Transform performingTargetTransform;
+    private int performingDamage;
+    private float performingProjectileTravelTime;
+    private bool damagePending;
+    private bool projectilePending;
+    private bool waitingPreAttack;
+    private bool performingRangedAttack;
     private bool hasManualOrder = false; // Bloque l'auto-attaque pendant un ordre manuel en cours
     private GameObject pendingChaseTarget;
     private IDamageable pendingChaseTargetDamageable;
@@ -37,8 +54,6 @@ public class AttackController : MonoBehaviour
     private UnitStatsComponent unitStatsComponent;
     private ITeamMember teamMember;
     private GameObject unitGameObject;
-    private Coroutine damageCoroutine;
-    private Coroutine approachRetryCoroutine;
     private AnimatorController animatorController; // Cache pour AnimatorController
     private ChaseController chaseController;
     private AttackState currentState = AttackState.Idle;
@@ -47,6 +62,7 @@ public class AttackController : MonoBehaviour
     private void Awake()
     {
         unitGameObject = gameObject;
+        checkIntervalTicks = SimulationClock.SecondsToTicks(checkInterval);
         unitStatsComponent = GetComponent<UnitStatsComponent>();
         teamMember = GetComponent<ITeamMember>();
         chaseController = GetComponent<ChaseController>();
@@ -54,6 +70,10 @@ public class AttackController : MonoBehaviour
         if (unitStatsComponent == null)
         {
             GameLogger.Error($"AttackController sur {gameObject.name}: UnitStatsComponent non trouvé !", this);
+        }
+        else
+        {
+            cooldownUntilTick = SimulationClock.SecondsToTicks(unitStatsComponent.GetAttackSpeed());
         }
 
         if (teamMember == null)
@@ -79,9 +99,20 @@ public class AttackController : MonoBehaviour
         }
     }
 
+    // Enregistre le contrôleur après l'attribution de l'entityID par UnitStatsComponent.Awake
+    private void Start()
+    {
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(gameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
+    }
+
     // Retire l'abonnement de riposte lors de la destruction du contrôleur
     private void OnDestroy()
     {
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
+
         if (unitStatsComponent != null)
         {
             unitStatsComponent.OnDamagedBy.RemoveListener(HandleDamagedBy);
@@ -134,30 +165,36 @@ public class AttackController : MonoBehaviour
         }
     }
 
-    private void Update()
+    // Exécute les décisions d'attaque sur la boucle logique fixe
+    public void SimTick(long tick)
     {
+        // Termine les attaques déjà engagées même si l'attaquant vient d'être désactivé ou tué
+        UpdatePerformingAttack(tick);
+
+        if (!isActiveAndEnabled)
+            return;
+
         // Vérifie si l'unité est morte (ne doit plus rien faire)
         if (unitStatsComponent != null && unitStatsComponent.IsDead())
         {
             return;
         }
 
-
         if (currentState == AttackState.Idle || currentTarget == null)
         {
             // Si aucune attaque en cours, vérifie automatiquement les ennemis à portée
-            if (autoAttackEnabled && Time.time - lastAutoAttackCheckTime >= checkInterval)
+            if (autoAttackEnabled && tick - lastAutoAttackCheckTick >= checkIntervalTicks)
             {
-                lastAutoAttackCheckTime = Time.time;
+                lastAutoAttackCheckTick = tick;
                 CheckForAutoAttack();
             }
             return;
         }
 
         // La chase en attente reste prioritaire si sa cible change de case pendant l'attaque auto
-        if (Time.time - lastAutoAttackCheckTime >= checkInterval)
+        if (tick - lastAutoAttackCheckTick >= checkIntervalTicks)
         {
-            lastAutoAttackCheckTime = Time.time;
+            lastAutoAttackCheckTick = tick;
             if (CheckPendingChaseTargetMovement())
                 return;
         }
@@ -195,15 +232,15 @@ public class AttackController : MonoBehaviour
                 }
                 // Force ProcessAttackLogic immédiatement sans attendre checkInterval
                 ProcessAttackLogic();
-                lastAttackLogicCheckTime = Time.time;
+                lastAttackLogicCheckTick = tick;
                 return;
             }
         }
 
         // Vérifie périodiquement l'état de la cible (fallback)
-        if (Time.time - lastAttackLogicCheckTime >= checkInterval)
+        if (tick - lastAttackLogicCheckTick >= checkIntervalTicks)
         {
-            lastAttackLogicCheckTime = Time.time;
+            lastAttackLogicCheckTick = tick;
             ProcessAttackLogic();
         }
     }
@@ -294,7 +331,7 @@ public class AttackController : MonoBehaviour
         if (target == null)
             return;
 
-        lastPendingChaseTargetPos = GridManager.Instance.WorldToGrid(target.transform.position);
+        lastPendingChaseTargetPos = GetLogicalPosition(target);
         pendingChaseTargetDamageable = target.GetComponent<IDamageable>();
     }
 
@@ -318,7 +355,7 @@ public class AttackController : MonoBehaviour
         }
 
         pendingChaseTargetDamageable = damageable;
-        Vector2Int currentPendingTargetPos = GridManager.Instance.WorldToGrid(pendingChaseTarget.transform.position);
+        Vector2Int currentPendingTargetPos = GetLogicalPosition(pendingChaseTarget);
         if (currentPendingTargetPos == lastPendingChaseTargetPos)
             return false;
 
@@ -376,7 +413,7 @@ public class AttackController : MonoBehaviour
             if (damageable != null && damageable.IsInvulnerable()) continue;
 
             // Trouve le plus proche par distance Chebyshev
-            Vector2Int enemyPosition = GridManager.Instance.WorldToGrid(enemy.transform.position);
+            Vector2Int enemyPosition = GetLogicalPosition(enemy);
             int distance = CombatSystem.CalculateChebyshevDistance(myPosition, enemyPosition);
 
             if (distance < shortestDistance)
@@ -443,7 +480,7 @@ public class AttackController : MonoBehaviour
 
         currentTarget = target;
         currentState = AttackState.Approaching;  // Sera Ready dès qu'à portée via ProcessAttackLogic
-        lastAttackLogicCheckTime = Time.time;
+        lastAttackLogicCheckTick = GetCurrentTick();
 
         // Vide la queue de mouvement pour attaquer après la case actuelle
         // L'unité termine son interpolation en cours de manière fluide
@@ -467,8 +504,7 @@ public class AttackController : MonoBehaviour
             GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Début attaque de {target.name}", this);
         }
 
-        // Lance immédiatement la logique d'attaque
-        ProcessAttackLogic();
+        // La logique d'approche ou de frappe sera traitée au prochain SimTick
     }
 
     // Arrête l'attaque en cours
@@ -484,21 +520,15 @@ public class AttackController : MonoBehaviour
         pendingChaseTarget = null;
         pendingChaseTargetDamageable = null;
 
-        if (approachRetryCoroutine != null)
-        {
-            StopCoroutine(approachRetryCoroutine);
-            approachRetryCoroutine = null;
-        }
-
         currentState = AttackState.Idle;
         currentTarget = null;
-
-        // Arrête la coroutine de dégâts si active
-        if (damageCoroutine != null)
-        {
-            StopCoroutine(damageCoroutine);
-            damageCoroutine = null;
-        }
+        approachRetryAtTick = 0;
+        damagePending = false;
+        projectilePending = false;
+        waitingPreAttack = false;
+        performingTargetDamageable = null;
+        preAttackTargetDamageable = null;
+        performingTargetTransform = null;
 
         // Retourne à l'animation Idle
         if (animatorController != null)
@@ -582,13 +612,11 @@ public class AttackController : MonoBehaviour
                     }
 
                     // Lance directement l'attaque pour déclencher IdleReversed
-                    float attackSpeedR = unitStatsComponent.GetAttackSpeed();
-                    bool cooldownReadyR = Time.time - lastAttackTime >= attackSpeedR;
+                    bool cooldownReadyR = GetCurrentTick() >= cooldownUntilTick;
 
                     if (currentState != AttackState.Performing && cooldownReadyR)
                     {
                         PerformAttack();
-                        lastAttackTime = Time.time;
                     }
                     return;
                 }
@@ -596,7 +624,7 @@ public class AttackController : MonoBehaviour
 
             // Lance l'attaque si aucune attaque n'est en cours ET si le cooldown est écoulé
             float attackSpeed = unitStatsComponent.GetAttackSpeed();
-            bool cooldownReady = Time.time - lastAttackTime >= attackSpeed;
+            bool cooldownReady = GetCurrentTick() >= cooldownUntilTick;
 
             // Joue AttackIdle seulement si on n'est pas en train d'attaquer
             // et qu'aucune animation Hit n'est en cours (évite d'écraser le trigger Hit)
@@ -604,8 +632,8 @@ public class AttackController : MonoBehaviour
             {
                 if (!animatorController.IsPlayingHitAnimation())
                 {
-                    Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
-                    Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+                    Vector2Int myPosition = movementController.GetCurrentGridPosition();
+                    Vector2Int targetPosition = GetLogicalPosition(currentTarget);
                     animatorController.PlayIdleAttackAnimation(myPosition, targetPosition);
                 }
             }
@@ -613,7 +641,6 @@ public class AttackController : MonoBehaviour
             if (currentState != AttackState.Performing && cooldownReady)
             {
                 PerformAttack();
-                lastAttackTime = Time.time; // Enregistre le temps de cette attaque
 
                 if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 {
@@ -630,10 +657,10 @@ public class AttackController : MonoBehaviour
                 }
 
                 // Hors portée → annule les dégâts en cours et déplace vers la cible
-                if (damageCoroutine != null)
+                if (damagePending)
                 {
-                    StopCoroutine(damageCoroutine);
-                    damageCoroutine = null;
+                    damagePending = false;
+                    performingTargetDamageable = null;
 
                     if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
@@ -695,14 +722,15 @@ public class AttackController : MonoBehaviour
         BuildingStatsComponent buildingTarget = currentTarget.GetComponent<BuildingStatsComponent>();
         if (buildingTarget != null)
         {
-            bool inRange = CombatSystem.IsInRangeOfOccupiedTiles(myPosition, buildingTarget.GetOccupiedTiles(), attackRange);
+            bool inRange = CombatSystem.IsInRangeOfOccupiedTiles(
+                myPosition, EntityRegistry.Instance.GetBuildingOccupiedCells(currentTarget), attackRange);
             if (debugAttack && inRange)
                 GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: À portée du bâtiment multi-tiles", this);
             return inRange;
         }
 
         // Cible standard (unité 1x1)
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector2Int targetPosition = GetLogicalPosition(currentTarget);
         bool inRangeStandard = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
 
         if (debugAttack && inRangeStandard)
@@ -718,6 +746,10 @@ public class AttackController : MonoBehaviour
         if (movementController == null || currentTarget == null)
             return;
 
+        long currentTick = GetCurrentTick();
+        if (approachRetryAtTick > currentTick)
+            return;
+
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
         int attackRange = unitStatsComponent.GetAttackRange();
 
@@ -729,7 +761,7 @@ public class AttackController : MonoBehaviour
         {
             // Utilise toutes les tiles occupées pour trouver la meilleure position d'attaque
             bestPosition = CombatSystem.FindBestAttackPositionForOccupiedTiles(
-                buildingTarget.GetOccupiedTiles(),
+                EntityRegistry.Instance.GetBuildingOccupiedCells(currentTarget),
                 myPosition,
                 attackRange,
                 pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
@@ -737,14 +769,14 @@ public class AttackController : MonoBehaviour
 
             if (debugAttack)
             {
-                Vector2Int anchor = buildingTarget.GetAnchorGridPosition();
+                Vector2Int anchor = GetLogicalPosition(currentTarget);
                 GameLogger.Log(GameLogger.Category.Combat, $"🔍 MoveToRange (bâtiment): Position {myPosition}, Ancre {anchor}, Taille {buildingTarget.GetSize()}", this);
             }
         }
         else
         {
             // Cible standard (unité 1x1)
-            Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+            Vector2Int targetPosition = GetLogicalPosition(currentTarget);
 
             if (debugAttack)
             {
@@ -765,8 +797,7 @@ public class AttackController : MonoBehaviour
             if (debugAttack)
                 GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name} — retry dans 1s", this);
 
-            if (approachRetryCoroutine == null)
-                approachRetryCoroutine = StartCoroutine(RetryApproachPeriodically());
+            approachRetryAtTick = currentTick + SimulationClock.TICKS_PER_SECOND;
 
             return;
         }
@@ -778,29 +809,16 @@ public class AttackController : MonoBehaviour
             return;
         }
 
-        if (approachRetryCoroutine != null)
+        if (!movementController.MoveToInternal(bestPosition))
         {
-            StopCoroutine(approachRetryCoroutine);
-            approachRetryCoroutine = null;
+            // Un ordre joueur en attente reste prioritaire ; l'approche sera réévaluée au prochain check.
+            return;
         }
 
-        movementController.MoveTo(bestPosition);
+        approachRetryAtTick = 0;
 
         if (debugAttack)
             GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})", this);
-    }
-
-    // Relance périodiquement la logique d'approche tant que la cible reste valide, hors portée et sans position accessible
-    private IEnumerator RetryApproachPeriodically()
-    {
-        while (currentTarget != null && IsTargetValid() && !IsTargetInRange())
-        {
-            yield return new WaitForSeconds(1f);
-            if (currentTarget != null && IsTargetValid())
-                ProcessAttackLogic();
-        }
-
-        approachRetryCoroutine = null;
     }
 
     // Exécute l'attaque sur la cible
@@ -839,11 +857,16 @@ public class AttackController : MonoBehaviour
 
         // Marque qu'une attaque est en cours
         currentState = AttackState.Performing;
+        lastAttackTick = GetCurrentTick();
+        cooldownUntilTick = lastAttackTick + SimulationClock.SecondsToTicks(unitStatsComponent.GetAttackSpeed());
 
         // Gestion spéciale Rootborn : IdleReversed avant première attaque de la session
-        if (IsRootborn())
+        if (IsRootborn() && animatorController != null && !animatorController.HasPlayedIdleReversedThisSession())
         {
-            StartCoroutine(PlayRootbornPreAttackAnimation(targetDamageable));
+            waitingPreAttack = true;
+            preAttackTargetDamageable = targetDamageable;
+            preAttackUntilTick = lastAttackTick + SimulationClock.SecondsToTicks(0.5f);
+            animatorController.PlayRootbornIdleReversed(null);
         }
         else
         {
@@ -852,145 +875,126 @@ public class AttackController : MonoBehaviour
         }
     }
 
-    // Coroutine pour gérer l'animation pré-attaque du Rootborn
-    // Bloque l'attaque jusqu'à ce que IdleReversed soit terminé
-    private IEnumerator PlayRootbornPreAttackAnimation(IDamageable targetDamageable)
-    {
-        if (animatorController == null || !IsRootborn())
-        {
-            yield break;
-        }
-
-        bool animationCompleted = false;
-
-        // Lance l'animation IdleReversed avec callback
-        animatorController.PlayRootbornIdleReversed(() => {
-            animationCompleted = true;
-        });
-
-        // Attend que l'animation soit terminée
-        while (!animationCompleted)
-        {
-            yield return null;
-        }
-
-        if (debugAttack)
-        {
-            GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Animation pré-attaque Rootborn terminée", this);
-        }
-
-        // Lance l'attaque normale maintenant
-        ExecuteAttackAnimation(targetDamageable);
-    }
-
-    // Exécute l'animation d'attaque et inflige les dégâts immédiatement
+    // Exécute l'animation et programme projectile, dégâts et fin de cooldown en ticks
     private void ExecuteAttackAnimation(IDamageable targetDamageable)
     {
         if (animatorController != null && currentTarget != null)
         {
-            Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
-            Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+            Vector2Int myPosition = movementController.GetCurrentGridPosition();
+            Vector2Int targetPosition = GetLogicalPosition(currentTarget);
 
             // Joue l'animation
             animatorController.PlayAttackAnimation(myPosition, targetPosition);
         }
 
-        // Arrête la coroutine précédente si elle existe
-        if (damageCoroutine != null)
-        {
-            StopCoroutine(damageCoroutine);
-        }
-
-        // Inflige les dégâts à la fin de l'animation
-        damageCoroutine = StartCoroutine(DealDamageAtEndOfAnimation(targetDamageable));
-    }
-
-    // Inflige les dégâts à la fin de l'animation et reset le flag
-    private IEnumerator DealDamageAtEndOfAnimation(IDamageable targetDamageable)
-    {
-        // Attend la fin de l'animation d'attaque (durée fixe)
-        yield return new WaitForSeconds(0.2f);
-
-        // Calcule le temps de trajet du projectile si attaque à distance
-        float projectileTravelTime = 0f;
+        long currentTick = GetCurrentTick();
+        int animationTicks = SimulationClock.SecondsToTicks(0.2f);
         int attackRange = unitStatsComponent.GetAttackRange();
+        performingRangedAttack = attackRange > 1;
+        performingTargetDamageable = targetDamageable;
+        performingTargetTransform = currentTarget != null ? currentTarget.transform : null;
+        performingDamage = unitStatsComponent.GetAttackDamage();
+        performingProjectileTravelTime = 0f;
+        projectilePending = false;
 
-        // Si portée > 1, calcule le temps de trajet et délègue les dégâts au projectile
-        if (attackRange > 1 && currentTarget != null)
+        if (performingRangedAttack && currentTarget != null)
         {
-            // Capture les références avant tout yield (l'attaquant peut mourir pendant le vol)
-            Transform capturedTargetTransform = currentTarget.transform;
-            int capturedDamage = unitStatsComponent.GetAttackDamage();
-
-            // Calcule la distance en cases entre attaquant et cible
-            Vector2Int myPosition = GridManager.Instance.WorldToGrid(transform.position);
-            Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+            Vector2Int myPosition = movementController.GetCurrentGridPosition();
+            Vector2Int targetPosition = GetLogicalPosition(currentTarget);
             int distanceInCells = Mathf.Abs(targetPosition.x - myPosition.x) + Mathf.Abs(targetPosition.y - myPosition.y);
-
-            // Calcule le temps de trajet du projectile
-            projectileTravelTime = distanceInCells * projectileTravelTimePerCell;
+            performingProjectileTravelTime = distanceInCells * projectileTravelTimePerCell;
+            projectileAtTick = currentTick + animationTicks;
+            projectilePending = projectilePrefab != null;
 
             if (debugAttack)
             {
-                GameLogger.Log(GameLogger.Category.Combat, $"🏹 AttackController {gameObject.name}: Projectile lancé, distance {distanceInCells} cases, trajet {projectileTravelTime}s", this);
+                GameLogger.Log(GameLogger.Category.Combat, $"🏹 AttackController {gameObject.name}: Projectile programmé, distance {distanceInCells} cases, trajet {performingProjectileTravelTime}s", this);
             }
-
-            // Spawne le projectile avec payload de dégâts autonomes
-            if (projectilePrefab != null)
-            {
-                Vector3 startPos = transform.position;
-
-                GameObject projectile = Instantiate(projectilePrefab, startPos, Quaternion.identity);
-                ProjectileVisual visual = projectile.GetComponent<ProjectileVisual>();
-
-                if (visual != null)
-                {
-                    // Le projectile est autonome : suit la cible (homing) et applique les dégâts à l'impact
-                    visual.Initialize(startPos, capturedTargetTransform, projectileTravelTime, targetDamageable, unitGameObject, capturedDamage);
-                }
-            }
-
-            // Pas de yield ici : le projectile gère les dégâts de façon autonome
-            // L'attaquant peut enchaîner l'attaque suivante pendant le vol
         }
-        else if (attackRange <= 1)
+
+        int travelTicks = SimulationClock.SecondsToTicks(performingProjectileTravelTime);
+        damageAtTick = currentTick + animationTicks + travelTicks;
+        performingUntilTick = System.Math.Max(cooldownUntilTick, damageAtTick);
+        damagePending = true;
+    }
+
+    // Avance les échéances d'une attaque Performing sur le tick courant
+    private void UpdatePerformingAttack(long tick)
+    {
+        if (waitingPreAttack && tick >= preAttackUntilTick)
         {
-            // Attaque mêlée : inflige les dégâts directement via IDamageable
-            if (targetDamageable != null && !targetDamageable.IsDead() && !targetDamageable.IsInvulnerable() && IsTargetInRange())
-            {
-                int damage = unitStatsComponent.GetAttackDamage();
-                targetDamageable.TakeDamage(damage, unitGameObject);
-
-                if (debugAttack)
-                {
-                    GameLogger.Log(GameLogger.Category.Combat, $"💥 AttackController {gameObject.name}: Dégâts infligés ({damage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable", this);
-                }
-            }
+            waitingPreAttack = false;
+            IDamageable targetDamageable = preAttackTargetDamageable;
+            preAttackTargetDamageable = null;
+            if (currentState == AttackState.Performing && targetDamageable != null)
+                ExecuteAttackAnimation(targetDamageable);
         }
 
-        // Récupère attackSpeed depuis UnitStatsComponent
-        float attackSpeed = unitStatsComponent.GetAttackSpeed();
-
-        // Calcule le cooldown restant (attackSpeed - animation - projectile)
-        float totalAttackTime = AnimatorController.ATTACK_ANIMATION_DURATION + projectileTravelTime;
-        float cooldown = Mathf.Max(0f, attackSpeed - totalAttackTime);
-
-        if (debugAttack && cooldown > 0f)
+        if (projectilePending && tick >= projectileAtTick)
         {
-            GameLogger.Log(GameLogger.Category.Combat, $"⏳ AttackController {gameObject.name}: Cooldown de {cooldown}s avant prochaine attaque", this);
+            projectilePending = false;
+            SpawnVisualProjectile();
         }
 
-        // Attend le cooldown
-        yield return new WaitForSeconds(cooldown);
+        if (damagePending && tick >= damageAtTick)
+        {
+            damagePending = false;
+            ApplyScheduledDamage();
+        }
 
-        // Repasse en Ready si on est toujours en attaque, sinon laisse Idle (StopAttack a pu être appelé)
-        if (currentState == AttackState.Performing)
+        if (currentState == AttackState.Performing && !waitingPreAttack && tick >= performingUntilTick)
         {
             currentState = AttackState.Ready;
+            performingTargetDamageable = null;
+            performingTargetTransform = null;
         }
+    }
 
-        // Libère la référence
-        damageCoroutine = null;
+    // Instancie uniquement la représentation visuelle du projectile
+    private void SpawnVisualProjectile()
+    {
+        if (projectilePrefab == null || performingTargetTransform == null)
+            return;
+
+        Vector3 startPosition = transform.position;
+        GameObject projectile = Instantiate(projectilePrefab, startPosition, Quaternion.identity);
+        ProjectileVisual visual = projectile.GetComponent<ProjectileVisual>();
+        if (visual != null)
+            visual.Initialize(startPosition, performingTargetTransform, performingProjectileTravelTime, null, null, 0);
+    }
+
+    // Applique les dégâts programmés sans dépendre du temps du projectile visuel
+    private void ApplyScheduledDamage()
+    {
+        IDamageable targetDamageable = performingTargetDamageable;
+        if (targetDamageable == null || targetDamageable.IsDead())
+            return;
+
+        if (!performingRangedAttack && (targetDamageable.IsInvulnerable() || !IsTargetInRange()))
+            return;
+
+        targetDamageable.TakeDamage(performingDamage, unitGameObject);
+
+        if (debugAttack)
+        {
+            GameLogger.Log(GameLogger.Category.Combat, $"💥 AttackController {gameObject.name}: Dégâts infligés ({performingDamage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable", this);
+        }
+    }
+
+    // Retourne le tick logique courant sans dépendre de l'horloge Unity
+    private long GetCurrentTick()
+    {
+        return SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
+    }
+
+    // Retourne la position logique d'une cible sans lire sa représentation visuelle.
+    private Vector2Int GetLogicalPosition(GameObject target)
+    {
+        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(target, out Vector2Int position))
+            return position;
+
+        MovementController targetMovement = target != null ? target.GetComponent<MovementController>() : null;
+        return targetMovement != null ? targetMovement.GetCurrentGridPosition() : Vector2Int.zero;
     }
 
     // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)

@@ -1,176 +1,766 @@
-﻿using System.Collections;
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-// Composant responsable de l'exécution du mouvement individuel d'une unité
-// Architecture LOGIQUE/VISUEL séparée pour stabilité lors spam d'ordres
-// LOGIQUE = position grille (source de vérité) | VISUEL = transform.position (cosmétique)
-public class MovementController : MonoBehaviour, IEvictable, ICellListener
+// Composant responsable du mouvement logique tick-based et de sa présentation interpolée.
+public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITickable
 {
     [Header("Movement Settings")]
-    private float movementSpeed = 1f;          // Vitesse déplacement (unités Unity/seconde)
-    private float retryInterval = 2f;     // Filet de sécurité pour les blocages sans notification
-    [SerializeField] private float detourRatioThreshold = 3f; // Ratio chemin/Chebyshev au-delà duquel le chemin est considéré absurde
+    private float movementSpeed = 1f;
+    private int ticksPerCell = SimulationClock.TICKS_PER_SECOND;
+    private const int RETRY_INTERVAL_TICKS = SimulationClock.TICKS_PER_SECOND / 2;
+    [SerializeField] private float detourRatioThreshold = 3f;
+    [SerializeField] private float earlyYieldThreshold = 0.3f;
 
-    // Modifie la vitesse de déplacement de l'unité
-    // Appelé par UnitStats pour synchroniser les stats
+    [Header("Debug")]
+    [SerializeField] private bool debugMovement = true;
+
+    public enum MovementState { Idle, Moving, Blocked, Arrived }
+    public enum MoveState { Idle, WaitingPath, SteppingToAnchor, SteppingToCenter, Receding, Blocked }
+
+    private Queue<Vector2Int> logicalPath;
+    private MoveState moveState = MoveState.Idle;
+    private Vector2Int currentCell;
+    private Vector2Int previousStableCell;
+    private Vector2Int targetCell;
+    private Vector3 anchorWorldPos;
+    private int stepProgressTicks;
+    private int activeStepDurationTicks = 1;
+
+    private Vector2Int? pendingDestination;
+    private Vector2Int? orderedDestination;
+    private Vector2Int? queuedCommandDestination;
+    private bool queuedCommandStartsNewOrder;
+    private bool queuedCommandIsPlayerOrder;
+    private int consecutivePathFailures;
+    private Vector2Int lastCollisionCell;
+    private Vector2Int? recoveryDestination;
+    private readonly List<Vector2Int> watchedCells = new List<Vector2Int>(3);
+    private bool eventRepathPending;
+    private bool repathRequested;
+    private bool notificationRepathIssuedThisStep;
+    private bool intraGroupRepathIssuedThisStep;
+    private long currentOrderTick;
+    private int ownerPlayerID;
+    private long simulationEntityID = -1;
+    private long recoveryPauseUntilTick = -1;
+    private Vector2Int? recoveryPauseDestination;
+    private long retryAtTick = -1;
+    private Vector2Int? retryDestination;
+    private long preMovementUntilTick = -1;
+    private bool idleReversedCompletionPending;
+
+    private GameObject unitGameObject;
+    private AnimatorController animatorController;
+    private UnitStatsComponent statsComponent;
+    private AttackController attackController;
+    private ITeamMember teamMember;
+    private bool isFirstMoveOfSession = true;
+    private long activePathRequestId;
+    private Vector3 previousTickWorldPosition;
+    private Vector3 currentTickWorldPosition;
+    private bool visualFrozen;
+
+    public UnityEngine.Events.UnityEvent OnMovementStarted = new();
+    public UnityEngine.Events.UnityEvent OnArrived = new();
+    public UnityEngine.Events.UnityEvent<bool> OnIdleStateChanged = new();
+
+    // Expose l'état et les clés d'arbitrage sans recalcul ni accès composant pendant les ticks.
+    public bool IsMoving => GetCurrentState() == MovementState.Moving;
+    public float StepProgressRatio => stepProgressTicks / (float)activeStepDurationTicks;
+    public long CurrentOrderTick => currentOrderTick;
+    public int OwnerPlayerID => ownerPlayerID;
+
+    // Convertit la vitesse SO en durée entière orthogonale, une seule fois à la lecture.
     public void SetMovementSpeed(float newSpeed)
     {
         movementSpeed = Mathf.Max(0.1f, newSpeed);
+        ticksPerCell = Math.Max(1, (int)Math.Round(
+            SimulationClock.TICKS_PER_SECOND / (double)movementSpeed,
+            MidpointRounding.AwayFromZero));
 
         if (debugMovement)
-        {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Vitesse mise à jour -> {movementSpeed}", this);
-        }
+            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: {movementSpeed} cases/s -> {ticksPerCell} ticks/case", this);
     }
 
-    [Header("Debug")]
-    [SerializeField] private bool debugMovement = true;         // Affichage debug dans console
-
-    // Énumération des états possibles du contrôleur de mouvement
-    public enum MovementState
-    {
-        Idle,       // Unité immobile, prête à recevoir ordres
-        Moving,     // Unité en déplacement vers case suivante
-        Blocked,    // Mouvement bloqué par obstacle/unité
-        Arrived     // Destination finale atteinte
-    }
-
-    // États internes explicites du pipeline de déplacement
-    public enum MoveState
-    {
-        Idle,
-        WaitingPath,
-        SteppingToAnchor,
-        SteppingToCenter,
-        Receding,
-        Blocked
-    }
-
-    // ========== LOGIQUE (Source de vérité) ==========
-    private Queue<Vector2Int> logicalPath;        // Chemin logique à suivre
-    private MoveState moveState = MoveState.Idle;
-
-    // ========== VISUEL (Présentation uniquement) ==========
-    private Vector2Int currentCell;               // Cellule logique validée (= dernier centre atteint)
-    private Vector2Int previousStableCell;        // Cellule stable précédant le dernier commit réussi
-    private Vector2Int targetCell;                // Cellule visée par step en cours
-    private Vector3 anchorWorldPos;               // Ancrage géométrique cible/franchi
-    private const float ANCHOR_EPSILON = 0.05f;
-    private const float CENTER_EPSILON = 0.05f;
-
-    // ========== ÉTAT ==========
-    private Vector2Int? pendingDestination = null; // Ordre à consommer au prochain point stable ou après IdleReversed
-    private Vector2Int? orderedDestination = null; // Destination persistante de l'ordre courant
-    private int consecutivePathFailures;       // Échecs consécutifs de rejointe de la destination ordonnée
-    private Vector2Int lastCollisionCell;      // Dernière case ayant causé une collision
-    private Vector2Int? recoveryDestination;   // Destination ordonnée conservée pendant le détour local
-    private readonly List<Vector2Int> watchedCells = new List<Vector2Int>(3);
-    private bool repathRequested;
-    private bool notificationRepathIssuedThisStep;
-    private long currentOrderTick;
-    private int ownerPlayerID;
-
-    // Déclenché quand l'unité commence à se déplacer (premier step du chemin)
-    public UnityEngine.Events.UnityEvent OnMovementStarted = new();
-
-    // Déclenché quand l'unité atteint sa destination finale avec succès
-    public UnityEngine.Events.UnityEvent OnArrived = new();
-
-    // Déclenché quand l'unité entre ou sort de l'état Idle logique
-    public UnityEngine.Events.UnityEvent<bool> OnIdleStateChanged = new();
-
-    // Vrai si l'unité est actuellement en mouvement
-    public bool IsMoving => GetCurrentState() == MovementState.Moving;
-
-    // Références cached pour performance
-    private GameObject unitGameObject;
-    private AnimatorController animatorController;
-    private UnitStatsComponent _statsComponent; // Cache pour IsRootborn() via SO
-    private AttackController attackController;
-    private ITeamMember teamMember;
-
-    // Variables de contrôle temporel
-    private Coroutine interpolationCoroutine;
-    private Coroutine retryCoroutine;
-    private bool isFirstMoveOfSession = true; // Reset quand mouvement s'arrête
-    private long activePathRequestId = 0;
-
+    // Initialise les références et la cellule de spawn avant l'entrée dans la simulation.
     private void Start()
     {
         unitGameObject = gameObject;
         logicalPath = new Queue<Vector2Int>();
-
-        // Initialise position logique depuis position monde (avec vérification)
-        if (GridManager.Instance != null)
-        {
-            currentCell = GridManager.Instance.WorldToGrid(transform.position);
-            previousStableCell = currentCell;
-            EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, currentCell);
-        }
-        else
-        {
-            GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: GridManager.Instance est null dans Awake(), position logique sera initialisée plus tard", this);
-        }
-
-        // Cache la référence AnimatorController
         animatorController = GetComponent<AnimatorController>();
-        if (animatorController == null)
-        {
-            GameLogger.Warn(GameLogger.Category.Movement, $"MovementController sur {gameObject.name}: AnimatorController non trouvé!", this);
-        }
-
-        _statsComponent = GetComponent<UnitStatsComponent>();
+        statsComponent = GetComponent<UnitStatsComponent>();
         attackController = GetComponent<AttackController>();
         teamMember = GetComponent<ITeamMember>();
         ownerPlayerID = teamMember != null ? teamMember.GetTeamID() : 0;
+
+        if (GridManager.Instance != null)
+        {
+            // Bootstrap Unity unique : aucune décision de simulation ne relit ensuite le Transform.
+            Vector3 spawnWorldPosition = transform.position;
+            currentCell = GridManager.Instance.WorldToGrid(spawnWorldPosition);
+            previousStableCell = currentCell;
+            EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
+            previousTickWorldPosition = GridManager.Instance.GridToWorld(currentCell);
+            currentTickWorldPosition = previousTickWorldPosition;
+            transform.position = currentTickWorldPosition;
+        }
+
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(unitGameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
     }
 
-    // Annule la requête en attente si l'unité est détruite avant son callback
+    // Retire le contrôleur de tous les systèmes partagés.
     private void OnDestroy()
     {
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
         CancelPendingPathRequest();
         ClearCellSubscriptions();
         EntityRegistry.Instance?.ClearLeaving(unitGameObject);
+        EntityRegistry.Instance?.ClearIncoming(unitGameObject);
     }
 
-    // Centralise toutes les transitions et synchronise l'état de mouvement du registre
+    // Interpole les deux poses logiques encadrant le tick sans prendre de décision.
+    private void LateUpdate()
+    {
+        if (visualFrozen || GridManager.Instance == null)
+            return;
+
+        float alpha = SimulationClockManager.Instance != null
+            ? SimulationClockManager.Instance.InterpolationAlpha
+            : 1f;
+        transform.position = Vector3.Lerp(previousTickWorldPosition, currentTickWorldPosition, alpha);
+    }
+
+    // Exécute toutes les décisions de mouvement au tick logique.
+    public void SimTick(long tick)
+    {
+        if (!isActiveAndEnabled || GridManager.Instance == null)
+            return;
+
+        previousTickWorldPosition = currentTickWorldPosition;
+
+        if (queuedCommandDestination.HasValue)
+        {
+            Vector2Int destination = queuedCommandDestination.Value;
+            bool startsNewOrder = queuedCommandStartsNewOrder;
+            queuedCommandDestination = null;
+            queuedCommandIsPlayerOrder = false;
+            RequestMove(destination, startsNewOrder, tick);
+        }
+
+        if (eventRepathPending)
+        {
+            eventRepathPending = false;
+            ProcessEventRepath(tick);
+        }
+
+        if (preMovementUntilTick >= 0 && tick >= preMovementUntilTick)
+        {
+            preMovementUntilTick = -1;
+            if (pendingDestination.HasValue)
+            {
+                Vector2Int destination = pendingDestination.Value;
+                pendingDestination = null;
+                RequestMove(destination, false, tick);
+            }
+            else
+            {
+                BeginNextStep(tick);
+            }
+        }
+
+        if (idleReversedCompletionPending)
+        {
+            idleReversedCompletionPending = false;
+            if (preMovementUntilTick < 0 && pendingDestination.HasValue)
+            {
+                Vector2Int destination = pendingDestination.Value;
+                pendingDestination = null;
+                RequestMove(destination, false, tick);
+            }
+        }
+
+        if (recoveryPauseDestination.HasValue && tick >= recoveryPauseUntilTick)
+        {
+            Vector2Int destination = recoveryPauseDestination.Value;
+            CancelRecoveryPause();
+            if (moveState == MoveState.Blocked && orderedDestination == destination)
+            {
+                consecutivePathFailures = 0;
+                RequestMove(destination, false, tick);
+            }
+        }
+
+        if (retryDestination.HasValue && tick >= retryAtTick)
+        {
+            Vector2Int destination = retryDestination.Value;
+            CancelRetry();
+            if (moveState == MoveState.Blocked && orderedDestination == destination)
+                QueueRetryPath(destination);
+        }
+
+        if (moveState == MoveState.SteppingToAnchor || moveState == MoveState.SteppingToCenter)
+            AdvanceStep(tick);
+        else if (moveState == MoveState.Receding)
+            AdvanceRecede(tick);
+
+        currentTickWorldPosition = EvaluateLogicalWorldPosition();
+    }
+
+    // Met en file un ordre public afin que sa consommation ait lieu au SimTick.
+    public bool MoveTo(Vector2Int targetPosition)
+    {
+        if (GridManager.Instance == null || !GridManager.Instance.IsInBounds(targetPosition))
+            return false;
+
+        visualFrozen = false;
+        queuedCommandDestination = targetPosition;
+        queuedCommandStartsNewOrder = true;
+        queuedCommandIsPlayerOrder = true;
+        return true;
+    }
+
+    // Met en file un ordre système sans pouvoir écraser un ordre joueur encore non consommé.
+    public bool MoveToInternal(Vector2Int targetPosition)
+    {
+        if (GridManager.Instance == null || !GridManager.Instance.IsInBounds(targetPosition))
+            return false;
+
+        if (queuedCommandDestination.HasValue && queuedCommandIsPlayerOrder)
+            return false;
+
+        visualFrozen = false;
+        queuedCommandDestination = targetPosition;
+        queuedCommandStartsNewOrder = true;
+        queuedCommandIsPlayerOrder = false;
+        return true;
+    }
+
+    // Traite un ordre au tick courant et choisit son point de départ stable.
+    private bool RequestMove(Vector2Int targetPosition, bool startsNewOrder, long tick)
+    {
+        CancelRecoveryPause();
+        CancelRetry();
+
+        if (!GridManager.Instance.IsInBounds(targetPosition))
+            return false;
+
+        if (startsNewOrder)
+        {
+            currentOrderTick = tick;
+            consecutivePathFailures = 0;
+            recoveryDestination = null;
+            repathRequested = false;
+            notificationRepathIssuedThisStep = false;
+            intraGroupRepathIssuedThisStep = false;
+            ClearCellSubscriptions();
+        }
+
+        CancelPendingPathRequest();
+        orderedDestination = targetPosition;
+
+        if (!IsReadyForMovement())
+        {
+            pendingDestination = targetPosition;
+            return true;
+        }
+
+        if (moveState == MoveState.Receding)
+        {
+            pendingDestination = targetPosition;
+            return true;
+        }
+
+        if (moveState == MoveState.SteppingToAnchor)
+        {
+            Vector2Int requestStartCell = currentCell;
+            return QueuePathRequest(requestStartCell, targetPosition,
+                path => HandleBifurcationPathResult(path, requestStartCell, targetPosition));
+        }
+
+        if (moveState == MoveState.SteppingToCenter)
+        {
+            pendingDestination = targetPosition;
+            if (targetPosition == currentCell)
+                logicalPath.Clear();
+            return true;
+        }
+
+        pendingDestination = null;
+        Vector2Int initialStartCell = currentCell;
+        return QueuePathRequest(initialStartCell, targetPosition,
+            path => HandleInitialPathResult(path, initialStartCell, targetPosition), true);
+    }
+
+    // Applique un chemin initial calculé dans le budget du tick.
+    private void HandleInitialPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int destination)
+    {
+        if (currentCell != requestStartCell)
+        {
+            if (!queuedCommandDestination.HasValue || !queuedCommandIsPlayerOrder)
+            {
+                queuedCommandDestination = destination;
+                queuedCommandStartsNewOrder = false;
+                queuedCommandIsPlayerOrder = false;
+            }
+            return;
+        }
+
+        if (path == null || path.Count == 0 || IsPathAbsurd(path, destination))
+        {
+            HandleInitialPathFailure(destination);
+            return;
+        }
+
+        LoadPath(path);
+        OnIdleStateChanged.Invoke(false);
+        OnMovementStarted.Invoke();
+        BeginNextStep(SimulationClockManager.Instance?.CurrentTick ?? 0);
+    }
+
+    // Applique une bifurcation tant que l'ancrage n'a pas été franchi.
+    private void HandleBifurcationPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int destination)
+    {
+        if (moveState != MoveState.SteppingToAnchor || currentCell != requestStartCell)
+        {
+            pendingDestination = destination;
+            return;
+        }
+
+        if (path == null || path.Count == 0 || IsPathAbsurd(path, destination))
+        {
+            RegisterPathFailure(destination);
+            pendingDestination = destination;
+            return;
+        }
+
+        Vector2Int firstCell = path[0];
+        Vector2Int currentDirection = GetDirection(currentCell, targetCell);
+        Vector2Int newDirection = GetDirection(currentCell, firstCell);
+        if (firstCell == targetCell && newDirection == currentDirection)
+        {
+            // Le premier step reste identique : seule la suite du chemin est remplacée.
+            LoadPath(path);
+            logicalPath.Dequeue();
+            RefreshWatchedCells(true);
+            return;
+        }
+
+        // Toute autre bifurcation revient au centre sur la géométrie actuelle avant de re-path.
+        pendingDestination = destination;
+        StartRecede();
+    }
+
+    // Charge une liste de cellules dans la queue stable.
+    private void LoadPath(List<Vector2Int> path)
+    {
+        logicalPath.Clear();
+        foreach (Vector2Int cell in path)
+            logicalPath.Enqueue(cell);
+        RefreshWatchedCells();
+    }
+
+    // Démarre le prochain step ou termine le mouvement.
+    private void BeginNextStep(long tick)
+    {
+        if (logicalPath.Count == 0)
+        {
+            OnMovementCompleted();
+            return;
+        }
+
+        if (IsRootborn() && isFirstMoveOfSession)
+        {
+            isFirstMoveOfSession = false;
+            preMovementUntilTick = tick + SimulationClock.SecondsToTicks(0.5f);
+            SetState(MoveState.WaitingPath);
+            animatorController?.PlayRootbornIdleReversed(null);
+            return;
+        }
+
+        Vector2Int nextCell = logicalPath.Dequeue();
+        if (!GridManager.Instance.IsWalkableFor(nextCell, unitGameObject))
+        {
+            HandlePathBlocked();
+            return;
+        }
+
+        EntityRegistry registry = EntityRegistry.Instance;
+        GameObject concurrent = registry?.GetIncomingUnit(nextCell);
+        MovementController concurrentMovement = concurrent != null && concurrent != unitGameObject
+            ? registry.GetMovementController(concurrent)
+            : null;
+        if (IsSameMovementGroup(concurrentMovement))
+        {
+            if (orderedDestination.HasValue && !intraGroupRepathIssuedThisStep)
+            {
+                intraGroupRepathIssuedThisStep = true;
+                QueueStableRepath(orderedDestination.Value);
+            }
+            else
+            {
+                HandlePathBlocked();
+            }
+            return;
+        }
+
+        ConfigureStep(nextCell);
+        RefreshWatchedCells(true);
+        SetState(MoveState.SteppingToAnchor);
+        animatorController?.PlayWalkAnimation(currentCell, targetCell);
+    }
+
+    // Configure la géométrie et la durée entière orthogonale ou diagonale.
+    private void ConfigureStep(Vector2Int nextCell)
+    {
+        targetCell = nextCell;
+        anchorWorldPos = ComputeAnchor(currentCell, GetDirection(currentCell, targetCell));
+        activeStepDurationTicks = GetStepDuration(currentCell, targetCell);
+        stepProgressTicks = 0;
+        intraGroupRepathIssuedThisStep = false;
+        EntityRegistry.Instance?.SetIncoming(unitGameObject, targetCell);
+    }
+
+    // Avance d'un tick vers l'ancrage ou le centre cible.
+    private void AdvanceStep(long tick)
+    {
+        EntityRegistry registry = EntityRegistry.Instance;
+        GameObject concurrent = registry?.GetIncomingUnit(targetCell);
+        if (concurrent != null && concurrent != unitGameObject)
+        {
+            MovementController concurrentMovement = registry.GetMovementController(concurrent);
+            if (IsSameMovementGroup(concurrentMovement))
+            {
+                StartRecede();
+                return;
+            }
+
+            bool concurrentWins = concurrentMovement != null
+                && (concurrentMovement.CurrentOrderTick < currentOrderTick
+                    || (concurrentMovement.CurrentOrderTick == currentOrderTick
+                        && concurrentMovement.OwnerPlayerID < ownerPlayerID));
+            if (concurrentWins && concurrentMovement.StepProgressRatio >= earlyYieldThreshold)
+            {
+                RegisterCollision(targetCell);
+                StartRecede();
+                return;
+            }
+        }
+
+        if (moveState == MoveState.SteppingToCenter)
+        {
+            if (pendingDestination == currentCell)
+            {
+                StartRecede();
+                return;
+            }
+
+            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(targetCell);
+            if (occupant != null && occupant != unitGameObject)
+            {
+                RegisterCollision(targetCell);
+                StartRecede();
+                return;
+            }
+        }
+
+        stepProgressTicks = Math.Min(activeStepDurationTicks, stepProgressTicks + 1);
+        if (moveState == MoveState.SteppingToAnchor && stepProgressTicks >= GetAnchorTick())
+            EnterSteppingToCenter();
+
+        if (stepProgressTicks < activeStepDurationTicks)
+            return;
+
+        if (!TryCommitTargetCell())
+        {
+            RegisterCollision(targetCell);
+            StartRecede();
+            return;
+        }
+
+        if (repathRequested && orderedDestination.HasValue)
+        {
+            pendingDestination = orderedDestination.Value;
+            repathRequested = false;
+        }
+
+        ConsumeAfterStablePoint(tick);
+    }
+
+    // Recule d'un tick sur le même chemin géométrique.
+    private void AdvanceRecede(long tick)
+    {
+        stepProgressTicks = Math.Max(0, stepProgressTicks - 1);
+        if (stepProgressTicks > 0)
+            return;
+
+        EntityRegistry.Instance?.ClearLeaving(unitGameObject);
+        notificationRepathIssuedThisStep = false;
+
+        if (consecutivePathFailures >= 2 && orderedDestination.HasValue)
+        {
+            StartFailureRecovery(orderedDestination.Value, tick);
+            return;
+        }
+
+        ConsumeAfterStablePoint(tick);
+    }
+
+    // Consomme un ordre pending ou poursuit le chemin depuis un centre stable.
+    private void ConsumeAfterStablePoint(long tick)
+    {
+        if (pendingDestination.HasValue)
+        {
+            Vector2Int destination = pendingDestination.Value;
+            pendingDestination = null;
+            if (destination == currentCell)
+            {
+                logicalPath.Clear();
+                OnMovementCompleted();
+                return;
+            }
+
+            QueueStableRepath(destination);
+            return;
+        }
+
+        if (moveState == MoveState.Receding && orderedDestination.HasValue)
+        {
+            QueueStableRepath(orderedDestination.Value);
+            return;
+        }
+
+        BeginNextStep(tick);
+    }
+
+    // Recalcule un chemin depuis une cellule stable après collision, recede ou ordre pending.
+    private void QueueStableRepath(Vector2Int destination)
+    {
+        QueuePathRequest(currentCell, destination, path =>
+        {
+            if (path == null || path.Count == 0 || IsPathAbsurd(path, destination))
+            {
+                if (IsOrderedDestinationCamped(destination))
+                {
+                    StartRetryToDestination(destination);
+                    return;
+                }
+                RegisterPathFailure(destination);
+                if (consecutivePathFailures >= 2)
+                    StartFailureRecovery(destination, SimulationClockManager.Instance?.CurrentTick ?? 0);
+                else
+                    HandleFailedRepath(destination);
+                return;
+            }
+
+            LoadPath(path);
+            orderedDestination = destination;
+            BeginNextStep(SimulationClockManager.Instance?.CurrentTick ?? 0);
+        }, true);
+    }
+
+    // Passe en retour arrière en conservant la progression atteinte.
+    private void StartRecede()
+    {
+        EntityRegistry.Instance?.ClearIncoming(unitGameObject);
+        SetState(MoveState.Receding);
+        animatorController?.PlayWalkAnimation(targetCell, currentCell);
+    }
+
+    // Ouvre la fenêtre de contestabilité au franchissement logique de l'ancrage.
+    private void EnterSteppingToCenter()
+    {
+        EntityRegistry.Instance?.SetLeaving(unitGameObject, currentCell);
+        SetState(MoveState.SteppingToCenter);
+    }
+
+    // Commit atomiquement la cible au tick final.
+    private bool TryCommitTargetCell()
+    {
+        if (EntityRegistry.Instance == null
+            || !EntityRegistry.Instance.TryClaimPosition(unitGameObject, targetCell, currentOrderTick, ownerPlayerID))
+            return false;
+
+        previousStableCell = currentCell;
+        currentCell = targetCell;
+        consecutivePathFailures = 0;
+        EntityRegistry.Instance.ClearIncoming(unitGameObject);
+        EntityRegistry.Instance.ClearLeaving(unitGameObject);
+        notificationRepathIssuedThisStep = false;
+        RefreshWatchedCells();
+        return true;
+    }
+
+    // Calcule la pose logique théorique du tick sur centre -> ancrage -> centre.
+    private Vector3 EvaluateLogicalWorldPosition()
+    {
+        Vector3 center = GridManager.Instance.GridToWorld(currentCell);
+        if (moveState != MoveState.SteppingToAnchor
+            && moveState != MoveState.SteppingToCenter
+            && moveState != MoveState.Receding)
+            return center;
+
+        int anchorTick = GetAnchorTick();
+        if (stepProgressTicks <= anchorTick)
+            return Vector3.Lerp(center, anchorWorldPos, stepProgressTicks / (float)anchorTick);
+
+        Vector3 targetCenter = GridManager.Instance.GridToWorld(targetCell);
+        int centerTicks = Math.Max(1, activeStepDurationTicks - anchorTick);
+        return Vector3.Lerp(anchorWorldPos, targetCenter,
+            (stepProgressTicks - anchorTick) / (float)centerTicks);
+    }
+
+    // Calcule l'ancrage géométrique historique sans en modifier la forme.
+    private Vector3 ComputeAnchor(Vector2Int cell, Vector2Int direction)
+    {
+        Vector3 center = GridManager.Instance.GridToWorld(cell);
+        float halfSize = GridManager.Instance.GetCellSize() / 2f;
+        return center + new Vector3(direction.x * halfSize, direction.y * halfSize, 0f);
+    }
+
+    // Retourne une direction normalisée sur les deux axes.
+    private Vector2Int GetDirection(Vector2Int from, Vector2Int to)
+    {
+        return new Vector2Int(Mathf.Clamp(to.x - from.x, -1, 1), Mathf.Clamp(to.y - from.y, -1, 1));
+    }
+
+    // Retourne la durée du step avec le ratio A* diagonal 14/10.
+    private int GetStepDuration(Vector2Int from, Vector2Int to)
+    {
+        Vector2Int direction = GetDirection(from, to);
+        return direction.x != 0 && direction.y != 0
+            ? Math.Max(1, (int)Math.Round(ticksPerCell * 14d / 10d, MidpointRounding.AwayFromZero))
+            : ticksPerCell;
+    }
+
+    // Retourne le tick de franchissement de l'ancrage, arrondi au plus proche.
+    private int GetAnchorTick()
+    {
+        return Math.Max(1, (int)Math.Round(activeStepDurationTicks / 2d, MidpointRounding.AwayFromZero));
+    }
+
+    // Réagit à une éviction en revenant depuis le centre perdu vers le centre stable précédent.
+    public void OnEvicted(Vector2Int lostCell)
+    {
+        CancelPendingPathRequest();
+        CancelRecoveryPause();
+        CancelRetry();
+        ClearCellSubscriptions();
+        logicalPath.Clear();
+        EntityRegistry.Instance?.ClearLeaving(unitGameObject);
+        EntityRegistry.Instance?.ClearIncoming(unitGameObject);
+
+        if (recoveryDestination.HasValue)
+        {
+            orderedDestination = recoveryDestination.Value;
+            recoveryDestination = null;
+        }
+
+        targetCell = lostCell;
+        currentCell = previousStableCell;
+        anchorWorldPos = ComputeAnchor(currentCell, GetDirection(currentCell, targetCell));
+        activeStepDurationTicks = GetStepDuration(currentCell, targetCell);
+        stepProgressTicks = activeStepDurationTicks;
+        EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
+        StartRecede();
+    }
+
+    // Ajoute une demande au scheduler déterministe et ignore les callbacks obsolètes.
+    private bool QueuePathRequest(Vector2Int start, Vector2Int end, Action<List<Vector2Int>> callback, bool enterWaitingState = false)
+    {
+        if (PathFindingManager.Instance == null)
+            return false;
+
+        CancelPendingPathRequest();
+        long requestId = 0;
+        requestId = PathFindingManager.Instance.RequestPath(start, end, unitGameObject, path =>
+        {
+            if (activePathRequestId != requestId)
+                return;
+            activePathRequestId = 0;
+            callback(path);
+        });
+        activePathRequestId = requestId;
+        if (enterWaitingState && requestId > 0)
+            SetState(MoveState.WaitingPath);
+        return requestId > 0;
+    }
+
+    // Annule la requête de path encore en file.
+    private void CancelPendingPathRequest()
+    {
+        if (activePathRequestId == 0)
+            return;
+        PathFindingManager.Instance?.CancelRequest(activePathRequestId);
+        activePathRequestId = 0;
+    }
+
+    // Centralise les transitions et l'index moving du registre.
     private void SetState(MoveState newState)
     {
         if (moveState == newState)
             return;
-
-        MoveState previousState = moveState;
         moveState = newState;
-
-        if (newState == MoveState.SteppingToAnchor)
+        if (newState == MoveState.SteppingToAnchor || newState == MoveState.SteppingToCenter || newState == MoveState.Receding)
             EntityRegistry.Instance?.SetMoving(unitGameObject, true);
         else if (newState == MoveState.Idle || newState == MoveState.Blocked)
             EntityRegistry.Instance?.SetMoving(unitGameObject, false);
-
         if (newState == MoveState.Blocked)
+        {
             notificationRepathIssuedThisStep = false;
-
-        if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: état {previousState} → {newState}", this);
+            intraGroupRepathIssuedThisStep = false;
+        }
     }
 
-    // Remplace les abonnements par les trois prochaines cellules du chemin courant
+    // Indique si deux unités appartiennent au même ordre groupé et à la même équipe.
+    private bool IsSameMovementGroup(MovementController concurrentMovement)
+    {
+        return concurrentMovement != null
+            && concurrentMovement.CurrentOrderTick == currentOrderTick
+            && concurrentMovement.OwnerPlayerID == ownerPlayerID;
+    }
+
+    // Reçoit une occupation de cellule et reporte sa décision au SimTick.
+    public void OnUnitEntered(Vector2Int cell, GameObject unit)
+    {
+        if (unit == unitGameObject || !watchedCells.Contains(cell) || notificationRepathIssuedThisStep)
+            return;
+        if (moveState != MoveState.SteppingToAnchor && moveState != MoveState.SteppingToCenter && moveState != MoveState.Blocked)
+            return;
+        notificationRepathIssuedThisStep = true;
+        eventRepathPending = true;
+    }
+
+    // Reçoit une libération de destination bloquée et reporte sa décision au SimTick.
+    public void OnUnitLeft(Vector2Int cell, GameObject unit)
+    {
+        if (unit == unitGameObject || moveState != MoveState.Blocked || orderedDestination != cell
+            || notificationRepathIssuedThisStep || EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell) != null)
+            return;
+        notificationRepathIssuedThisStep = true;
+        eventRepathPending = true;
+    }
+
+    // Applique au tick le re-path demandé par une notification.
+    private void ProcessEventRepath(long tick)
+    {
+        if (!orderedDestination.HasValue)
+            return;
+        if (moveState == MoveState.SteppingToCenter)
+            repathRequested = true;
+        else
+            RequestMove(orderedDestination.Value, false, tick);
+    }
+
+    // Met à jour les trois cellules surveillées.
     private void RefreshWatchedCells(bool includeCurrentTarget = false)
     {
-        if (EntityRegistry.Instance == null)
-        {
-            watchedCells.Clear();
-            return;
-        }
-
-        foreach (Vector2Int cell in watchedCells)
-            EntityRegistry.Instance.UnregisterCellListener(cell, this);
-        watchedCells.Clear();
-
+        ClearCellSubscriptions();
         if (includeCurrentTarget)
             RegisterWatchedCell(targetCell);
-
         foreach (Vector2Int cell in logicalPath)
         {
             RegisterWatchedCell(cell);
@@ -179,17 +769,16 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         }
     }
 
-    // Ajoute une cellule à la surveillance courante sans doublon
+    // Ajoute une cellule à la surveillance sans doublon.
     private void RegisterWatchedCell(Vector2Int cell)
     {
-        if (watchedCells.Count >= 3 || watchedCells.Contains(cell))
+        if (EntityRegistry.Instance == null || watchedCells.Count >= 3 || watchedCells.Contains(cell))
             return;
-
         EntityRegistry.Instance.RegisterCellListener(cell, this);
         watchedCells.Add(cell);
     }
 
-    // Surveille uniquement la destination exacte lorsqu'une unité est bloquée
+    // Surveille uniquement la destination exacte bloquée.
     private void WatchBlockedDestination()
     {
         ClearCellSubscriptions();
@@ -197,749 +786,37 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
             RegisterWatchedCell(orderedDestination.Value);
     }
 
-    // Retire tous les abonnements de cellules détenus par ce contrôleur
+    // Retire tous les listeners de cellules.
     private void ClearCellSubscriptions()
     {
         EntityRegistry.Instance?.UnregisterAllCellListeners(this);
         watchedCells.Clear();
     }
 
-    // Déclenche un re-path lorsqu'une unité tierce occupe une cellule surveillée
-    public void OnUnitEntered(Vector2Int cell, GameObject unit)
+    // Route un premier échec vers le retry ou la récupération anti-boucle.
+    private void HandleInitialPathFailure(Vector2Int destination)
     {
-        if (unit == unitGameObject || !watchedCells.Contains(cell) || notificationRepathIssuedThisStep)
-            return;
-
-        if (moveState != MoveState.SteppingToAnchor
-            && moveState != MoveState.SteppingToCenter
-            && moveState != MoveState.Blocked)
+        if (IsOrderedDestinationCamped(destination))
         {
+            StartRetryToDestination(destination);
             return;
         }
 
-        notificationRepathIssuedThisStep = true;
-        RequestEventRepath();
-    }
-
-    // Relance immédiatement une destination bloquée dès que son occupant la libère
-    public void OnUnitLeft(Vector2Int cell, GameObject unit)
-    {
-        if (unit == unitGameObject || moveState != MoveState.Blocked
-            || !orderedDestination.HasValue || orderedDestination.Value != cell
-            || notificationRepathIssuedThisStep)
+        if (recoveryDestination.HasValue && recoveryDestination.Value != destination)
         {
-            return;
-        }
-
-        if (EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell) != null)
-            return;
-
-        notificationRepathIssuedThisStep = true;
-        RequestEventRepath();
-    }
-
-    // Applique immédiatement le re-path ou le reporte au prochain point stable du step
-    private void RequestEventRepath()
-    {
-        if (!orderedDestination.HasValue)
-            return;
-
-        if (moveState == MoveState.SteppingToCenter)
-        {
-            repathRequested = true;
-            return;
-        }
-
-        MoveTo(orderedDestination.Value, false);
-    }
-
-    // Interface publique principale pour demander un déplacement vers une destination
-    // Calcule l'A* sur cellules et adapte le step en cours selon la phase ancrage/centre.
-    public bool MoveTo(Vector2Int targetPosition)
-    {
-        return MoveTo(targetPosition, true);
-    }
-
-    // Traite un ordre public ou une continuation interne en conservant le tick d'origine
-    private bool MoveTo(Vector2Int targetPosition, bool startsNewOrder)
-    {
-        if (retryCoroutine != null)
-        {
-            StopCoroutine(retryCoroutine);
-            retryCoroutine = null;
-        }
-
-        if (currentCell == Vector2Int.zero && GridManager.Instance != null)
-        {
-            currentCell = GridManager.Instance.WorldToGrid(transform.position);
-        }
-
-        if (!GridManager.Instance.IsInBounds(targetPosition))
-        {
-            GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Destination {targetPosition} hors limites", this);
-            return false;
-        }
-
-        if (startsNewOrder)
-        {
-            currentOrderTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
-            consecutivePathFailures = 0;
+            Vector2Int originalDestination = recoveryDestination.Value;
             recoveryDestination = null;
-            repathRequested = false;
-            notificationRepathIssuedThisStep = false;
-            ClearCellSubscriptions();
-        }
-
-        CancelPendingPathRequest();
-
-        if (!IsReadyForMovement())
-        {
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-            if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: ordre en attente IdleReversed", this);
-            return true;
-        }
-
-        if (debugMovement)
-            GameLogger.Log(GameLogger.Category.Movement, $"🔍 MoveTo {gameObject.name}: currentCell={currentCell}, target={targetPosition}, état={moveState}", this);
-
-        pendingDestination = null;
-
-        // Un ordre reçu pendant le recede sera consommé au retour sur une cellule stable
-        if (moveState == MoveState.Receding)
-        {
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-            if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: ordre pendant recede → {targetPosition}", this);
-            return true;
-        }
-
-        // La bifurcation reste libre avant le franchissement de l'ancrage
-        if (moveState == MoveState.SteppingToAnchor)
-        {
-            orderedDestination = targetPosition;
-            Vector2Int requestStartCell = currentCell;
-            return QueuePathRequest(requestStartCell, targetPosition,
-                path => HandleBifurcationPathResult(path, requestStartCell, targetPosition), false);
-        }
-
-        // Après l'ancrage, le centre courant est obligatoire avant consommation du nouvel ordre
-        if (moveState == MoveState.SteppingToCenter)
-        {
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-
-            if (targetPosition == currentCell)
-            {
-                logicalPath.Clear();
-                if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: rebrousse vers {currentCell}", this);
-            }
-            else if (debugMovement)
-            {
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: ordre en file → {targetPosition}", this);
-            }
-            return true;
-        }
-
-        orderedDestination = targetPosition;
-        Vector2Int initialStartCell = currentCell;
-        return QueuePathRequest(initialStartCell, targetPosition,
-            path => HandleInitialPathResult(path, initialStartCell, targetPosition));
-    }
-
-    // Applique le résultat d'une demande initiale puis démarre le déplacement ou le retry existant
-    private void HandleInitialPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int targetPosition)
-    {
-        if (currentCell != requestStartCell)
-        {
-            MoveTo(targetPosition, false);
+            StartRecoveryPause(originalDestination);
             return;
         }
-
-        if (path != null && path.Count > 0 && IsPathAbsurd(path, targetPosition))
-        {
-            if (debugMovement)
-                GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: chemin absurde vers {targetPosition} ({path.Count} steps / Chebyshev {CombatSystem.CalculateChebyshevDistance(currentCell, targetPosition)}), ordre ignoré", this);
-            HandleInitialPathFailure(targetPosition);
-            return;
-        }
-
-        if (path == null || path.Count == 0)
-        {
-            GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pas de chemin vers {targetPosition} — retry", this);
-            HandleInitialPathFailure(targetPosition);
-            return;
-        }
-
-        logicalPath.Clear();
-        foreach (Vector2Int cell in path) logicalPath.Enqueue(cell);
-        RefreshWatchedCells();
-
-        if (debugMovement)
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: nouveau chemin {path.Count} cases depuis {currentCell} vers {targetPosition}", this);
-
-        OnIdleStateChanged.Invoke(false);
-        OnMovementStarted.Invoke();
-        SetState(MoveState.SteppingToAnchor);
-        interpolationCoroutine = StartCoroutine(InterpolationLoop());
-    }
-
-    // Route l'échec initial vers la récupération de l'ordre ou vers son retry normal
-    private void HandleInitialPathFailure(Vector2Int targetPosition)
-    {
-        if (recoveryDestination.HasValue && recoveryDestination.Value != targetPosition)
-        {
-            Vector2Int destination = recoveryDestination.Value;
-            recoveryDestination = null;
-            StartRecoveryPause(destination);
-            return;
-        }
-
-        RegisterPathFailure(targetPosition);
+        RegisterPathFailure(destination);
         if (consecutivePathFailures >= 2)
-            StartFailureRecovery(targetPosition);
+            StartFailureRecovery(destination, SimulationClockManager.Instance?.CurrentTick ?? 0);
         else
-            StartRetryToDestination(targetPosition);
+            StartRetryToDestination(destination);
     }
 
-    // Applique une bifurcation si l'ancrage n'est pas franchi, sinon la convertit en destination pending
-    private void HandleBifurcationPathResult(List<Vector2Int> path, Vector2Int requestStartCell, Vector2Int targetPosition)
-    {
-        if (moveState != MoveState.SteppingToAnchor || currentCell != requestStartCell)
-        {
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-
-            if (moveState == MoveState.Idle || moveState == MoveState.Blocked)
-                MoveTo(targetPosition, false);
-            return;
-        }
-
-        if (path == null || path.Count == 0)
-        {
-            RegisterPathFailure(targetPosition);
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-            return;
-        }
-
-        if (IsPathAbsurd(path, targetPosition))
-        {
-            RegisterPathFailure(targetPosition);
-            pendingDestination = targetPosition;
-            orderedDestination = targetPosition;
-            return;
-        }
-
-        logicalPath.Clear();
-        foreach (Vector2Int cell in path) logicalPath.Enqueue(cell);
-        orderedDestination = targetPosition;
-
-        Vector2Int newFirstCell = logicalPath.Peek();
-        logicalPath.Dequeue();
-        Vector2Int direction = GetDirection(currentCell, newFirstCell);
-        targetCell = newFirstCell;
-        anchorWorldPos = ComputeAnchor(currentCell, direction);
-        RefreshWatchedCells(true);
-
-        if (animatorController != null)
-            animatorController.PlayWalkAnimation(currentCell, newFirstCell);
-
-        if (debugMovement) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bifurcation ToAnchor → {newFirstCell}", this);
-    }
-
-    // Place une demande dans le scheduler et ignore tout callback devenu obsolète
-    private bool QueuePathRequest(Vector2Int startPosition, Vector2Int endPosition, System.Action<List<Vector2Int>> callback, bool enterWaitingState = true)
-    {
-        if (PathFindingManager.Instance == null)
-        {
-            GameLogger.Error($"MovementController {gameObject.name}: PathFindingManager introuvable", this);
-            return false;
-        }
-
-        CancelPendingPathRequest();
-
-        long requestId = 0;
-        requestId = PathFindingManager.Instance.RequestPath(startPosition, endPosition, unitGameObject, path =>
-        {
-            if (activePathRequestId != requestId)
-                return;
-
-            activePathRequestId = 0;
-            callback(path);
-        });
-
-        activePathRequestId = requestId;
-        if (requestId > 0 && enterWaitingState)
-            SetState(MoveState.WaitingPath);
-        return requestId > 0;
-    }
-
-    // Annule la demande de chemin encore en attente pour cette unité
-    private void CancelPendingPathRequest()
-    {
-        if (activePathRequestId == 0)
-            return;
-
-        PathFindingManager.Instance?.CancelRequest(activePathRequestId);
-        activePathRequestId = 0;
-    }
-
-    // Boucle principale d'interpolation en steps ancrage -> centre.
-    // Consomme le path cellule par cellule et ne commit la logique qu'au centre cible.
-    private IEnumerator InterpolationLoop()
-    {
-        if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: début boucle interpolation", this);
-
-        while (logicalPath.Count > 0)
-        {
-            Vector2Int nextCell = logicalPath.Dequeue();
-
-            if (IsRootborn() && isFirstMoveOfSession)
-            {
-                yield return StartCoroutine(PlayRootbornPreMovementAnimation());
-                isFirstMoveOfSession = false;
-            }
-
-            if (!GridManager.Instance.IsWalkableFor(nextCell, unitGameObject))
-            {
-                if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: case {nextCell} inaccessible", this);
-                HandlePathBlocked();
-                yield break;
-            }
-
-            targetCell = nextCell;
-            Vector2Int direction = GetDirection(currentCell, targetCell);
-            anchorWorldPos = ComputeAnchor(currentCell, direction);
-            SetState(MoveState.SteppingToAnchor);
-
-            if (animatorController != null)
-                animatorController.PlayWalkAnimation(currentCell, targetCell);
-
-            if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: step {currentCell} → {targetCell} via ancrage", this);
-
-            yield return StartCoroutine(ExecuteStep());
-
-            if (repathRequested && orderedDestination.HasValue)
-            {
-                pendingDestination = orderedDestination.Value;
-                repathRequested = false;
-            }
-
-            if (moveState == MoveState.Receding && consecutivePathFailures >= 2 && orderedDestination.HasValue)
-            {
-                StartFailureRecovery(orderedDestination.Value);
-                yield break;
-            }
-
-            // Un recede termine toujours sur currentCell, seul point où un pending peut être consommé
-            if (moveState == MoveState.Receding && pendingDestination.HasValue)
-            {
-                Vector2Int recedeDestination = pendingDestination.Value;
-                pendingDestination = null;
-
-                if (recedeDestination == currentCell)
-                {
-                    logicalPath.Clear();
-                    OnMovementCompleted();
-                    yield break;
-                }
-
-                List<Vector2Int> recedePath = null;
-                bool recedePathCompleted = false;
-                if (!QueuePathRequest(currentCell, recedeDestination, path =>
-                    {
-                        recedePath = path;
-                        recedePathCompleted = true;
-                    }))
-                {
-                    HandlePathBlocked();
-                    yield break;
-                }
-
-                long recedeRequestId = activePathRequestId;
-                while (!recedePathCompleted)
-                {
-                    if (activePathRequestId != recedeRequestId)
-                        yield break;
-
-                    yield return null;
-                }
-
-                if (recedePath == null || recedePath.Count == 0 || IsPathAbsurd(recedePath, recedeDestination))
-                {
-                    RegisterPathFailure(recedeDestination);
-                    if (consecutivePathFailures >= 2)
-                        StartFailureRecovery(recedeDestination);
-                    else
-                        HandleFailedRepath(recedeDestination);
-                    yield break;
-                }
-
-                logicalPath.Clear();
-                foreach (Vector2Int cell in recedePath) logicalPath.Enqueue(cell);
-                RefreshWatchedCells();
-                SetState(MoveState.SteppingToAnchor);
-                continue;
-            }
-
-            if (moveState == MoveState.Receding)
-            {
-                if (!orderedDestination.HasValue)
-                {
-                    SetState(MoveState.Idle);
-                    yield break;
-                }
-
-                Vector2Int dest = orderedDestination.Value;
-                List<Vector2Int> retryPath = null;
-                bool retryPathCompleted = false;
-
-                if (!QueuePathRequest(currentCell, dest, path =>
-                    {
-                        retryPath = path;
-                        retryPathCompleted = true;
-                    }))
-                {
-                    HandlePathBlocked();
-                    yield break;
-                }
-
-                long collisionRequestId = activePathRequestId;
-                while (!retryPathCompleted)
-                {
-                    if (activePathRequestId != collisionRequestId)
-                        yield break;
-
-                    yield return null;
-                }
-
-                if (retryPath != null && retryPath.Count > 0 && !IsPathAbsurd(retryPath, dest))
-                {
-                    if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: recalcul après collision réussi vers {dest}", this);
-                    logicalPath.Clear();
-                    foreach (var c in retryPath) logicalPath.Enqueue(c);
-                    RefreshWatchedCells();
-                    SetState(MoveState.SteppingToAnchor);
-                    continue;
-                }
-
-                RegisterPathFailure(dest);
-                if (consecutivePathFailures >= 2)
-                    StartFailureRecovery(dest);
-                else
-                    HandleFailedRepath(dest);
-                yield break;
-            }
-
-            // Commit réussi → currentCell est déjà mis à jour dans ExecuteStep.
-
-            // Consomme pendingDestination (rebrousse, file, ordre pendant recede, etc.).
-            if (pendingDestination.HasValue)
-            {
-                Vector2Int dest = pendingDestination.Value;
-                pendingDestination = null;
-                List<Vector2Int> newPath = null;
-                bool pendingPathCompleted = false;
-
-                if (!QueuePathRequest(currentCell, dest, path =>
-                    {
-                        newPath = path;
-                        pendingPathCompleted = true;
-                    }))
-                {
-                    HandlePathBlocked();
-                    yield break;
-                }
-
-                long pendingRequestId = activePathRequestId;
-                while (!pendingPathCompleted)
-                {
-                    if (activePathRequestId != pendingRequestId)
-                        yield break;
-
-                    yield return null;
-                }
-
-                if (newPath != null && newPath.Count > 0 && !IsPathAbsurd(newPath, dest))
-                {
-                    logicalPath.Clear();
-                    foreach (var c in newPath) logicalPath.Enqueue(c);
-                    RefreshWatchedCells();
-                    if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: pending consommé → {dest}", this);
-                }
-                else
-                {
-                    RegisterPathFailure(dest);
-                    if (consecutivePathFailures >= 2)
-                        StartFailureRecovery(dest);
-                    else
-                        HandleFailedRepath(dest);
-                    yield break;
-                }
-            }
-
-            if (logicalPath.Count > 0 && animatorController != null)
-                animatorController.PlayWalkAnimation(currentCell, logicalPath.Peek());
-
-            if (logicalPath.Count > 0)
-                SetState(MoveState.SteppingToAnchor);
-        }
-
-        OnMovementCompleted();
-    }
-
-    // Calcule la position monde du point d'ancrage entre cell et la cellule voisine dans direction donnée.
-    private Vector3 ComputeAnchor(Vector2Int cell, Vector2Int direction)
-    {
-        Vector3 center = GridManager.Instance.GridToWorld(cell);
-        float halfSize = GridManager.Instance.GetCellSize() / 2f;
-        return center + new Vector3(direction.x * halfSize, direction.y * halfSize, 0f);
-    }
-
-    // Retourne la direction unitaire (-1/0/+1 par axe) de from vers to.
-    private Vector2Int GetDirection(Vector2Int from, Vector2Int to)
-    {
-        int dx = Mathf.Clamp(to.x - from.x, -1, 1);
-        int dy = Mathf.Clamp(to.y - from.y, -1, 1);
-        return new Vector2Int(dx, dy);
-    }
-
-    // Exécute un step en 2 phases : ToAnchor (centre courant -> ancrage), ToCenter (ancrage -> centre cible).
-    // Le commit logique se fait uniquement au passage du centre, via TryClaimPosition atomique.
-    private IEnumerator ExecuteStep()
-    {
-        Vector3 fromCenterWorld = GridManager.Instance.GridToWorld(currentCell);
-        transform.position = fromCenterWorld;
-
-        // Phase ToAnchor : déplacement libre tant que l'ancrage n'est pas franchi.
-        while (moveState == MoveState.SteppingToAnchor)
-        {
-            Vector3 toAnchor = anchorWorldPos;
-            Vector3 dir = toAnchor - transform.position;
-            float dist = dir.magnitude;
-
-            if (dist < ANCHOR_EPSILON)
-            {
-                transform.position = toAnchor;
-                EnterSteppingToCenter();
-                break;
-            }
-
-            float step = movementSpeed * Time.deltaTime;
-            if (step >= dist)
-            {
-                transform.position = toAnchor;
-                EnterSteppingToCenter();
-                break;
-            }
-
-            transform.position += dir.normalized * step;
-            yield return null;
-        }
-
-        // Phase ToCenter : une fois l'ancrage franchi, le centre cible est obligatoire.
-        Vector3 centerWorld = GridManager.Instance.GridToWorld(targetCell);
-        while (moveState == MoveState.SteppingToCenter)
-        {
-            if (pendingDestination.HasValue && pendingDestination.Value == currentCell)
-            {
-                SetState(MoveState.Receding);
-                yield return StartCoroutine(RecedeToCurrentCenter());
-                yield break;
-            }
-
-            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(targetCell);
-            if (occupant != null && occupant != unitGameObject)
-            {
-                RegisterCollision(targetCell);
-                if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement)) GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: collision targetCell {targetCell} occupée par {occupant.name}, recede", this);
-                SetState(MoveState.Receding);
-                yield return StartCoroutine(RecedeToCurrentCenter());
-                yield break;
-            }
-
-            Vector3 toCenter = centerWorld - transform.position;
-            float dist = toCenter.magnitude;
-
-            if (dist < CENTER_EPSILON)
-            {
-                transform.position = centerWorld;
-                if (!TryCommitTargetCell())
-                {
-                    SetState(MoveState.Receding);
-                    yield return StartCoroutine(RecedeToCurrentCenter());
-                }
-                yield break;
-            }
-
-            float step = movementSpeed * Time.deltaTime;
-            if (step >= dist)
-            {
-                transform.position = centerWorld;
-                if (!TryCommitTargetCell())
-                {
-                    SetState(MoveState.Receding);
-                    yield return StartCoroutine(RecedeToCurrentCenter());
-                }
-                yield break;
-            }
-
-            transform.position += toCenter.normalized * step;
-            yield return null;
-        }
-    }
-
-    // Ouvre la fenêtre de contestabilité de la cellule source pendant le Lerp vers le centre cible
-    private void EnterSteppingToCenter()
-    {
-        EntityRegistry.Instance?.SetLeaving(unitGameObject, currentCell);
-        SetState(MoveState.SteppingToCenter);
-    }
-
-    // Tente le commit atomique de targetCell et ferme la fenêtre leaving en cas de succès
-    private bool TryCommitTargetCell()
-    {
-        if (EntityRegistry.Instance == null) return false;
-        if (EntityRegistry.Instance.TryClaimPosition(unitGameObject, targetCell, currentOrderTick, ownerPlayerID))
-        {
-            previousStableCell = currentCell;
-            currentCell = targetCell;
-            consecutivePathFailures = 0;
-            EntityRegistry.Instance.ClearLeaving(unitGameObject);
-            notificationRepathIssuedThisStep = false;
-            RefreshWatchedCells();
-            return true;
-        }
-        return false;
-    }
-
-    // Retour visuel position actuelle -> ancrage franchi -> centre currentCell, sans commit logique.
-    private IEnumerator RecedeToCurrentCenter()
-    {
-        Vector3 centerWorld = GridManager.Instance.GridToWorld(currentCell);
-
-        if (animatorController != null)
-            animatorController.PlayWalkAnimation(targetCell, currentCell);
-
-        Vector3 anchor = anchorWorldPos;
-        while (moveState == MoveState.Receding)
-        {
-            Vector3 dir = anchor - transform.position;
-            float dist = dir.magnitude;
-            if (dist < ANCHOR_EPSILON) { transform.position = anchor; break; }
-            float step = movementSpeed * Time.deltaTime;
-            if (step >= dist) { transform.position = anchor; break; }
-            transform.position += dir.normalized * step;
-            yield return null;
-        }
-
-        while (moveState == MoveState.Receding)
-        {
-            Vector3 dir = centerWorld - transform.position;
-            float dist = dir.magnitude;
-            if (dist < CENTER_EPSILON) { transform.position = centerWorld; break; }
-            float step = movementSpeed * Time.deltaTime;
-            if (step >= dist) { transform.position = centerWorld; break; }
-            transform.position += dir.normalized * step;
-            yield return null;
-        }
-
-        EntityRegistry.Instance?.ClearLeaving(unitGameObject);
-        notificationRepathIssuedThisStep = false;
-    }
-
-    // Réagit à la perte d'une cellule claimée en rejouant le recede animé vers la cellule stable précédente
-    public void OnEvicted(Vector2Int lostCell)
-    {
-        CancelPendingPathRequest();
-        ClearCellSubscriptions();
-        repathRequested = false;
-        notificationRepathIssuedThisStep = false;
-
-        if (recoveryDestination.HasValue)
-        {
-            orderedDestination = recoveryDestination.Value;
-            recoveryDestination = null;
-        }
-
-        if (interpolationCoroutine != null)
-        {
-            StopCoroutine(interpolationCoroutine);
-            interpolationCoroutine = null;
-        }
-
-        if (retryCoroutine != null)
-        {
-            StopCoroutine(retryCoroutine);
-            retryCoroutine = null;
-        }
-
-        logicalPath.Clear();
-        EntityRegistry.Instance?.ClearLeaving(unitGameObject);
-
-        targetCell = lostCell;
-        currentCell = previousStableCell;
-        anchorWorldPos = ComputeAnchor(currentCell, GetDirection(currentCell, targetCell));
-        EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
-        SetState(MoveState.Receding);
-        interpolationCoroutine = StartCoroutine(ResumeAfterEviction());
-    }
-
-    // Termine le recede d'éviction puis relance immédiatement le re-path de l'ordre courant
-    private IEnumerator ResumeAfterEviction()
-    {
-        yield return StartCoroutine(RecedeToCurrentCenter());
-
-        Vector2Int? destination = pendingDestination ?? orderedDestination;
-        pendingDestination = null;
-        if (!destination.HasValue)
-        {
-            SetState(MoveState.Idle);
-            yield break;
-        }
-
-        List<Vector2Int> recoveryPath = null;
-        bool recoveryPathCompleted = false;
-        if (!QueuePathRequest(currentCell, destination.Value, path =>
-            {
-                recoveryPath = path;
-                recoveryPathCompleted = true;
-            }))
-        {
-            HandleFailedRepath(destination.Value);
-            yield break;
-        }
-
-        long recoveryRequestId = activePathRequestId;
-        while (!recoveryPathCompleted)
-        {
-            if (activePathRequestId != recoveryRequestId)
-                yield break;
-
-            yield return null;
-        }
-
-        if (recoveryPath == null || recoveryPath.Count == 0 || IsPathAbsurd(recoveryPath, destination.Value))
-        {
-            RegisterPathFailure(destination.Value);
-            if (consecutivePathFailures >= 2)
-                StartFailureRecovery(destination.Value);
-            else
-                HandleFailedRepath(destination.Value);
-            yield break;
-        }
-
-        logicalPath.Clear();
-        foreach (Vector2Int cell in recoveryPath) logicalPath.Enqueue(cell);
-        RefreshWatchedCells();
-        orderedDestination = destination.Value;
-        SetState(MoveState.SteppingToAnchor);
-        interpolationCoroutine = StartCoroutine(InterpolationLoop());
-    }
-
-    // Applique le flux d'échec commun aux re-paths après collision ou éviction
+    // Place l'unité en blocage persistant après un re-path échoué.
     private void HandleFailedRepath(Vector2Int destination)
     {
         if (attackController != null)
@@ -948,8 +825,6 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
             GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
             if (nearestEnemy != null)
             {
-                if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
-                    GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: bloquée + ennemi à portée → auto-attaque", this);
                 ClearCellSubscriptions();
                 orderedDestination = null;
                 attackController.InterruptChaseAndAttack(nearestEnemy);
@@ -960,38 +835,95 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
 
         SetState(MoveState.Blocked);
         attackController?.SetManualOrder(false);
-        if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
+        if (animatorController != null && !(attackController?.IsAttacking() ?? false))
             animatorController.PlayIdleAnimation();
         WatchBlockedDestination();
-        retryCoroutine = StartCoroutine(RetryPathPeriodically(destination));
+        ScheduleRetry(destination);
     }
 
-    // Enregistre un échec de chemin uniquement pour la destination de l'ordre actif
+    // Lance un retry déterministe après deux secondes en ticks.
+    private void StartRetryToDestination(Vector2Int destination)
+    {
+        orderedDestination = destination;
+        SetState(MoveState.Blocked);
+        WatchBlockedDestination();
+        attackController?.SetManualOrder(false);
+        if (animatorController != null && !(attackController?.IsAttacking() ?? false))
+            animatorController.PlayIdleAnimation();
+        ScheduleRetry(destination);
+    }
+
+    // Programme l'échéance logique du retry.
+    private void ScheduleRetry(Vector2Int destination)
+    {
+        long tick = SimulationClockManager.Instance?.CurrentTick ?? 0;
+        retryDestination = destination;
+        retryAtTick = tick + RETRY_INTERVAL_TICKS;
+    }
+
+    // Annule un retry logique.
+    private void CancelRetry()
+    {
+        retryDestination = null;
+        retryAtTick = -1;
+    }
+
+    // Calcule le retry dans le budget pathfinding du tick.
+    private void QueueRetryPath(Vector2Int destination)
+    {
+        GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(destination);
+        bool destinationOccupied = occupant != null
+            && occupant != unitGameObject
+            && !EntityRegistry.Instance.IsMoving(occupant);
+        QueuePathRequest(currentCell, destination, path =>
+        {
+            bool failed = path == null || path.Count == 0 || IsPathAbsurd(path, destination);
+            if (destinationOccupied)
+            {
+                StartRetryToDestination(destination);
+                return;
+            }
+            if (failed)
+            {
+                RegisterPathFailure(destination);
+                if (consecutivePathFailures >= 2)
+                    StartFailureRecovery(destination, SimulationClockManager.Instance?.CurrentTick ?? 0);
+                else
+                    StartRetryToDestination(destination);
+                return;
+            }
+            LoadPath(path);
+            BeginNextStep(SimulationClockManager.Instance?.CurrentTick ?? 0);
+        });
+    }
+
+    // Enregistre un échec uniquement pour l'ordre actif.
     private void RegisterPathFailure(Vector2Int destination)
     {
         Vector2Int? activeDestination = recoveryDestination ?? orderedDestination;
-        if (!activeDestination.HasValue || activeDestination.Value != destination)
-            return;
-
-        consecutivePathFailures++;
+        if (activeDestination == destination)
+            consecutivePathFailures++;
     }
 
-    // Enregistre les collisions répétées sur une même case dans le compteur d'échecs unique
+    // Indique si l'ordre actif vise exactement une destination occupée par une unité immobile.
+    private bool IsOrderedDestinationCamped(Vector2Int destination)
+    {
+        if (!orderedDestination.HasValue || orderedDestination.Value != destination || EntityRegistry.Instance == null)
+            return false;
+
+        GameObject occupant = EntityRegistry.Instance.GetUnitAtLogicalPosition(destination);
+        return occupant != null && occupant != unitGameObject && !EntityRegistry.Instance.IsMoving(occupant);
+    }
+
+    // Agrège les collisions répétées sur la même cellule.
     private void RegisterCollision(Vector2Int blockedCell)
     {
-        if (blockedCell == lastCollisionCell)
-        {
-            consecutivePathFailures++;
-        }
-        else
-        {
-            consecutivePathFailures = 1;
-            lastCollisionCell = blockedCell;
-        }
+        consecutivePathFailures = blockedCell == lastCollisionCell ? consecutivePathFailures + 1 : 1;
+        lastCollisionCell = blockedCell;
     }
 
-    // Lance un détour local adjacent avant une pause, sans remplacer la destination de l'ordre joueur
-    private void StartFailureRecovery(Vector2Int destination)
+    // Lance un détour adjacent puis la pause déterministe anti-boucle.
+    private void StartFailureRecovery(Vector2Int destination, long tick)
     {
         CancelPendingPathRequest();
         logicalPath.Clear();
@@ -1003,81 +935,95 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         if (detour.HasValue)
         {
             recoveryDestination = destination;
-            retryCoroutine = null;
-            if (debugMovement && GameLogger.IsEnabled(GameLogger.Category.Movement))
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: {consecutivePathFailures} échecs, détour local vers {detour.Value}", this);
-            if (!MoveTo(detour.Value, false))
+            if (!RequestMove(detour.Value, false, tick))
             {
                 recoveryDestination = null;
                 StartRecoveryPause(destination);
             }
             return;
         }
-
         StartRecoveryPause(destination);
     }
 
-    // Place l'unité en attente avant de retenter sa destination exacte
+    // Programme la pause rng de récupération en ticks.
     private void StartRecoveryPause(Vector2Int destination)
     {
         orderedDestination = destination;
         SetState(MoveState.Blocked);
         WatchBlockedDestination();
         attackController?.SetManualOrder(false);
-        if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
-            animatorController.PlayIdleAnimation();
-
-        retryCoroutine = StartCoroutine(PauseBeforeRetry(destination));
+        animatorController?.PlayIdleAnimation();
+        SimulationClockManager clock = SimulationClockManager.Instance;
+        int pauseTicks = clock != null ? clock.SimulationRandom.NextRange(40, 61) : 50;
+        recoveryPauseDestination = destination;
+        recoveryPauseUntilTick = (clock?.CurrentTick ?? 0) + pauseTicks;
     }
 
-    // Attend un délai désynchronisé puis relance un path depuis la position actuelle
-    private IEnumerator PauseBeforeRetry(Vector2Int destination)
+    // Annule la pause anti-boucle.
+    private void CancelRecoveryPause()
     {
-        yield return new WaitForSeconds(Random.Range(0.8f, 1.2f));
-
-        if (moveState != MoveState.Blocked || !orderedDestination.HasValue || orderedDestination.Value != destination)
-            yield break;
-
-        consecutivePathFailures = 0;
-        retryCoroutine = null;
-        MoveTo(destination, false);
+        recoveryPauseDestination = null;
+        recoveryPauseUntilTick = -1;
     }
 
-    // Gère la situation où le chemin devient inaccessible
-    // Lance un retry automatique local pour recalculer le chemin
-    // Change l'état et démarre la coroutine de retry périodique
+    // Cherche un détour adjacent libre en ordre stable.
+    private Vector2Int? FindDetourCell()
+    {
+        if (!orderedDestination.HasValue)
+            return null;
+        Vector2Int[] offsets = {
+            new Vector2Int(-1, 0), new Vector2Int(1, 0), new Vector2Int(0, 1), new Vector2Int(0, -1),
+            new Vector2Int(-1, 1), new Vector2Int(1, 1), new Vector2Int(-1, -1), new Vector2Int(1, -1)
+        };
+        Vector2Int? best = null;
+        int bestDistance = int.MaxValue;
+        foreach (Vector2Int offset in offsets)
+        {
+            Vector2Int cell = currentCell + offset;
+            if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject))
+                continue;
+            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
+            if (occupant != null && occupant != unitGameObject)
+                continue;
+            int distance = CombatSystem.CalculateChebyshevDistance(cell, orderedDestination.Value);
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = cell;
+            }
+        }
+        return best;
+    }
+
+    // Détecte les détours excessifs sans dépendre du visuel.
+    private bool IsPathAbsurd(List<Vector2Int> path, Vector2Int destination)
+    {
+        if (path == null || path.Count == 0)
+            return false;
+        int distance = CombatSystem.CalculateChebyshevDistance(currentCell, destination);
+        return distance > 0 && path.Count > distance * detourRatioThreshold;
+    }
+
+    // Gère une cellule devenue inaccessible avant le début du step.
     private void HandlePathBlocked()
     {
         EntityRegistry.Instance?.ClearLeaving(unitGameObject);
+        EntityRegistry.Instance?.ClearIncoming(unitGameObject);
         logicalPath.Clear();
-
-        if (debugMovement)
-        {
-            GameLogger.Warn(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Chemin bloqué à {currentCell}", this);
-        }
-
-        if (animatorController != null && !(attackController != null && attackController.IsAttacking()))
-        {
-            animatorController.PlayIdleAnimation();
-        }
-
+        animatorController?.PlayIdleAnimation();
         if (!orderedDestination.HasValue)
         {
             ClearCellSubscriptions();
             SetState(MoveState.Idle);
             return;
         }
-
-        // Lance retry persistant — la collision en cours de Lerp est gérée directement dans InterpolationLoop
         SetState(MoveState.Blocked);
         WatchBlockedDestination();
-        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
         attackController?.SetManualOrder(false);
-        retryCoroutine = StartCoroutine(RetryPathPeriodically(orderedDestination.Value));
+        ScheduleRetry(orderedDestination.Value);
     }
 
-    // Appelé quand le mouvement se termine avec succès
-    // Nettoie l'état et déclenche animations de fin
+    // Termine une destination et conserve les événements historiques.
     private void OnMovementCompleted()
     {
         ClearCellSubscriptions();
@@ -1089,7 +1035,6 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         {
             Vector2Int destination = recoveryDestination.Value;
             recoveryDestination = null;
-            interpolationCoroutine = null;
             StartRecoveryPause(destination);
             return;
         }
@@ -1098,162 +1043,71 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         consecutivePathFailures = 0;
         SetState(MoveState.Idle);
         OnArrived.Invoke();
-
-        if (debugMovement)
+        bool attacking = attackController?.IsAttacking() ?? false;
+        if (!attacking && attackController != null)
         {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Destination {currentCell} atteinte", this);
-        }
-
-        // Vérifie si une attaque est en cours
-        bool isAttacking = attackController != null && attackController.IsAttacking();
-
-        // Si ennemi à portée et pas déjà en train d'attaquer, déclenche l'attaque immédiatement
-        if (!isAttacking && attackController != null)
-        {
-            GameObject nearestEnemy = attackController.FindNearestEnemyInRange();
-            if (nearestEnemy != null)
+            GameObject enemy = attackController.FindNearestEnemyInRange();
+            if (enemy != null)
             {
-                attackController.InterruptChaseAndAttack(nearestEnemy);
+                attackController.InterruptChaseAndAttack(enemy);
                 return;
             }
         }
-
-        // Animation idle SEULEMENT si pas en train d'attaquer
-        if (animatorController != null && !isAttacking)
-        {
-            animatorController.PlayIdleAnimation();
-        }
-
-        // Reset état pour prochain mouvement
+        if (!attacking)
+            animatorController?.PlayIdleAnimation();
         OnIdleStateChanged.Invoke(true);
         isFirstMoveOfSession = true;
-
-        // Lève le blocage auto-attaque — l'unité est arrivée, elle peut de nouveau auto-attaquer
-        if (attackController != null)
-        {
-            attackController.SetManualOrder(false);
-        }
-
-        // Reset le flag IdleReversed dans AnimatorController pour prochain mouvement
-        if (IsRootborn() && animatorController != null && !isAttacking)
-        {
-            animatorController.ResetIdleReversedSession();
-        }
+        attackController?.SetManualOrder(false);
+        if (IsRootborn() && !attacking)
+            animatorController?.ResetIdleReversedSession();
     }
 
-    // Arrête immédiatement le mouvement en cours
-    // Interruption manuelle ou automatique (conflit, obstacle)
-    // Nettoie l'état, arrête toutes les coroutines
+    // Arrête la logique et laisse la présentation rejoindre la cellule validée sans téléportation.
     public void StopMovement()
     {
-        CancelPendingPathRequest();
-        ClearCellSubscriptions();
-        repathRequested = false;
-        notificationRepathIssuedThisStep = false;
-        EntityRegistry.Instance?.ClearLeaving(unitGameObject);
-        orderedDestination = null;
-        pendingDestination = null;
-        recoveryDestination = null;
-        consecutivePathFailures = 0;
-
-        // Arrête la coroutine d'interpolation
-        if (interpolationCoroutine != null)
-        {
-            StopCoroutine(interpolationCoroutine);
-            interpolationCoroutine = null;
-        }
-
-        // Arrête la coroutine de retry si active
-        if (retryCoroutine != null)
-        {
-            StopCoroutine(retryCoroutine);
-            retryCoroutine = null;
-        }
-
-        // Vide la queue
-        logicalPath.Clear();
-
-        // Réaffirme la cellule logique validée avant le snap visuel
-        EntityRegistry.Instance?.UpdateLogicalPosition(gameObject, currentCell);
-
-        // Snap visuel à la cellule logique validée
-        transform.position = GridManager.Instance.GridToWorld(currentCell);
-
-        // Remet à zéro les variables d'état
-        SetState(MoveState.Idle);
-        isFirstMoveOfSession = true;
-
-        // Arrête les animations et retourne à idle
-        if (animatorController != null)
-        {
-            animatorController.StopAllAnimations();
-        }
-
-        if (debugMovement)
-        {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Mouvement arrêté à {currentCell}", this);
-        }
+        ResetMovementState();
+        EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
+        Vector3 center = GridManager.Instance.GridToWorld(currentCell);
+        previousTickWorldPosition = center;
+        currentTickWorldPosition = center;
+        visualFrozen = false;
+        animatorController?.StopAllAnimations();
     }
 
-    // Stoppe le mouvement en conservant la position visuelle actuelle (pas de snap au centre de case)
-    // Utilisé pour freeze en place : mort, sacrifice — l'unité reste là où elle est physiquement
+    // Arrête la logique sans modifier la pose visuelle courante.
     public void FreezeInPlace()
     {
+        ResetMovementState();
+        visualFrozen = true;
+    }
+
+    // Nettoie l'état commun aux deux formes d'arrêt.
+    private void ResetMovementState()
+    {
         CancelPendingPathRequest();
+        CancelRecoveryPause();
+        CancelRetry();
         ClearCellSubscriptions();
-        repathRequested = false;
-        notificationRepathIssuedThisStep = false;
         EntityRegistry.Instance?.ClearLeaving(unitGameObject);
+        EntityRegistry.Instance?.ClearIncoming(unitGameObject);
+        queuedCommandDestination = null;
+        queuedCommandIsPlayerOrder = false;
+        intraGroupRepathIssuedThisStep = false;
         orderedDestination = null;
         pendingDestination = null;
         recoveryDestination = null;
-        consecutivePathFailures = 0;
-
-        // Arrête la coroutine d'interpolation
-        if (interpolationCoroutine != null)
-        {
-            StopCoroutine(interpolationCoroutine);
-            interpolationCoroutine = null;
-        }
-
-        // Arrête la coroutine de retry si active
-        if (retryCoroutine != null)
-        {
-            StopCoroutine(retryCoroutine);
-            retryCoroutine = null;
-        }
-
-        // Vide la queue
         logicalPath.Clear();
-
-        // Remet à zéro les variables d'état sans modifier la position visuelle ni le registre logique
         SetState(MoveState.Idle);
         isFirstMoveOfSession = true;
-
-        // L'animator est géré par UnitFreezer avant cet appel — ne pas toucher ici
-        if (debugMovement)
-        {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Mouvement figé en place à {transform.position}", this);
-        }
     }
 
-    // Vide la queue de chemin sans téléporter l'unité
-    // L'unité termine son interpolation vers la case actuelle puis s'arrête
+    // Vide le chemin sans téléporter l'unité.
     public void ClearPathQueue()
     {
-        if (logicalPath != null)
-        {
-            logicalPath.Clear();
-        }
-
-        if (debugMovement)
-        {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Queue de chemin vidée", this);
-        }
+        logicalPath?.Clear();
     }
 
-    // Retourne l'état actuel du contrôleur de mouvement
-    // Interface pour debug et coordination avec autres systèmes
+    // Retourne l'état public historique.
     public MovementState GetCurrentState()
     {
         switch (moveState)
@@ -1270,288 +1124,65 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener
         }
     }
 
-    // Force la sortie d'idle logique sans changer l'état de mouvement
+    // Force la sortie d'idle logique.
     public void ForceExitIdle()
     {
         if (moveState == MoveState.Idle)
             OnIdleStateChanged.Invoke(false);
     }
 
-    // Notifie que l'idle logique est restauré si l'unité est toujours idle
+    // Notifie le retour d'idle si l'état est toujours compatible.
     public void NotifyIdleRestored()
     {
         if (moveState == MoveState.Idle)
             OnIdleStateChanged.Invoke(true);
     }
 
-    // Retourne la position de grille LOGIQUE (source de vérité)
-    // Utilisé par AttackController et ChaseController pour calculs de distance/portée
+    // Retourne la position grille source de vérité.
     public Vector2Int GetCurrentGridPosition()
     {
         return currentCell;
     }
 
-    // Vérifie si l'unité est prête à recevoir un nouvel ordre de mouvement
-    // Retourne false si une animation pré-mouvement (IdleReversed) est en cours
+    // Indique si aucune animation spéciale ne bloque un nouvel ordre.
     public bool IsReadyForMovement()
     {
-        // Si c'est un Rootborn et que l'IdleReversed est en cours, pas prêt
-        if (IsRootborn() && animatorController != null && animatorController.IsPlayingSpecialAnimation())
-        {
-            return false;
-        }
-
-        return true;
+        return !(IsRootborn() && animatorController != null && animatorController.IsPlayingSpecialAnimation());
     }
 
-    // Joue l'animation IdleReversed pour les Rootborn avant le mouvement
-    // Attend que l'animation se termine complètement avant de continuer
-    private IEnumerator PlayRootbornPreMovementAnimation()
-    {
-        if (animatorController != null)
-        {
-            bool animationComplete = false;
-
-            // Lance l'IdleReversed avec callback
-            animatorController.PlayRootbornIdleReversed(() =>
-            {
-                animationComplete = true;
-            });
-
-            // Attend que le callback soit appelé
-            while (!animationComplete)
-            {
-                yield return null;
-            }
-
-            if (debugMovement)
-            {
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: IdleReversed terminée", this);
-            }
-        }
-    }
-
-    // Lance un retry automatique vers une destination
-    // Utilisé quand PathFinding échoue initialement
-    private void StartRetryToDestination(Vector2Int destination)
-    {
-        orderedDestination = destination;
-        SetState(MoveState.Blocked);
-        WatchBlockedDestination();
-
-        if (debugMovement)
-        {
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Retry vers {destination}", this);
-        }
-
-        // Autorise l'auto-attaque pendant le retry — si un ennemi entre à portée, l'unité ripostera
-        attackController?.SetManualOrder(false);
-        retryCoroutine = StartCoroutine(RetryPathPeriodically(destination));
-    }
-
-    // Coroutine pour réessayer de calculer un nouveau chemin périodiquement
-    // Retry automatique local sans dépendance externe
-    // Continue jusqu'à succès ou arrêt manuel
-    private IEnumerator RetryPathPeriodically(Vector2Int destination)
-    {
-        while (moveState == MoveState.Blocked)
-        {
-            yield return new WaitForSeconds(retryInterval);
-
-            if (moveState != MoveState.Blocked)
-                yield break;
-
-            // Conserve la destination exacte tant qu'une autre unité l'occupe
-            GameObject destinationOccupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(destination);
-            bool destinationOccupiedByUnit = destinationOccupant != null && destinationOccupant != unitGameObject;
-
-            List<Vector2Int> newPath = null;
-            bool retryPathCompleted = false;
-            if (!QueuePathRequest(currentCell, destination, path =>
-                {
-                    newPath = path;
-                    retryPathCompleted = true;
-                }))
-            {
-                yield break;
-            }
-
-            long retryRequestId = activePathRequestId;
-            while (!retryPathCompleted)
-            {
-                if (activePathRequestId != retryRequestId)
-                    yield break;
-
-                yield return null;
-            }
-
-            bool pathFailed = newPath == null || newPath.Count == 0 || IsPathAbsurd(newPath, destination);
-
-            // Une destination campée reste la destination exacte, le détour n'est qu'une récupération locale temporaire
-            if (destinationOccupiedByUnit)
-            {
-                if (pathFailed)
-                    RegisterPathFailure(destination);
-
-                if (consecutivePathFailures >= 2)
-                {
-                    retryCoroutine = null;
-                    StartFailureRecovery(destination);
-                    yield break;
-                }
-
-                SetState(MoveState.Blocked);
-                continue;
-            }
-
-            if (pathFailed)
-            {
-                RegisterPathFailure(destination);
-                if (consecutivePathFailures >= 2)
-                {
-                    retryCoroutine = null;
-                    StartFailureRecovery(destination);
-                    yield break;
-                }
-
-                SetState(MoveState.Blocked);
-                continue;
-            }
-
-            retryCoroutine = null;
-            if (debugMovement)
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Retry réussi vers {destination}", this);
-            MoveTo(destination, false);
-            yield break;
-        }
-    }
-
-    // Vérifie si le chemin vers une destination est absurde (détour excessif)
-    // Retourne true si longueurChemin > distanceChebyshev * detourRatioThreshold
-    private bool IsPathAbsurd(List<Vector2Int> path, Vector2Int destination)
-    {
-        if (path == null || path.Count == 0) return false;
-
-        int chebyshev = CombatSystem.CalculateChebyshevDistance(currentCell, destination);
-
-        if (chebyshev == 0) return false;
-
-        return path.Count > chebyshev * detourRatioThreshold;
-    }
-
-    // Cherche une case adjacente libre depuis la position actuelle, plus proche de orderedDestination
-    private Vector2Int? FindDetourCell()
-    {
-        if (!orderedDestination.HasValue) return null;
-
-        Vector2Int target = orderedDestination.Value;
-        Vector2Int[] offsets = {
-            new Vector2Int(-1, 0), new Vector2Int(1, 0),
-            new Vector2Int(0, 1),  new Vector2Int(0, -1),
-            new Vector2Int(-1, 1), new Vector2Int(1, 1),
-            new Vector2Int(-1,-1), new Vector2Int(1,-1)
-        };
-
-        Vector2Int? bestCell = null;
-        int bestDistance = int.MaxValue;
-
-        foreach (var off in offsets)
-        {
-            Vector2Int cell = currentCell + off;
-
-            if (!GridManager.Instance.IsWalkableFor(cell, unitGameObject)) continue;
-            GameObject occupant = EntityRegistry.Instance?.GetUnitAtLogicalPosition(cell);
-            if (occupant != null && occupant != unitGameObject) continue;
-
-            int dist = CombatSystem.CalculateChebyshevDistance(cell, target);
-            if (dist < bestDistance)
-            {
-                bestDistance = dist;
-                bestCell = cell;
-            }
-        }
-
-        return bestCell;
-    }
-
-    // Callback appelé par AnimatorController quand IdleReversed se termine
-    // Exécute l'ordre de mouvement mis en attente
+    // Compatibilité callback Animator : la décision reste consommée au tick par l'échéance fixe.
     public void OnIdleReversedComplete()
     {
-        if (pendingDestination.HasValue)
-        {
-            Vector2Int destination = pendingDestination.Value;
-            pendingDestination = null;
-
-            if (debugMovement)
-            {
-                GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: Exécution ordre en attente vers {destination}", this);
-            }
-
-            // Exécute l'ordre différé
-            MoveTo(destination, false);
-        }
+        idleReversedCompletionPending = true;
     }
 
-    // Vérifie si cette unité est un Rootborn via le ScriptableObject (UnitStatsData.isRootborn)
-    // Retourne false si UnitStatsComponent absent plutôt que de deviner via le nom de l'objet
+    // Retourne le type Rootborn depuis les données d'unité.
     private bool IsRootborn()
     {
-        if (_statsComponent != null) return _statsComponent.IsRootborn();
-        return false;
+        return statsComponent != null && statsComponent.IsRootborn();
     }
 
-    // Méthode de debug pour afficher l'état du contrôleur
+    // Affiche l'état logique sans reconvertir la position visuelle.
     [ContextMenu("Debug Movement Controller")]
     private void DebugControllerState()
     {
-        GameLogger.Log(GameLogger.Category.Movement, $"=== MovementController Debug - {gameObject.name} ===", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"État interne: {moveState} | API: {GetCurrentState()}", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"En mouvement: {IsMoving}", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"Position LOGIQUE: {currentCell}", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"Position VISUELLE: {transform.position} → {GridManager.Instance.WorldToGrid(transform.position)}", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"Queue: {logicalPath.Count} cases restantes", this);
-        GameLogger.Log(GameLogger.Category.Movement, $"Requête path active: {activePathRequestId != 0}", this);
+        GameLogger.Log(GameLogger.Category.Movement,
+            $"MovementController {gameObject.name}: {moveState}, cellule={currentCell}, progression={stepProgressTicks}/{activeStepDurationTicks}", this);
     }
 
-    // Dessine le chemin actuel dans la vue Scene pour debug visuel
+    // Dessine le chemin logique dans la vue Scene.
     private void OnDrawGizmos()
     {
         if (logicalPath == null || logicalPath.Count == 0 || GridManager.Instance == null)
             return;
 
-        // Dessine position logique
-        Gizmos.color = Color.yellow;
-        Vector3 logicalPos = GridManager.Instance.GridToWorld(currentCell);
-        Gizmos.DrawWireCube(logicalPos, Vector3.one * 1.2f);
-
-        // Dessine la queue restante
+        Vector3 previous = GridManager.Instance.GridToWorld(currentCell);
         Gizmos.color = Color.blue;
-        Vector2Int[] pathArray = logicalPath.ToArray();
-        Vector3 previousPos = logicalPos;
-
-        foreach (var cell in pathArray)
+        foreach (Vector2Int cell in logicalPath)
         {
-            Vector3 cellPos = GridManager.Instance.GridToWorld(cell);
-            Gizmos.DrawLine(previousPos, cellPos);
-            previousPos = cellPos;
-        }
-
-        // Dessine la case cible actuelle
-        if (moveState == MoveState.SteppingToAnchor || moveState == MoveState.SteppingToCenter || moveState == MoveState.Receding)
-        {
-            Gizmos.color = Color.red;
-            Vector3 targetPos = GridManager.Instance.GridToWorld(targetCell);
-            Gizmos.DrawWireCube(targetPos, Vector3.one * 0.8f);
-        }
-
-        // Dessine la destination finale
-        if (pathArray.Length > 0)
-        {
-            Gizmos.color = Color.green;
-            Vector3 finalPos = GridManager.Instance.GridToWorld(pathArray[pathArray.Length - 1]);
-            Gizmos.DrawWireSphere(finalPos, 0.3f);
+            Vector3 next = GridManager.Instance.GridToWorld(cell);
+            Gizmos.DrawLine(previous, next);
+            previous = next;
         }
     }
 }
-

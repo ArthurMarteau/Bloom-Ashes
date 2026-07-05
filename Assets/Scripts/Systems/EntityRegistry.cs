@@ -17,7 +17,10 @@ public class EntityRegistry : MonoBehaviour
     private Dictionary<GameObject, IDamageable> entities = new Dictionary<GameObject, IDamageable>();
     private Dictionary<GameObject, ITeamMember> teamMembers = new Dictionary<GameObject, ITeamMember>();
     private Dictionary<GameObject, IEvictable> evictables = new Dictionary<GameObject, IEvictable>();
+    private Dictionary<GameObject, long> entityIDs = new Dictionary<GameObject, long>();
+    private Dictionary<GameObject, MovementController> movementControllers = new Dictionary<GameObject, MovementController>();
     private HashSet<GameObject> movingUnits = new HashSet<GameObject>();
+    private long nextEntityID = 1;
 
     // Registre des positions logiques : position grille source de vérité, indépendante du Lerp visuel
     // Mis à jour par MovementController à chaque étape logique
@@ -30,8 +33,11 @@ public class EntityRegistry : MonoBehaviour
     private Dictionary<Vector2Int, long> claimTicks = new Dictionary<Vector2Int, long>();
     private Dictionary<Vector2Int, HashSet<GameObject>> cellToUnits = new Dictionary<Vector2Int, HashSet<GameObject>>();
     private Dictionary<Vector2Int, GameObject> leavingPositionToUnit = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<Vector2Int, GameObject> incomingByCell = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<GameObject, Vector2Int> incomingCellsByUnit = new Dictionary<GameObject, Vector2Int>();
     private Dictionary<Vector2Int, List<ICellListener>> cellListeners = new Dictionary<Vector2Int, List<ICellListener>>();
     private Dictionary<Vector2Int, GameObject> buildingPositions = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<GameObject, Vector2Int> buildingLogicalPositions = new Dictionary<GameObject, Vector2Int>();
 
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
@@ -74,6 +80,11 @@ public class EntityRegistry : MonoBehaviour
         entities[go] = entity;
         teamMembers[go] = teamMember;
         evictables[go] = evictable;
+        MovementController movementController = evictable as MovementController;
+        if (movementController != null)
+            movementControllers[go] = movementController;
+        if (!entityIDs.ContainsKey(go))
+            entityIDs[go] = nextEntityID++;
 
         if (debugRegistry)
         {
@@ -90,6 +101,8 @@ public class EntityRegistry : MonoBehaviour
         entities.Remove(go);
         teamMembers.Remove(go);
         evictables.Remove(go);
+        entityIDs.Remove(go);
+        movementControllers.Remove(go);
         movingUnits.Remove(go);
         ReleasePositionInternal(go);
 
@@ -215,6 +228,54 @@ public class EntityRegistry : MonoBehaviour
         return go != null && movingUnits.Contains(go);
     }
 
+    // Enregistre l'unité en approche d'une cellule avec un seul entrant visible par case.
+    public void SetIncoming(GameObject go, Vector2Int cell)
+    {
+        if (go == null) return;
+
+        ClearIncoming(go);
+        if (incomingByCell.TryGetValue(cell, out GameObject existing) && existing != null && existing != go)
+        {
+            if (debugRegistry && GameLogger.IsEnabled(GameLogger.Category.Spawn))
+            {
+                GameLogger.Warn(GameLogger.Category.Spawn,
+                    $" EntityRegistry: conflit d'entrants sur {cell} entre {existing.name} et {go.name} — dernier entrant conservé", null);
+            }
+            incomingCellsByUnit.Remove(existing);
+        }
+
+        incomingByCell[cell] = go;
+        incomingCellsByUnit[go] = cell;
+    }
+
+    // Retire l'unité de l'index des cellules en approche en O(1).
+    public void ClearIncoming(GameObject go)
+    {
+        if (go == null) return;
+        if (incomingCellsByUnit.TryGetValue(go, out Vector2Int cell)
+            && incomingByCell.TryGetValue(cell, out GameObject registered) && registered == go)
+        {
+            incomingByCell.Remove(cell);
+        }
+        incomingCellsByUnit.Remove(go);
+    }
+
+    // Retourne l'unité actuellement indexée comme entrante sur la cellule.
+    public GameObject GetIncomingUnit(Vector2Int cell)
+    {
+        if (incomingByCell.TryGetValue(cell, out GameObject go) && go != null)
+            return go;
+        return null;
+    }
+
+    // Retourne le contrôleur mis en cache à l'enregistrement, sans GetComponent pendant les ticks.
+    public MovementController GetMovementController(GameObject go)
+    {
+        if (go != null && movementControllers.TryGetValue(go, out MovementController controller))
+            return controller;
+        return null;
+    }
+
     // Libère la position logique d'une entité sans la désenregistrer du registry
     // Appelée à la mort d'une unité : la case devient walkable immédiatement,
     // mais l'entité reste dans `entities` pendant l'animation de mort (filtrée par IsDead() ailleurs)
@@ -228,6 +289,7 @@ public class EntityRegistry : MonoBehaviour
     // Libère tous les index de position logique et de cellule en cours d'abandon
     private void ReleasePositionInternal(GameObject go)
     {
+        ClearIncoming(go);
         if (logicalPositions.TryGetValue(go, out var lp))
         {
             RemoveUnitFromCell(lp, go);
@@ -259,6 +321,37 @@ public class EntityRegistry : MonoBehaviour
     {
         if (positionToUnit.TryGetValue(position, out GameObject go) && go != null) return go;
         return null;
+    }
+
+    // Retourne la position logique enregistrée d'une entité sans consulter son Transform.
+    public bool TryGetLogicalPosition(GameObject go, out Vector2Int position)
+    {
+        if (go != null)
+        {
+            if (logicalPositions.TryGetValue(go, out position))
+                return true;
+            if (buildingLogicalPositions.TryGetValue(go, out position))
+                return true;
+        }
+
+        position = default;
+        return false;
+    }
+
+    // Retourne les cellules logiques occupées par un bâtiment dans un ordre stable.
+    public List<Vector2Int> GetBuildingOccupiedCells(GameObject building)
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+        if (building == null)
+            return cells;
+
+        foreach (var entry in buildingPositions)
+        {
+            if (entry.Value == building)
+                cells.Add(entry.Key);
+        }
+        cells.Sort((left, right) => left.x != right.x ? left.x.CompareTo(right.x) : left.y.CompareTo(right.y));
+        return cells;
     }
 
     // Ajoute un listener aux notifications d'une cellule logique.
@@ -305,14 +398,31 @@ public class EntityRegistry : MonoBehaviour
     {
         if (building == null) return;
         buildingPositions[cell] = building;
-        GridManager.Instance?.SetStaticBlocked(cell, true);
+        if (!buildingLogicalPositions.TryGetValue(building, out Vector2Int anchor)
+            || cell.x < anchor.x || (cell.x == anchor.x && cell.y < anchor.y))
+        {
+            buildingLogicalPositions[building] = cell;
+        }
     }
 
     // Désenregistre le bâtiment occupant une cellule logique.
     public void UnregisterBuilding(Vector2Int cell)
     {
+        if (buildingPositions.TryGetValue(cell, out GameObject building) && building != null)
+        {
+            buildingLogicalPositions.Remove(building);
+            foreach (var entry in buildingPositions)
+            {
+                if (entry.Key == cell || entry.Value != building)
+                    continue;
+                if (!buildingLogicalPositions.TryGetValue(building, out Vector2Int anchor)
+                    || entry.Key.x < anchor.x || (entry.Key.x == anchor.x && entry.Key.y < anchor.y))
+                {
+                    buildingLogicalPositions[building] = entry.Key;
+                }
+            }
+        }
         buildingPositions.Remove(cell);
-        GridManager.Instance?.SetStaticBlocked(cell, false);
     }
 
     // Retourne le bâtiment occupant une cellule logique, ou null.
@@ -397,6 +507,15 @@ public class EntityRegistry : MonoBehaviour
     public int GetEntityCount()
     {
         return entities.Count;
+    }
+
+    // Retourne l'identifiant séquentiel stable de l'entité ou -1 si elle n'est pas enregistrée
+    public long GetEntityID(GameObject go)
+    {
+        if (go != null && entityIDs.TryGetValue(go, out long entityID))
+            return entityID;
+
+        return -1;
     }
 
     // === Utilitaires ===
@@ -485,6 +604,8 @@ public class EntityRegistry : MonoBehaviour
             entities.Remove(go);
             teamMembers.Remove(go);
             evictables.Remove(go);
+            entityIDs.Remove(go);
+            movementControllers.Remove(go);
             movingUnits.Remove(go);
         }
 

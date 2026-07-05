@@ -12,7 +12,7 @@ public struct PathRequest
     public long requestId;
 }
 
-// Planificateur POCO qui limite le nombre de calculs A* exécutés par frame
+// Planificateur POCO qui limite le nombre de calculs A* exécutés par tick
 public class PathFindingScheduler
 {
     private readonly Queue<PathRequest> pendingRequests = new Queue<PathRequest>();
@@ -66,11 +66,11 @@ public class PathFindingScheduler
     }
 
     // Exécute au maximum le budget demandé et ignore les requêtes annulées ou détruites
-    public void ProcessBudget(int maxPerFrame)
+    public void ProcessBudget(int maxPerTick)
     {
         int processedCount = 0;
 
-        while (processedCount < maxPerFrame && pendingRequests.Count > 0)
+        while (processedCount < maxPerTick && pendingRequests.Count > 0)
         {
             PathRequest request = pendingRequests.Dequeue();
 

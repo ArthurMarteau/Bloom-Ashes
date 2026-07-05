@@ -4,7 +4,7 @@ using UnityEngine;
 // Unité intermédiaire statique entre le Rootborn et l'unité de combat finale
 // Spawné par TransformationController.ExecuteTransform, remplacé par l'unité finale à la fin du buildTime
 // Ne se déplace pas — reste sur sa tile jusqu'à l'éclosion ou l'annulation
-public class BudComponent : MonoBehaviour
+public class BudComponent : MonoBehaviour, ITickable
 {
     private const float FallbackBuildTime = 10f;
 
@@ -17,8 +17,12 @@ public class BudComponent : MonoBehaviour
     // Équipe propriétaire — propagée à l'unité finale et au Rootborn de repli
     private int teamID;
 
-    // Temps écoulé depuis le début de la production
-    private float elapsedTime;
+    // Temps logique de production
+    private int elapsedTicks;
+    private int buildTimeTicks;
+    private long simulationEntityID = -1;
+    private bool isProductionActive;
+    private BuildingStatsComponent buildingStatsComponent;
 
     // Vrai si Cancel() a été appelé — empêche la coroutine de continuer
     private bool isCancelled;
@@ -28,10 +32,10 @@ public class BudComponent : MonoBehaviour
     {
         get
         {
-            if (productionBuildTime <= 0f)
+            if (buildTimeTicks <= 0)
                 return 1f;
 
-            return Mathf.Clamp01(elapsedTime / productionBuildTime);
+            return Mathf.Clamp01((float)elapsedTicks / buildTimeTicks);
         }
     }
 
@@ -44,9 +48,11 @@ public class BudComponent : MonoBehaviour
         unitInProduction = unitData;
         this.respawnStatsData = respawnStatsData;
         productionBuildTime = GetBuildTime(unitInProduction);
+        buildTimeTicks = SimulationClock.SecondsToTicks(productionBuildTime);
         teamID = team;
-        elapsedTime = 0f;
+        elapsedTicks = 0;
         isCancelled = false;
+        isProductionActive = true;
 
         PrepareBud(currentHP, maxHP);
 
@@ -54,34 +60,46 @@ public class BudComponent : MonoBehaviour
         if (budTeam != null)
             budTeam.SetTeamID(team);
 
-        StartCoroutine(ProductionRoutine());
-
-        BuildingStatsComponent buildingStats = GetComponent<BuildingStatsComponent>();
-        if (buildingStats != null)
-            buildingStats.OnBuildingDestroyed.AddListener(OnBudKilled);
+        buildingStatsComponent = GetComponent<BuildingStatsComponent>();
+        if (buildingStatsComponent != null)
+            buildingStatsComponent.OnBuildingDestroyed.AddListener(OnBudKilled);
     }
 
-    // Coroutine principale : incrémente le timer frame par frame puis déclenche l'éclosion
-    private IEnumerator ProductionRoutine()
+    // Enregistre le Bud après l'attribution de son entityID par BuildingStatsComponent.Awake
+    private void Start()
     {
-        // Attente active — incrémentation manuelle pour exposer Progress à l'UI
-        while (elapsedTime < productionBuildTime)
-        {
-            if (isCancelled) yield break;
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(gameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
+    }
 
-            elapsedTime += Time.deltaTime;
-            yield return null;
-        }
+    // Retire le Bud de la boucle logique et de l'événement de destruction
+    private void OnDestroy()
+    {
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
 
-        if (isCancelled) yield break;
+        if (buildingStatsComponent != null)
+            buildingStatsComponent.OnBuildingDestroyed.RemoveListener(OnBudKilled);
+    }
 
-        if (isCancelled) yield break;
+    // Avance la production sur la boucle logique fixe
+    public void SimTick(long tick)
+    {
+        if (!isActiveAndEnabled || !isProductionActive || isCancelled)
+            return;
+
+        elapsedTicks++;
+        if (elapsedTicks < buildTimeTicks)
+            return;
+
+        isProductionActive = false;
 
         if (unitInProduction == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ProductionRoutine — unitInProduction null, spawn final impossible", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production — unitInProduction null, spawn final impossible", this);
             Destroy(gameObject);
-            yield break;
+            return;
         }
 
         SpawnFinalUnit();
@@ -143,6 +161,7 @@ public class BudComponent : MonoBehaviour
     public void Cancel()
     {
         isCancelled = true;
+        isProductionActive = false;
         StopAllCoroutines();
 
         // Étape 1 : Récupère les HP actuels du Bud
@@ -210,6 +229,7 @@ public class BudComponent : MonoBehaviour
     private void OnBudKilled()
     {
         isCancelled = true;
+        isProductionActive = false;
         StopAllCoroutines();
     }
 
@@ -250,6 +270,7 @@ public class BudComponent : MonoBehaviour
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedTime:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}", this);
+        float elapsedSeconds = (float)elapsedTicks / SimulationClock.TICKS_PER_SECOND;
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedSeconds:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}", this);
     }
 }

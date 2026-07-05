@@ -6,7 +6,7 @@ using UnityEngine.Events;
 // S'initialise avant les autres managers grâce à DefaultExecutionOrder
 // Délègue tous les calculs à WatersapSystem (POCO pur)
 [DefaultExecutionOrder(-50)]
-public class WatersapManager : MonoBehaviour
+public class WatersapManager : MonoBehaviour, ITickable
 {
     public static WatersapManager Instance { get; private set; }
 
@@ -21,7 +21,8 @@ public class WatersapManager : MonoBehaviour
     private Dictionary<int, int> watersapByTeam = new Dictionary<int, int>();
 
     // Timer de revenu passif par équipe
-    private Dictionary<int, float> passiveTimerByTeam = new Dictionary<int, float>();
+    private Dictionary<int, long> passiveTimerByTeam = new Dictionary<int, long>();
+    private int passiveIncomeIntervalTicks;
 
     // Système de calcul pur — aucune dépendance Unity
     private WatersapSystem watersapSystem = new WatersapSystem();
@@ -41,22 +42,42 @@ public class WatersapManager : MonoBehaviour
 
         if (watersapData == null)
             GameLogger.Error("💧 WatersapManager : WatersapData non assigné !", this);
+        else
+            passiveIncomeIntervalTicks = SimulationClock.SecondsToTicks(watersapData.passiveIncomeInterval);
     }
 
-    // Fait avancer les timers de revenu passif pour toutes les équipes enregistrées
-    private void Update()
+    // Enregistre le manager sous l'identifiant réservé 0
+    private void Start()
     {
-        if (watersapData == null) return;
+        if (Instance == this)
+            SimulationClockManager.Instance?.Register(0, this);
+    }
+
+    // Retire le manager de la boucle logique et nettoie son singleton
+    private void OnDestroy()
+    {
+        if (Instance != this)
+            return;
+
+        SimulationClockManager.Instance?.Unregister(0, this);
+        Instance = null;
+    }
+
+    // Fait avancer les timers de revenu passif sur la boucle logique fixe
+    public void SimTick(long tick)
+    {
+        if (!isActiveAndEnabled || watersapData == null) return;
 
         // Copie des clés pour éviter InvalidOperationException si le dictionnaire est modifié pendant l'itération
         var teamIDs = new System.Collections.Generic.List<int>(watersapByTeam.Keys);
+        teamIDs.Sort();
         foreach (int teamID in teamIDs)
         {
-            passiveTimerByTeam[teamID] += Time.deltaTime;
+            passiveTimerByTeam[teamID]++;
 
-            if (passiveTimerByTeam[teamID] >= watersapData.passiveIncomeInterval)
+            if (passiveTimerByTeam[teamID] >= passiveIncomeIntervalTicks)
             {
-                passiveTimerByTeam[teamID] = 0f;
+                passiveTimerByTeam[teamID] = 0;
                 AddWatersap(teamID, watersapData.passiveIncomeAmount);
 
                 if (debugWatersap)
@@ -75,7 +96,7 @@ public class WatersapManager : MonoBehaviour
         }
 
         watersapByTeam[teamID] = 0;
-        passiveTimerByTeam[teamID] = 0f;
+        passiveTimerByTeam[teamID] = 0;
 
         if (startWithFullWatersap && watersapData != null)
         {

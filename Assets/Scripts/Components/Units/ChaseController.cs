@@ -4,7 +4,7 @@ using UnityEngine;
 // Gère la poursuite persistante d'une unité cible
 // L'unité suit sa cible et reste adjacente à elle tant que l'ordre persiste
 // S'intègre avec MovementController pour les déplacements case par case
-public class ChaseController : MonoBehaviour
+public class ChaseController : MonoBehaviour, ITickable
 {
     [Header("Chase Settings")]
     [SerializeField] private float checkInterval = 0.2f; // Intervalle de vérification position cible
@@ -14,7 +14,10 @@ public class ChaseController : MonoBehaviour
     private GameObject currentTarget;
     private bool isChasing = false;
     private Vector2Int lastTargetPosition;
-    private float lastCheckTime;
+    private int checkIntervalTicks;
+    private long lastCheckTick;
+    private long simulationEntityID = -1;
+    private bool initialMovePending;
 
     // Références
     private MovementController movementController;
@@ -24,6 +27,7 @@ public class ChaseController : MonoBehaviour
     private void Awake()
     {
         unitGameObject = gameObject;
+        checkIntervalTicks = SimulationClock.SecondsToTicks(checkInterval);
 
         movementController = GetComponent<MovementController>();
         if (movementController == null)
@@ -32,16 +36,41 @@ public class ChaseController : MonoBehaviour
         }
     }
 
-    // Vérifie et met à jour la chase chaque frame
-    private void Update()
+    // Enregistre la chase après l'attribution de l'entityID de l'unité
+    private void Start()
     {
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(gameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
+    }
+
+    // Retire la chase de la boucle logique lors de sa destruction
+    private void OnDestroy()
+    {
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
+    }
+
+    // Vérifie et met à jour la chase sur la boucle logique fixe
+    public void SimTick(long tick)
+    {
+        if (!isActiveAndEnabled)
+            return;
+
         if (!isChasing || currentTarget == null)
         {
             return;
         }
 
+        if (initialMovePending)
+        {
+            initialMovePending = false;
+            MoveTowardsTarget();
+            return;
+        }
+
         // NOUVEAU : Vérifie TOUJOURS si la cible a bougé, même pendant mouvement
-        Vector2Int currentTargetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector2Int currentTargetPosition = GetLogicalPosition(currentTarget);
 
         // Si cible a bougé (changé de case)
         if (currentTargetPosition != lastTargetPosition)
@@ -66,9 +95,9 @@ public class ChaseController : MonoBehaviour
         }
 
         // Vérifie périodiquement si on est bien adjacent (quand à l'arrêt)
-        if (Time.time - lastCheckTime >= checkInterval)
+        if (tick - lastCheckTick >= checkIntervalTicks)
         {
-            lastCheckTime = Time.time;
+            lastCheckTick = tick;
             CheckTargetPosition();
         }
     }
@@ -97,16 +126,16 @@ public class ChaseController : MonoBehaviour
 
         currentTarget = target;
         isChasing = true;
-        lastTargetPosition = GridManager.Instance.WorldToGrid(target.transform.position);
-        lastCheckTime = Time.time;
+        initialMovePending = true;
+        lastTargetPosition = GetLogicalPosition(target);
+        lastCheckTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
 
         if (debugChase)
         {
             GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Début chase de {target.name}", this);
         }
 
-        // Lance immédiatement le premier mouvement
-        MoveTowardsTarget();
+        // Le premier mouvement sera décidé au prochain SimTick
     }
 
     // Arrête la poursuite en cours
@@ -119,6 +148,7 @@ public class ChaseController : MonoBehaviour
         }
 
         isChasing = false;
+        initialMovePending = false;
         currentTarget = null;
 
         if (debugChase)
@@ -128,7 +158,7 @@ public class ChaseController : MonoBehaviour
     }
 
     // Vérifie si la cible a bougé et réagit en conséquence
-    // Appelé périodiquement dans Update()
+    // Appelé périodiquement dans SimTick
     private void CheckTargetPosition()
     {
         if (currentTarget == null)
@@ -142,7 +172,7 @@ public class ChaseController : MonoBehaviour
             return;
         }
 
-        Vector2Int currentTargetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector2Int currentTargetPosition = GetLogicalPosition(currentTarget);
 
         // Vérifie si la cible a changé de case
         if (currentTargetPosition != lastTargetPosition)
@@ -181,7 +211,7 @@ public class ChaseController : MonoBehaviour
         }
 
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector2Int targetPosition = GetLogicalPosition(currentTarget);
 
         // Vérifie si déjà adjacent
         if (IsAdjacentTo(myPosition, targetPosition))
@@ -207,7 +237,11 @@ public class ChaseController : MonoBehaviour
 
         // Envoie l'ordre de mouvement
         GameLogger.Log(GameLogger.Category.Movement, $"📤 Chase: Envoi ordre mouvement vers {bestCell}", this);
-        movementController.MoveTo(bestCell);
+        if (!movementController.MoveToInternal(bestCell))
+        {
+            // Un ordre joueur en attente reste prioritaire ; la chase réessaiera lors de son prochain check.
+            return;
+        }
 
         if (debugChase)
         {
@@ -303,7 +337,7 @@ public class ChaseController : MonoBehaviour
             return false;
 
         Vector2Int myPosition = movementController.GetCurrentGridPosition();
-        Vector2Int targetPosition = GridManager.Instance.WorldToGrid(currentTarget.transform.position);
+        Vector2Int targetPosition = GetLogicalPosition(currentTarget);
         return IsAdjacentTo(myPosition, targetPosition);
     }
 
@@ -311,6 +345,16 @@ public class ChaseController : MonoBehaviour
     public GameObject GetCurrentTarget()
     {
         return currentTarget;
+    }
+
+    // Retourne la position logique de la cible sans consulter son Transform.
+    private Vector2Int GetLogicalPosition(GameObject target)
+    {
+        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(target, out Vector2Int position))
+            return position;
+
+        MovementController targetMovement = target != null ? target.GetComponent<MovementController>() : null;
+        return targetMovement != null ? targetMovement.GetCurrentGridPosition() : Vector2Int.zero;
     }
 
     // Debug pour afficher l'état de la chase

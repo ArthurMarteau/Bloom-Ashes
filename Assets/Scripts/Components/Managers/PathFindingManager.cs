@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Serialization;
 
-// Pont MonoBehaviour entre la boucle Unity et le scheduler POCO de pathfinding
+// Pont MonoBehaviour entre l'horloge logique et le scheduler POCO de pathfinding
 public class PathFindingManager : MonoBehaviour
 {
     public static PathFindingManager Instance { get; private set; }
 
-    [SerializeField] private int pathsPerFrame = 4;
+    [FormerlySerializedAs("pathsPerFrame")]
+    [SerializeField] private int pathsPerTick = 16;
 
     private readonly PathFindingScheduler scheduler = new PathFindingScheduler();
 
@@ -35,10 +37,10 @@ public class PathFindingManager : MonoBehaviour
         Instance = this;
     }
 
-    // Traite le budget de chemins de la frame courante
-    private void Update()
+    // Traite le budget après TickAll afin que les callbacks appartiennent au tick courant
+    public void ProcessTickBudget()
     {
-        scheduler.ProcessBudget(Mathf.Max(0, pathsPerFrame));
+        scheduler.ProcessBudget(Mathf.Max(0, pathsPerTick));
     }
 
     // Nettoie la référence globale lors de la destruction

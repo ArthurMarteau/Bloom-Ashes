@@ -68,22 +68,18 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         }
     }
 
-    // Complète l'enregistrement des tiles si GridManager n'était pas prêt en Awake.
+    // Réaffirme les tiles en Start après l'initialisation de la grille statique.
     private void Start()
     {
-        if (registeredBuildingCells.Count == 0)
-            RegisterOccupiedTilesInRegistry();
-
+        RegisterOccupiedTilesInRegistry();
     }
 
     // Désenregistre le bâtiment de l'EntityRegistry lors de la destruction
     private void OnDestroy()
     {
+        UnregisterOccupiedTilesFromRegistry();
         if (EntityRegistry.Instance != null)
-        {
-            UnregisterOccupiedTilesFromRegistry();
             EntityRegistry.Instance.UnregisterEntity(gameObject);
-        }
     }
 
     // Déclenche le VFX de spawn — appelé uniquement après un Instantiate dynamique
@@ -321,10 +317,13 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         if (EntityRegistry.Instance == null || GridManager.Instance == null)
             return;
 
+        bool blocksMovement = BlocksMovement();
         registeredBuildingCells.Clear();
         foreach (Vector2Int cell in GetOccupiedTiles())
         {
             EntityRegistry.Instance.RegisterBuilding(cell, gameObject);
+            if (blocksMovement)
+                GridManager.Instance.SetStaticBlocked(cell, true);
             registeredBuildingCells.Add(cell);
         }
     }
@@ -332,15 +331,24 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
     // Retire les tiles occupées par ce bâtiment de l'index logique des bâtiments.
     private void UnregisterOccupiedTilesFromRegistry()
     {
-        if (EntityRegistry.Instance == null || registeredBuildingCells.Count == 0)
+        if (registeredBuildingCells.Count == 0)
             return;
 
+        bool blocksMovement = BlocksMovement();
         foreach (Vector2Int cell in registeredBuildingCells)
         {
-            EntityRegistry.Instance.UnregisterBuilding(cell);
+            EntityRegistry.Instance?.UnregisterBuilding(cell);
+            if (blocksMovement)
+                GridManager.Instance?.SetStaticBlocked(cell, false);
         }
 
         registeredBuildingCells.Clear();
+    }
+
+    // Retourne si le layer du bâtiment appartient aux masks statiquement bloquants de la grille.
+    private bool BlocksMovement()
+    {
+        return GridManager.Instance != null && GridManager.Instance.IsOnBlockingLayer(gameObject);
     }
 
     // Retourne la valeur de défense du bâtiment

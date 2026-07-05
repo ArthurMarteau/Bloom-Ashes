@@ -6,11 +6,13 @@
 public abstract class AbilityExecutor : IAbility
 {
     protected AbilityData abilityData;
-    protected float lastUsedTime = -999f;
+    protected long lastUsedTick = -1;
+    protected int cooldownTicks;
 
     public AbilityExecutor(AbilityData data)
     {
         abilityData = data;
+        cooldownTicks = data != null ? SimulationClock.SecondsToTicks(data.cooldownDuration) : 0;
     }
 
     // Retourne les données SO de l'ability
@@ -20,12 +22,14 @@ public abstract class AbilityExecutor : IAbility
     public virtual bool CanExecute(GameObject caster)
     {
         // Vérifie le cooldown
-        if (abilityData.cooldownDuration > 0f)
+        if (cooldownTicks > 0 && lastUsedTick >= 0)
         {
-            float timeSinceLastUse = Time.time - lastUsedTime;
-            if (timeSinceLastUse < abilityData.cooldownDuration)
+            long currentTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
+            long elapsedTicks = currentTick - lastUsedTick;
+            if (elapsedTicks < cooldownTicks)
             {
-                GameLogger.Log(GameLogger.Category.UI, $"⏳ {abilityData.abilityName} en cooldown ({abilityData.cooldownDuration - timeSinceLastUse:F1}s restantes)", null);
+                float remainingSeconds = (float)(cooldownTicks - elapsedTicks) / SimulationClock.TICKS_PER_SECOND;
+                GameLogger.Log(GameLogger.Category.UI, $"⏳ {abilityData.abilityName} en cooldown ({remainingSeconds:F1}s restantes)", null);
                 return false;
             }
         }
@@ -61,7 +65,7 @@ public abstract class AbilityExecutor : IAbility
         }
 
         // Enregistre le temps d'utilisation pour le cooldown
-        lastUsedTime = Time.time;
+        lastUsedTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
 
         // Exécute la logique spécifique et propage son résultat
         return ExecuteAbility(caster);

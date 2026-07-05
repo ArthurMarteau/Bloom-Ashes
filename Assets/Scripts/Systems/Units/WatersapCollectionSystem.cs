@@ -5,6 +5,7 @@ public class WatersapCollectionSystem
     private readonly int maxStock;
     private readonly float collectionInterval;
     private float timer;
+    private int elapsedTicks;
     private int currentStock;
 
     public int CurrentStock => currentStock;
@@ -23,6 +24,7 @@ public class WatersapCollectionSystem
 
     // Avance le timer de collecte — retourne true si un Watersap vient d'être collecté
     // Si le stock est plein, ne collecte pas (le component doit déclencher l'auto-transfer en amont)
+    [System.Obsolete("Utiliser TickOnce pour la simulation lockstep.")]
     public bool Tick(float deltaTime)
     {
         if (currentStock >= maxStock) return false;
@@ -37,10 +39,27 @@ public class WatersapCollectionSystem
         return false;
     }
 
+    // Avance le compteur logique et collecte une unité lorsque l'intervalle en ticks est atteint
+    public bool TickOnce(int tickCount, int intervalTicks)
+    {
+        if (currentStock >= maxStock || tickCount <= 0)
+            return false;
+
+        elapsedTicks += tickCount;
+        int safeIntervalTicks = System.Math.Max(1, intervalTicks);
+        if (elapsedTicks < safeIntervalTicks)
+            return false;
+
+        elapsedTicks -= safeIntervalTicks;
+        currentStock++;
+        return true;
+    }
+
     // Remet le timer à zéro — appelé quand le Rootborn reçoit un ordre (move, build, transform…)
     public void ResetTimer()
     {
         timer = 0f;
+        elapsedTicks = 0;
     }
 
     // Vide le stock et retourne la quantité transférée — à ajouter au pool joueur

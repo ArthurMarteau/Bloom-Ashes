@@ -4,7 +4,7 @@ using UnityEngine.Events;
 // Wrapper Unity autour de WatersapCollectionSystem pour le prefab Rootborn
 // Gère la collecte passive, le stockage (0-10), l'auto-transfer et le manual trigger
 [RequireComponent(typeof(TeamComponent))]
-public class RootbornStockComponent : MonoBehaviour
+public class RootbornStockComponent : MonoBehaviour, ITickable
 {
     [Header("Configuration")]
     [Tooltip("Stock maximum de Watersap dans le Rootborn")]
@@ -23,6 +23,8 @@ public class RootbornStockComponent : MonoBehaviour
     private WatersapCollectionSystem collectionSystem;
     private MovementController movementController;
     private TeamComponent teamComponent;
+    private int collectionIntervalTicks;
+    private long simulationEntityID = -1;
 
     public int CurrentStock => collectionSystem?.CurrentStock ?? 0;
     public int MaxStock => maxStock;
@@ -31,6 +33,7 @@ public class RootbornStockComponent : MonoBehaviour
     private void Awake()
     {
         collectionSystem = new WatersapCollectionSystem(maxStock, collectionInterval);
+        collectionIntervalTicks = SimulationClock.SecondsToTicks(collectionInterval);
         teamComponent = GetComponent<TeamComponent>();
         movementController = GetComponent<MovementController>();
 
@@ -40,23 +43,34 @@ public class RootbornStockComponent : MonoBehaviour
         }
     }
 
+    // Enregistre le stock après l'attribution de l'entityID du Rootborn
+    private void Start()
+    {
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(gameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
+    }
+
     // Désabonne les events à la destruction du GameObject
     private void OnDestroy()
     {
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
+
         if (movementController != null)
         {
             movementController.OnMovementStarted.RemoveListener(HandleMovementStarted);
         }
     }
 
-    // Tick uniquement si le Rootborn est idle (pas en mouvement)
-    private void Update()
+    // Collecte uniquement sur tick logique quand le Rootborn est idle
+    public void SimTick(long tick)
     {
-        if (collectionSystem == null) return;
+        if (!isActiveAndEnabled || collectionSystem == null) return;
 
         if (movementController != null && movementController.IsMoving) return;
 
-        bool collected = collectionSystem.Tick(Time.deltaTime);
+        bool collected = collectionSystem.TickOnce(1, collectionIntervalTicks);
         if (collected)
         {
             OnStockChanged.Invoke(collectionSystem.CurrentStock);
