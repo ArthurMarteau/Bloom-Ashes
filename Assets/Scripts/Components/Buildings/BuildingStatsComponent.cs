@@ -199,6 +199,13 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         }
 
         OnBuildingDestroyed?.Invoke();
+
+        // Retire le bâtiment de la simulation au tick de destruction ; WaitForSeconds reste un délai visuel.
+        Vector3 foundationRespawnPosition = GetLogicalAnchorWorldPosition();
+        UnregisterOccupiedTilesFromRegistry();
+        EntityRegistry.Instance?.MarkDead(gameObject);
+        RespawnFoundationIfNeeded(foundationRespawnPosition);
+
         StartCoroutine(DestroySequence());
     }
 
@@ -209,9 +216,6 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         if (col != null)
             col.enabled = false;
 
-        // Retire les tiles occupées de l'index logique des bâtiments.
-        UnregisterOccupiedTilesFromRegistry();
-
         if (baseStats.onDeathVFX != null)
             VFXApplier.Apply(baseStats.onDeathVFX, gameObject);
 
@@ -220,13 +224,14 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         if (animator != null)
             animator.Play("Death");
 
-        // Laisse le VFX ou l'animation de mort se jouer avant le respawn et la destruction.
+        // Laisse le VFX ou l'animation de mort se jouer avant la destruction visuelle.
         float destroyDelay = baseStats.deathDelay;
         yield return new WaitForSeconds(destroyDelay);
 
-        RespawnFoundationIfNeeded();
-        EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
-        Destroy(gameObject);
+        if (EntitySpawnManager.Instance != null)
+            EntitySpawnManager.Instance.DespawnEntity(gameObject, 0f);
+        else
+            GameLogger.Warn(GameLogger.Category.Spawn, $"⚠️ {gameObject.name} : EntitySpawnManager introuvable, Destroy final non planifié", this);
     }
 
     // Stocke la Foundation d'origine pour permettre son respawn à la destruction
@@ -236,7 +241,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
     }
 
     // Respawn une Foundation à la destruction du bâtiment si une data est disponible.
-    private void RespawnFoundationIfNeeded()
+    private void RespawnFoundationIfNeeded(Vector3 position)
     {
         // Priorité : Foundation d'origine (construite en jeu) > Foundation par défaut du SO.
         FoundationStatsData foundationToSpawn = originFoundation ?? baseStats?.defaultFoundation;
@@ -255,13 +260,35 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
             return;
         }
 
-        Vector3 position = transform.position;
-        GameObject foundation = Instantiate(foundationToSpawn.prefab, position, Quaternion.identity);
+        int spawnTeamID = teamComponent != null ? teamComponent.GetTeamID() : 0;
+        if (EntitySpawnManager.Instance == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn,
+                $"️ {gameObject.name} : EntitySpawnManager introuvable, Foundation non spawnée", this);
+            return;
+        }
+
+        GameObject foundation = EntitySpawnManager.Instance.SpawnEntity(foundationToSpawn.prefab, position, spawnTeamID);
+        if (foundation == null)
+            return;
+
         foundation.name = foundationToSpawn.entityName;
-        foundation.GetComponent<BuildingStatsComponent>()?.NotifySpawned();
         EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, foundation);
         GameLogger.Log(GameLogger.Category.Spawn,
             $"️ {gameObject.name} : Foundation '{foundationToSpawn.name}' spawnée en {position}", this);
+    }
+
+    // Retourne la position monde de l'ancre logique avant le désenregistrement du bâtiment.
+    private Vector3 GetLogicalAnchorWorldPosition()
+    {
+        if (EntityRegistry.Instance != null
+            && GridManager.Instance != null
+            && EntityRegistry.Instance.TryGetLogicalPosition(gameObject, out Vector2Int cell))
+        {
+            return GridManager.Instance.GridToWorld(cell);
+        }
+
+        return Vector3.zero;
     }
 
     // === Getters publics supplémentaires ===
@@ -343,6 +370,12 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         }
 
         registeredBuildingCells.Clear();
+    }
+
+    // Libère les tiles bâtiment dès le retrait simulation, avant le Destroy Unity différé.
+    public void ReleaseOccupiedTilesFromSimulation()
+    {
+        UnregisterOccupiedTilesFromRegistry();
     }
 
     // Retourne si le layer du bâtiment appartient aux masks statiquement bloquants de la grille.

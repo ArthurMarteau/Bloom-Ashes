@@ -42,10 +42,25 @@ public class SimulationClockManager : MonoBehaviour
     // Avance l'horloge à fréquence fixe Unity
     private void FixedUpdate()
     {
+        NetworkManager.Instance?.Poll();
+
+        long nextTick = clock.CurrentTick + 1;
+        LockstepController lockstep = NetworkManager.Instance?.Lockstep;
+        if (lockstep != null)
+        {
+            lockstep.PrepareTick(nextTick);
+            if (!lockstep.CanAdvance(nextTick))
+                return;
+        }
+
         clock.Advance();
-        CommandExecutor.Instance?.ExecuteTick(clock.CurrentTick);
+        GameCommand[] commands = lockstep != null
+            ? lockstep.GetCommandsForTick(clock.CurrentTick)
+            : System.Array.Empty<GameCommand>();
+        CommandExecutor.Instance?.ExecuteTick(clock.CurrentTick, commands);
         tickManager.TickAll(clock.CurrentTick);
         PathFindingManager.Instance?.ProcessTickBudget();
+        NetworkManager.Instance?.LogChecksum(clock.CurrentTick);
         lastFixedUpdateTime = Time.time;
     }
 

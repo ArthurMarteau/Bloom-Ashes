@@ -10,11 +10,9 @@ public class ProjectileVisual : MonoBehaviour
     private float travelDuration;
     private float elapsedTime = 0f;
 
-    // Payload dégâts (optionnel, null si projectile purement visuel)
+    // Cible de homing visuel uniquement, sans dégâts à l'impact.
     private Transform targetTransform;
     private IDamageable targetDamageable;
-    private GameObject attackerObject;
-    private int damageAmount;
 
     // Initialise le projectile sans payload de dégâts (purement visuel)
     // À appeler immédiatement après Instantiate
@@ -26,8 +24,7 @@ public class ProjectileVisual : MonoBehaviour
         transform.position = startPosition;
     }
 
-    // Initialise le projectile avec homing et payload de dégâts autonomes
-    // Le projectile suit la cible et applique les dégâts à l'impact
+    // Initialise le projectile avec homing visuel uniquement.
     public void Initialize(Vector3 start, Transform target, float duration, IDamageable damageable, GameObject attacker, int damage)
     {
         startPosition = start;
@@ -35,8 +32,6 @@ public class ProjectileVisual : MonoBehaviour
         endPosition = target != null ? target.position : start;
         travelDuration = duration;
         targetDamageable = damageable;
-        attackerObject = attacker;
-        damageAmount = damage;
         transform.position = startPosition;
     }
 
@@ -53,10 +48,21 @@ public class ProjectileVisual : MonoBehaviour
 
     private void Update()
     {
+        if (targetDamageable != null && targetDamageable.IsDead())
+        {
+            Destroy(gameObject);
+            return;
+        }
+
         // Homing : met à jour la destination si la cible est encore présente
         if (targetTransform != null)
         {
             endPosition = targetTransform.position;
+        }
+        else if (elapsedTime > 0f)
+        {
+            Destroy(gameObject);
+            return;
         }
 
         UpdateRotation();
@@ -72,12 +78,6 @@ public class ProjectileVisual : MonoBehaviour
         // Impact à l'arrivée
         if (progress >= 1f)
         {
-            // Applique les dégâts si payload présent et cible encore vivante
-            if (targetDamageable != null && !targetDamageable.IsDead())
-            {
-                targetDamageable.TakeDamage(damageAmount, attackerObject);
-            }
-
             Destroy(gameObject);
         }
     }

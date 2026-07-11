@@ -39,6 +39,8 @@ public class EntityRegistry : MonoBehaviour
     private Dictionary<Vector2Int, List<ICellListener>> cellListeners = new Dictionary<Vector2Int, List<ICellListener>>();
     private Dictionary<Vector2Int, GameObject> buildingPositions = new Dictionary<Vector2Int, GameObject>();
     private Dictionary<GameObject, Vector2Int> buildingLogicalPositions = new Dictionary<GameObject, Vector2Int>();
+    private Dictionary<Vector2Int, GameObject> foundationPositions = new Dictionary<Vector2Int, GameObject>();
+    private Dictionary<GameObject, Vector2Int> foundationLogicalPositions = new Dictionary<GameObject, Vector2Int>();
 
     [Header("Debug")]
     [SerializeField] private bool debugRegistry = false;
@@ -336,6 +338,8 @@ public class EntityRegistry : MonoBehaviour
                 return true;
             if (buildingLogicalPositions.TryGetValue(go, out position))
                 return true;
+            if (foundationLogicalPositions.TryGetValue(go, out position))
+                return true;
         }
 
         position = default;
@@ -397,6 +401,20 @@ public class EntityRegistry : MonoBehaviour
         }
     }
 
+    // Marque une entité comme morte côté simulation avant son démontage visuel différé.
+    public void MarkDead(GameObject go)
+    {
+        if (go == null) return;
+
+        long entityID = GetEntityID(go);
+        go.GetComponent<BuildingStatsComponent>()?.ReleaseOccupiedTilesFromSimulation();
+        go.GetComponent<FoundationComponent>()?.ReleaseFoundationFromSimulation();
+        UnregisterEntity(go);
+
+        if (entityID >= 0)
+            SimulationClockManager.Instance?.Unregister(entityID);
+    }
+
     // Enregistre un bâtiment sur une cellule logique occupée.
     public void RegisterBuilding(Vector2Int cell, GameObject building)
     {
@@ -407,6 +425,60 @@ public class EntityRegistry : MonoBehaviour
         {
             buildingLogicalPositions[building] = cell;
         }
+    }
+
+    // Enregistre une Foundation sur une cellule logique occupée et lui attribue un entityID stable.
+    public void RegisterFoundation(Vector2Int cell, GameObject foundation)
+    {
+        if (foundation == null) return;
+
+        foundationPositions[cell] = foundation;
+        if (!entityIDs.ContainsKey(foundation))
+            entityIDs[foundation] = nextEntityID++;
+        entitiesByID[entityIDs[foundation]] = foundation;
+
+        if (!foundationLogicalPositions.TryGetValue(foundation, out Vector2Int anchor)
+            || cell.x < anchor.x || (cell.x == anchor.x && cell.y < anchor.y))
+        {
+            foundationLogicalPositions[foundation] = cell;
+        }
+    }
+
+    // Désenregistre une Foundation d'une cellule logique.
+    public void UnregisterFoundation(Vector2Int cell)
+    {
+        if (foundationPositions.TryGetValue(cell, out GameObject foundation) && foundation != null)
+        {
+            foundationLogicalPositions.Remove(foundation);
+            foreach (var entry in foundationPositions)
+            {
+                if (entry.Key == cell || entry.Value != foundation)
+                    continue;
+                if (!foundationLogicalPositions.TryGetValue(foundation, out Vector2Int anchor)
+                    || entry.Key.x < anchor.x || (entry.Key.x == anchor.x && entry.Key.y < anchor.y))
+                {
+                    foundationLogicalPositions[foundation] = entry.Key;
+                }
+            }
+        }
+        foundationPositions.Remove(cell);
+    }
+
+    // Désenregistre toutes les cellules d'une Foundation et libère son entityID.
+    public void UnregisterFoundation(GameObject foundation)
+    {
+        if (foundation == null) return;
+
+        foreach (Vector2Int cell in new List<Vector2Int>(foundationPositions.Keys))
+        {
+            if (foundationPositions[cell] == foundation)
+                foundationPositions.Remove(cell);
+        }
+
+        foundationLogicalPositions.Remove(foundation);
+        if (entityIDs.TryGetValue(foundation, out long entityID))
+            entitiesByID.Remove(entityID);
+        entityIDs.Remove(foundation);
     }
 
     // Désenregistre le bâtiment occupant une cellule logique.
@@ -434,6 +506,15 @@ public class EntityRegistry : MonoBehaviour
     {
         if (buildingPositions.TryGetValue(cell, out GameObject building) && building != null)
             return building;
+
+        return null;
+    }
+
+    // Retourne la Foundation occupant une cellule logique, ou null.
+    public GameObject GetFoundationAt(Vector2Int cell)
+    {
+        if (foundationPositions.TryGetValue(cell, out GameObject foundation) && foundation != null)
+            return foundation;
 
         return null;
     }
@@ -528,6 +609,38 @@ public class EntityRegistry : MonoBehaviour
         if (entitiesByID.TryGetValue(entityID, out GameObject go) && go != null)
             return go;
         return null;
+    }
+
+    // Retourne un snapshot déterministe des entités vivantes pour le checksum lockstep.
+    public List<EntityChecksumEntry> GetChecksumEntries()
+    {
+        List<long> ids = new List<long>(entitiesByID.Keys);
+        ids.Sort();
+
+        List<EntityChecksumEntry> result = new List<EntityChecksumEntry>(ids.Count);
+        foreach (long entityID in ids)
+        {
+            if (!entitiesByID.TryGetValue(entityID, out GameObject go) || go == null)
+                continue;
+            if (!entities.TryGetValue(go, out IDamageable damageable) || damageable == null || damageable.IsDead())
+                continue;
+
+            TryGetLogicalPosition(go, out Vector2Int position);
+            int teamID = teamMembers.TryGetValue(go, out ITeamMember teamMember) && teamMember != null
+                ? teamMember.GetTeamID()
+                : 0;
+
+            result.Add(new EntityChecksumEntry
+            {
+                entityID = entityID,
+                positionX = position.x,
+                positionY = position.y,
+                currentHP = damageable.GetCurrentHP(),
+                teamID = teamID
+            });
+        }
+
+        return result;
     }
 
     // Indique si une entité enregistrée est encore vivante au tick courant.

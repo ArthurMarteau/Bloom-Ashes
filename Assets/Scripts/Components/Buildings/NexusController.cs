@@ -139,6 +139,12 @@ public class NexusController : MonoBehaviour
             return false;
         }
 
+        if (EntitySpawnManager.Instance == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : EntitySpawnManager introuvable — spawn annulé", this);
+            return false;
+        }
+
         if (GridManager.Instance != null)
         {
             Vector2Int nexusTile = GridManager.Instance.WorldToGrid(transform.position);
@@ -159,17 +165,10 @@ public class NexusController : MonoBehaviour
             return false;
         }
 
-        // Spawne le Rootborn sur la tile du Nexus
-        GameObject spawnedUnit = Instantiate(rootbornData.unitPrefab, transform.position, Quaternion.identity);
-
-        // Assigne l'équipe au Rootborn spawné
-        TeamComponent unitTeam = spawnedUnit.GetComponent<TeamComponent>();
-        if (unitTeam != null)
-            unitTeam.SetTeamID(teamID);
-        else
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : TeamComponent manquant sur le Rootborn spawné — équipe non assignée", this);
-
-        spawnedUnit.GetComponent<UnitStatsComponent>()?.NotifySpawned();
+        // Spawne le Rootborn sur la tile du Nexus via le manager central.
+        GameObject spawnedUnit = EntitySpawnManager.Instance.SpawnEntity(rootbornData.unitPrefab, transform.position, teamID);
+        if (spawnedUnit == null)
+            return false;
 
         if (debugNexus)
             GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)", this);

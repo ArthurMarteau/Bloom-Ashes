@@ -1670,6 +1670,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: df56263d6393e0b44b9448ef705c7a28, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::AbilityManager
+  sacrificeAbilityData: {fileID: 0}
 --- !u!1 &282308081
 GameObject:
   m_ObjectHideFlags: 0
@@ -3156,7 +3157,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8550693501826029426, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
       propertyPath: m_LocalPosition.x
-      value: 7.3450947
+      value: 8.345095
       objectReference: {fileID: 0}
     - target: {fileID: 8550693501826029426, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
       propertyPath: m_LocalPosition.y
@@ -4663,6 +4664,7 @@ MonoBehaviour:
     serializedVersion: 2
     m_Bits: 256
   terrainMap: {fileID: 11400000, guid: ed8cd552f33b2444facad65cf33bd3b6, type: 2}
+  debugCell: {x: 0, y: 0}
 --- !u!1 &956326251
 GameObject:
   m_ObjectHideFlags: 0

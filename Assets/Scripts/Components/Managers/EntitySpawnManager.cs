@@ -19,7 +19,7 @@ public class EntitySpawnManager : MonoBehaviour
     public UnityEvent<GameObject, GameObject> OnEntityReplaced = new UnityEvent<GameObject, GameObject>();
 
     // Event déclenché quand une entité est détruite (mort, sacrifice, destruction bâtiment)
-    // Paramètre : entité détruite (encore valide au moment de l'appel, Destroy() appelé juste après)
+    // Paramètre : entité détruite (encore valide au moment de l'appel, démontage visuel déjà planifié)
     public UnityEvent<GameObject> OnEntityDestroyed = new UnityEvent<GameObject>();
 
     private void Awake()
@@ -32,10 +32,53 @@ public class EntitySpawnManager : MonoBehaviour
         Instance = this;
     }
 
-    /// <summary>
-    /// Notifie qu'une entité a été spawnée (SANS détruire le spawner)
-    /// Utilisé par : NexusController (Nexus reste, Rootborn spawn)
-    /// </summary>
+    // Instancie une entité gameplay, assigne son équipe et déclenche son VFX de spawn.
+    public GameObject SpawnEntity(GameObject prefab, Vector3 position, int teamID)
+    {
+        if (prefab == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, "⚠️ EntitySpawnManager : SpawnEntity appelé avec prefab null", this);
+            return null;
+        }
+
+        GameObject spawnedEntity = Instantiate(prefab, position, Quaternion.identity);
+
+        TeamComponent teamComponent = spawnedEntity.GetComponent<TeamComponent>();
+        if (teamComponent != null)
+            teamComponent.SetTeamID(teamID);
+        else
+            GameLogger.Warn(GameLogger.Category.Spawn, $"⚠️ EntitySpawnManager : TeamComponent manquant sur {spawnedEntity.name} — équipe non assignée", this);
+
+        spawnedEntity.GetComponent<UnitStatsComponent>()?.NotifySpawned();
+        spawnedEntity.GetComponent<BuildingStatsComponent>()?.NotifySpawned();
+
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawnedEntity.name} instancié en {position} (équipe {teamID})", this);
+        return spawnedEntity;
+    }
+
+    // Retire une entité de la simulation immédiatement puis laisse son visuel disparaître après délai.
+    public void DespawnEntity(GameObject entity, float visualDelay)
+    {
+        DespawnEntity(entity, visualDelay, true);
+    }
+
+    // Retire une entité de la simulation avec contrôle de l'event destroyed pour les remplacements.
+    public void DespawnEntity(GameObject entity, float visualDelay, bool notifyDestroyed)
+    {
+        if (entity == null)
+            return;
+
+        EntityRegistry.Instance?.MarkDead(entity);
+
+        if (notifyDestroyed)
+            NotifyEntityDestroyed(entity);
+
+        GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {entity.name} démontage visuel dans {visualDelay}s", this);
+        Destroy(entity, Mathf.Max(0f, visualDelay));
+    }
+
+    // Notifie qu'une entité a été spawnée (SANS détruire le spawner)
+    // Utilisé par : NexusController (Nexus reste, Rootborn spawn)
     public void NotifyEntitySpawned(GameObject spawner, GameObject spawnedEntity)
     {
         if (spawner == null || spawnedEntity == null)
@@ -48,10 +91,8 @@ public class EntitySpawnManager : MonoBehaviour
         OnEntitySpawned.Invoke(spawner, spawnedEntity);
     }
 
-    /// <summary>
-    /// Notifie qu'une entité a été REMPLACÉE par une autre
-    /// Utilisé par : RootbornProductionController, BudComponent
-    /// </summary>
+    // Notifie qu'une entité a été REMPLACÉE par une autre
+    // Utilisé par : RootbornProductionController, BudComponent
     public void NotifyEntityReplaced(GameObject oldEntity, GameObject newEntity)
     {
         if (oldEntity == null || newEntity == null)

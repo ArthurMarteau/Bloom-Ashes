@@ -98,36 +98,45 @@ public class BudComponent : MonoBehaviour, ITickable
         if (unitInProduction == null)
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production — unitInProduction null, spawn final impossible", this);
-            Destroy(gameObject);
+            DespawnBud(0f, true);
             return;
         }
 
         SpawnFinalUnit();
     }
 
-    // Libère la tile dans GridManager, instancie l'unité finale, puis détruit le Bud
+    // Libère la tile dans GridManager, spawne l'unité finale, puis détruit le Bud
     private void SpawnFinalUnit()
     {
-        // Libération de la tile : désactive le Collider2D avant l'Instantiate pour que
+        // Libération de la tile : désactive le Collider2D avant le spawn pour que
         // la tile apparaisse libre quand l'unité finale s'enregistre dans l'EntityRegistry
+        Vector2Int spawnCell = GetCurrentLogicalCell();
         Collider2D budCollider = GetComponent<Collider2D>();
         if (budCollider != null)
             budCollider.enabled = false;
+        EntityRegistry.Instance?.MarkDead(gameObject);
 
         if (unitInProduction.unitPrefab == null)
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — unitPrefab null pour {unitInProduction.unitName}", this);
-            Destroy(gameObject);
+            DespawnBud(0f, true);
             return;
         }
 
-        GameObject spawnedUnit = Instantiate(unitInProduction.unitPrefab, transform.position, Quaternion.identity);
+        if (EntitySpawnManager.Instance == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, spawn final impossible", this);
+            DespawnBud(0f, true);
+            return;
+        }
 
-        TeamComponent spawnedTeam = spawnedUnit.GetComponent<TeamComponent>();
-        if (spawnedTeam != null)
-            spawnedTeam.SetTeamID(teamID);
-
-        spawnedUnit.GetComponent<UnitStatsComponent>()?.NotifySpawned();
+        Vector3 spawnPosition = GridManager.Instance != null ? GridManager.Instance.GridToWorld(spawnCell) : Vector3.zero;
+        GameObject spawnedUnit = EntitySpawnManager.Instance.SpawnEntity(unitInProduction.unitPrefab, spawnPosition, teamID);
+        if (spawnedUnit == null)
+        {
+            DespawnBud(0f, true);
+            return;
+        }
 
         float freezeDuration = 0f;
         UnitStatsComponent spawnedStats = spawnedUnit.GetComponent<UnitStatsComponent>();
@@ -138,14 +147,13 @@ public class BudComponent : MonoBehaviour, ITickable
                 freezeDuration = spawnedData.onSpawnVFX.spriteDuration;
         }
         if (freezeDuration > 0f)
-            StartCoroutine(FreezeFor(spawnedUnit, freezeDuration));
+            UnitFreezer.FreezeForTicks(spawnedUnit, SimulationClock.SecondsToTicks(freezeDuration));
 
         GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})", this);
 
         if (EntityRegistry.Instance != null && GridManager.Instance != null)
         {
-            Vector2Int spawnedCell = GridManager.Instance.WorldToGrid(spawnedUnit.transform.position);
-            EntityRegistry.Instance.UpdateLogicalPosition(spawnedUnit, spawnedCell);
+            EntityRegistry.Instance.UpdateLogicalPosition(spawnedUnit, spawnCell);
         }
 
         // Notifie le système de remplacement AVANT destruction
@@ -154,7 +162,7 @@ public class BudComponent : MonoBehaviour, ITickable
             EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, spawnedUnit);
         }
 
-        Destroy(gameObject);
+        DespawnBud(0f, false);
     }
 
     // Annule la production : stoppe la coroutine en cours, restitue un Rootborn et détruit le Bud
@@ -162,8 +170,6 @@ public class BudComponent : MonoBehaviour, ITickable
     {
         isCancelled = true;
         isProductionActive = false;
-        StopAllCoroutines();
-
         // Étape 1 : Récupère les HP actuels du Bud
         int budCurrentHP = 0;
         BuildingStatsComponent budStats = GetComponent<BuildingStatsComponent>();
@@ -171,40 +177,48 @@ public class BudComponent : MonoBehaviour, ITickable
             budCurrentHP = budStats.GetCurrentHP();
 
         // Étape 2 : Libération de la tile
+        Vector2Int respawnCell = GetCurrentLogicalCell();
         Collider2D budCollider = GetComponent<Collider2D>();
         if (budCollider != null)
             budCollider.enabled = false;
+        EntityRegistry.Instance?.MarkDead(gameObject);
 
         if (respawnStatsData?.unitPrefab == null)
         {
             GameLogger.Error($"🌱 BudComponent {gameObject.name} : Cancel — respawnStatsData ou unitPrefab non assigné", this);
-            Destroy(gameObject);
+            DespawnBud(0f, true);
             return;
         }
 
-        GameObject respawned = Instantiate(respawnStatsData.unitPrefab, transform.position, Quaternion.identity);
+        if (EntitySpawnManager.Instance == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, restitution impossible", this);
+            DespawnBud(0f, true);
+            return;
+        }
 
-        TeamComponent t = respawned.GetComponent<TeamComponent>();
-        if (t != null)
-            t.SetTeamID(teamID);
+        Vector3 respawnPosition = GridManager.Instance != null ? GridManager.Instance.GridToWorld(respawnCell) : Vector3.zero;
+        GameObject respawned = EntitySpawnManager.Instance.SpawnEntity(respawnStatsData.unitPrefab, respawnPosition, teamID);
+        if (respawned == null)
+        {
+            DespawnBud(0f, true);
+            return;
+        }
 
         UnitStatsComponent stats = respawned.GetComponent<UnitStatsComponent>();
         if (stats != null)
             stats.SetCurrentHP(budCurrentHP);
 
-        stats?.NotifySpawned();
-
         float freezeDuration = 0f;
         if (respawnStatsData?.onSpawnVFX != null && respawnStatsData.onSpawnVFX.spriteDuration > 0f)
             freezeDuration = respawnStatsData.onSpawnVFX.spriteDuration;
         if (freezeDuration > 0f)
-            StartCoroutine(FreezeFor(respawned, freezeDuration));
+            UnitFreezer.FreezeForTicks(respawned, SimulationClock.SecondsToTicks(freezeDuration));
 
         GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)", this);
 
         if (EntityRegistry.Instance != null && GridManager.Instance != null)
         {
-            Vector2Int respawnCell = GridManager.Instance.WorldToGrid(respawned.transform.position);
             EntityRegistry.Instance.UpdateLogicalPosition(respawned, respawnCell);
         }
 
@@ -213,24 +227,34 @@ public class BudComponent : MonoBehaviour, ITickable
             EntitySpawnManager.Instance.NotifyEntityReplaced(gameObject, respawned);
 
         // Étape 8 : Destruction Bud
-        Destroy(gameObject);
+        DespawnBud(0f, false);
     }
 
-    private IEnumerator FreezeFor(GameObject unit, float duration)
+    // Détruit le Bud via le manager central après retrait simulation immédiat.
+    private void DespawnBud(float visualDelay, bool notifyDestroyed)
     {
-        yield return null; // attendre Start() de MovementController
-        if (unit == null) yield break;
-        UnitFreezer.Freeze(unit, disableComponents: true, freezeAnimator: false);
-        yield return new WaitForSeconds(duration);
-        if (unit == null) yield break;
-        UnitFreezer.Unfreeze(unit, enableComponents: true, unfreezeAnimator: false);
+        if (EntitySpawnManager.Instance != null)
+            EntitySpawnManager.Instance.DespawnEntity(gameObject, visualDelay, notifyDestroyed);
+        else
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, Destroy non planifié", this);
+            EntityRegistry.Instance?.MarkDead(gameObject);
+        }
     }
 
     private void OnBudKilled()
     {
         isCancelled = true;
         isProductionActive = false;
-        StopAllCoroutines();
+    }
+
+    // Retourne la cellule logique du Bud sans lire sa position visuelle.
+    private Vector2Int GetCurrentLogicalCell()
+    {
+        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(gameObject, out Vector2Int cell))
+            return cell;
+
+        return Vector2Int.zero;
     }
 
     private void PrepareBud(int currentHP, int maxHP)

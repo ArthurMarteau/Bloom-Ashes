@@ -184,7 +184,7 @@ MonoBehaviour:
   debugAttack: 1
   autoAttackEnabled: 1
   projectileTravelTimePerCell: 0.2
-  projectilePrefab: {fileID: 0}
+  projectilePrefab: {fileID: 7085599001705971275, guid: c7c4a6f6ee1c9304fa3a93e813829d47, type: 3}
 --- !u!114 &4916668170298024769
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -224,12 +224,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 31b749492dc6a794680897282be337dc, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::MovementController
-  retryInterval: 0.5
+  detourRatioThreshold: 3
+  earlyYieldThreshold: 0.3
   debugMovement: 1
   OnMovementStarted:
     m_PersistentCalls:
       m_Calls: []
   OnArrived:
+    m_PersistentCalls:
+      m_Calls: []
+  OnIdleStateChanged:
     m_PersistentCalls:
       m_Calls: []
 --- !u!114 &5287361853722055822
@@ -260,6 +264,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::UnitStatsComponent
   baseStats: {fileID: 11400000, guid: 67952215cc941ac4e875ec4347e2451b, type: 2}
   OnDamaged:
+    m_PersistentCalls:
+      m_Calls: []
+  OnDamagedBy:
     m_PersistentCalls:
       m_Calls: []
   OnHealed:
@@ -296,6 +303,4 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::TransformationController
   budPrefab: {fileID: 1139703711428364788, guid: a8caf4a22cb770c4bb7735c35d3ceba5, type: 3}
-  selfPrefab: {fileID: 6748851485159956997}
-  transformAnimDuration: 1
   debugTransform: 1

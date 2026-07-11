@@ -123,6 +123,25 @@ public class WatersapManager : MonoBehaviour, ITickable
         return current;
     }
 
+    // Retourne un snapshot déterministe des ressources par équipe pour le checksum lockstep.
+    public List<WatersapChecksumEntry> GetChecksumEntries()
+    {
+        List<int> teamIDs = new List<int>(watersapByTeam.Keys);
+        teamIDs.Sort();
+
+        List<WatersapChecksumEntry> result = new List<WatersapChecksumEntry>(teamIDs.Count);
+        foreach (int teamID in teamIDs)
+        {
+            result.Add(new WatersapChecksumEntry
+            {
+                teamID = teamID,
+                amount = watersapByTeam[teamID]
+            });
+        }
+
+        return result;
+    }
+
     // Ajoute du watersap à une équipe (sacrifice, collecte Rootborn, revenu passif)
     public void AddWatersap(int teamID, int amount)
     {

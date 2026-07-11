@@ -1,4 +1,3 @@
-using System.Collections;
 using UnityEngine;
 
 public class SacrificeExecutor : AbilityExecutor
@@ -30,22 +29,7 @@ public class SacrificeExecutor : AbilityExecutor
         WatersapManager.Instance.AddWatersap(teamComponent.GetTeamID(), sacrificeData.watersapGranted);
         GameLogger.Log(GameLogger.Category.Watersap, $" Sacrifice {caster.name} : +{sacrificeData.watersapGranted} Watersap", null);
 
-        MonoBehaviour coroutineHost = caster.GetComponent<UnitStatsComponent>();
-        if (coroutineHost == null)
-            return false;
-
-        coroutineHost.StartCoroutine(SacrificeRoutine(caster));
+        EntitySpawnManager.Instance?.DespawnEntity(caster, 1f);
         return true;
-    }
-
-    private IEnumerator SacrificeRoutine(GameObject unit)
-    {
-        yield return new WaitForSeconds(1f);
-
-        if (unit != null)
-        {
-            EntitySpawnManager.Instance?.NotifyEntityDestroyed(unit);
-            Object.Destroy(unit);
-        }
     }
 }

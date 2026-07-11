@@ -5,7 +5,7 @@ using UnityEngine.EventSystems;
 
 // Gère la sélection d'objets avec clic simple et rectangle de sélection
 // Glue MonoBehaviour : input, raycasts, carrés visuels, events UI et tracking destruction
-public class SelectionManager : MonoBehaviour
+public class SelectionManager : MonoBehaviour, ICellListener
 {
     [Header("Selection Settings")]
     [SerializeField] private LayerMask unitLayer = 1 << 9;
@@ -30,6 +30,10 @@ public class SelectionManager : MonoBehaviour
 
     private Camera mainCamera;
     private InputManager inputManager;
+    private readonly List<Vector2Int> watchedSelectionCells = new List<Vector2Int>();
+    private Vector2Int? selectionAnchorCell;
+    private bool preserveSelectionAnchor;
+    private bool watchedSelectionFromAutoSwitch;
 
     [Header("Events — UI")]
     public UnityEvent<List<GameObject>>    OnUnitsSelected      = new UnityEvent<List<GameObject>>();
@@ -170,6 +174,7 @@ public class SelectionManager : MonoBehaviour
 
         Vector3 clickWorldPosition = mainCamera.ScreenToWorldPoint(screenPosition);
         clickWorldPosition.z = 0f;
+        Vector2Int? clickedCell = TryWorldToGridCell(clickWorldPosition);
 
         Collider2D[] hits = Physics2D.OverlapPointAll(clickWorldPosition, combinedSelectableMask);
         GameObject bestHit = SelectionResolver.ResolveBestHit(hits);
@@ -177,10 +182,12 @@ public class SelectionManager : MonoBehaviour
         if (bestHit != null)
         {
             SelectionType selectionType = SelectionResolver.Classify(bestHit, out GameObject entity);
+            SetManualSelectionAnchor(clickedCell);
             ApplySelection(selectionType, entity, Vector2Int.zero, clickWorldPosition, inputManager != null && inputManager.IsShiftHeld);
             return;
         }
 
+        SetManualSelectionAnchor(clickedCell);
         HandleGroundSelection(clickWorldPosition);
     }
 
@@ -276,6 +283,9 @@ public class SelectionManager : MonoBehaviour
         SynchronizeSelectionVisuals(worldClickPosition);
         SynchronizeDeathHandlers();
         FireSelectionEvent();
+        if (state.Type == SelectionType.Units && state.Units.Count != 1)
+            ClearSelectionAnchor();
+        UpdateWatchedSelectionCell(worldClickPosition);
     }
 
     // Applique la règle Shift+clic pour une unité
@@ -314,10 +324,12 @@ public class SelectionManager : MonoBehaviour
     // Remplace la sélection par une liste d'unités issue du rectangle
     private void ApplyUnitListSelection(List<GameObject> units)
     {
+        ClearSelectionAnchor();
         state.SetUnits(units);
         SynchronizeSelectionVisuals(null);
         SynchronizeDeathHandlers();
         FireSelectionEvent();
+        UpdateWatchedSelectionCell(null);
     }
 
     // Synchronise les carrés de sélection avec l'état courant
@@ -576,6 +588,260 @@ public class SelectionManager : MonoBehaviour
         }
     }
 
+    // Suit les cellules associées à une sélection simple pour réagir aux entrées/sorties d'unités.
+    private void UpdateWatchedSelectionCell(Vector3? worldClickPosition)
+    {
+        UnregisterWatchedSelectionCell();
+
+        if (EntityRegistry.Instance == null)
+            return;
+
+        List<Vector2Int> cells;
+        if (preserveSelectionAnchor)
+        {
+            preserveSelectionAnchor = false;
+            watchedSelectionFromAutoSwitch = true;
+            cells = GetAnchorWatchCells();
+        }
+        else
+        {
+            cells = GetSelectionWatchCells(worldClickPosition);
+            watchedSelectionFromAutoSwitch = false;
+        }
+
+        if (cells.Count == 0)
+            return;
+
+        RegisterWatchedSelectionCells(cells);
+    }
+
+    // Retire tous les listeners de cellules courants.
+    private void UnregisterWatchedSelectionCell()
+    {
+        EntityRegistry.Instance?.UnregisterAllCellListeners(this);
+        watchedSelectionCells.Clear();
+    }
+
+    // Enregistre une liste de cellules sans doublons.
+    private void RegisterWatchedSelectionCells(List<Vector2Int> cells)
+    {
+        foreach (Vector2Int cell in cells)
+        {
+            if (watchedSelectionCells.Contains(cell))
+                continue;
+
+            watchedSelectionCells.Add(cell);
+            EntityRegistry.Instance.RegisterCellListener(cell, this);
+        }
+    }
+
+    // Convertit une position monde en cellule si elle est dans la grille.
+    private Vector2Int? TryWorldToGridCell(Vector3 worldPosition)
+    {
+        if (GridManager.Instance == null)
+            return null;
+
+        Vector2Int cell = GridManager.Instance.WorldToGrid(worldPosition);
+        return GridManager.Instance.IsInBounds(cell) ? cell : (Vector2Int?)null;
+    }
+
+    // Pose l'ancre de sélection depuis une action manuelle du joueur.
+    private void SetManualSelectionAnchor(Vector2Int? cell)
+    {
+        selectionAnchorCell = cell;
+        preserveSelectionAnchor = false;
+        watchedSelectionFromAutoSwitch = false;
+    }
+
+    // Efface l'ancre de sélection.
+    private void ClearSelectionAnchor()
+    {
+        selectionAnchorCell = null;
+        preserveSelectionAnchor = false;
+        watchedSelectionFromAutoSwitch = false;
+    }
+
+    // Retourne les cellules à surveiller pour le contenu prioritaire de l'ancre.
+    private List<Vector2Int> GetAnchorWatchCells()
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+        if (!selectionAnchorCell.HasValue)
+            return cells;
+
+        GameObject anchoredEntity = SelectionResolver.ResolveAtCell(selectionAnchorCell.Value);
+        if (anchoredEntity != null)
+        {
+            IMultiTile multiTile = anchoredEntity.GetComponent<IMultiTile>();
+            if (multiTile != null)
+            {
+                foreach (Vector2Int occupiedCell in multiTile.GetOccupiedTiles())
+                {
+                    if (!cells.Contains(occupiedCell))
+                        cells.Add(occupiedCell);
+                }
+            }
+        }
+
+        if (!cells.Contains(selectionAnchorCell.Value))
+            cells.Add(selectionAnchorCell.Value);
+
+        return cells;
+    }
+
+    // Détermine les cellules à suivre pour la sélection courante.
+    private List<Vector2Int> GetSelectionWatchCells(Vector3? worldClickPosition)
+    {
+        List<Vector2Int> cells = new List<Vector2Int>();
+
+        if (state.Type == SelectionType.Units)
+        {
+            if (state.Units.Count != 1)
+                return cells;
+
+            if (TryGetEntityCell(state.Units[0], out Vector2Int unitCell))
+                cells.Add(unitCell);
+            return cells;
+        }
+
+        if (state.Type == SelectionType.Ground)
+        {
+            cells.Add(state.Ground);
+            return cells;
+        }
+
+        if (state.Single != null)
+        {
+            IMultiTile multiTile = state.Single.GetComponent<IMultiTile>();
+            if (multiTile != null)
+            {
+                foreach (Vector2Int occupiedCell in multiTile.GetOccupiedTiles())
+                {
+                    if (!cells.Contains(occupiedCell))
+                        cells.Add(occupiedCell);
+                }
+
+                if (cells.Count > 0)
+                    return cells;
+            }
+
+            if (TryGetEntityCell(state.Single, out Vector2Int entityCell))
+            {
+                cells.Add(entityCell);
+                return cells;
+            }
+        }
+
+        if (worldClickPosition.HasValue && GridManager.Instance != null)
+        {
+            Vector2Int clickCell = GridManager.Instance.WorldToGrid(worldClickPosition.Value);
+            if (GridManager.Instance.IsInBounds(clickCell))
+                cells.Add(clickCell);
+        }
+
+        return cells;
+    }
+
+    // Retourne la cellule logique connue d'une entité sélectionnée.
+    private bool TryGetEntityCell(GameObject entity, out Vector2Int cell)
+    {
+        if (entity != null && EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(entity, out cell))
+            return true;
+
+        MovementController movementController = entity != null ? entity.GetComponent<MovementController>() : null;
+        if (movementController != null)
+        {
+            cell = movementController.GetCurrentGridPosition();
+            return true;
+        }
+
+        cell = default(Vector2Int);
+        return false;
+    }
+
+    // Réagit à l'arrivée d'une unité sur la cellule suivie.
+    public void OnUnitEntered(Vector2Int cell, GameObject unit)
+    {
+        if (!watchedSelectionCells.Contains(cell))
+            return;
+        if (watchedSelectionFromAutoSwitch && selectionAnchorCell.HasValue && cell != selectionAnchorCell.Value)
+            return;
+
+        ResolveWatchedCellSelection(cell);
+    }
+
+    // Réagit au départ d'une unité depuis la cellule suivie.
+    public void OnUnitLeft(Vector2Int cell, GameObject unit)
+    {
+        if (!watchedSelectionCells.Contains(cell))
+            return;
+
+        if (IsSingleSelectedUnit(unit) && !watchedSelectionFromAutoSwitch)
+        {
+            if (TryGetEntityCell(unit, out Vector2Int unitCell))
+                selectionAnchorCell = unitCell;
+            UpdateWatchedSelectionCell(null);
+            return;
+        }
+
+        ResolveWatchedCellSelection(selectionAnchorCell.HasValue ? selectionAnchorCell.Value : cell);
+    }
+
+    // Indique si l'unité sortante est l'unique unité sélectionnée, auquel cas la sélection la suit.
+    private bool IsSingleSelectedUnit(GameObject unit)
+    {
+        return unit != null
+            && state.Type == SelectionType.Units
+            && state.Units.Count == 1
+            && state.Units[0] == unit;
+    }
+
+    // Re-résout la cellule d'événement et bascule la sélection si la priorité effective a changé.
+    private void ResolveWatchedCellSelection(Vector2Int eventCell)
+    {
+        if (watchedSelectionCells.Count == 0)
+            return;
+
+        Vector2Int cell = eventCell;
+        GameObject resolved = SelectionResolver.ResolveAtCell(cell);
+
+        if (IsCurrentSelectionForCellResult(cell, resolved))
+            return;
+
+        Vector3? worldPosition = null;
+        if (GridManager.Instance != null)
+            worldPosition = GridManager.Instance.GridToWorld(cell);
+        if (resolved == null)
+        {
+            ApplySelection(SelectionType.Ground, null, cell, worldPosition, false);
+            return;
+        }
+
+        SelectionType selectionType = SelectionResolver.Classify(resolved, out GameObject entity);
+        PreserveAnchorIfSelectingUnit(selectionType);
+        ApplySelection(selectionType, entity, cell, worldPosition, false);
+    }
+
+    // Garde l'ancre manuelle quand une unité est sélectionnée automatiquement par arrivée.
+    private void PreserveAnchorIfSelectingUnit(SelectionType selectionType)
+    {
+        if (selectionType != SelectionType.Units)
+            return;
+
+        preserveSelectionAnchor = selectionAnchorCell.HasValue;
+    }
+
+    // Compare la sélection courante avec le résultat prioritaire d'une cellule.
+    private bool IsCurrentSelectionForCellResult(Vector2Int cell, GameObject resolved)
+    {
+        if (resolved == null)
+            return state.Type == SelectionType.Ground && state.Ground == cell;
+
+        if (state.Type == SelectionType.Units)
+            return state.Units.Count == 1 && state.Units[0] == resolved;
+
+        return state.Single == resolved;
+    }
+
     // Dessine le rectangle de sélection en temps réel pendant le drag
     private void DrawSelectionRectangle()
     {
@@ -663,6 +929,8 @@ public class SelectionManager : MonoBehaviour
     // Efface l'état, les carrés et les handlers sans émettre d'event
     private void ClearAllSelectionSilent()
     {
+        UnregisterWatchedSelectionCell();
+        ClearSelectionAnchor();
         state.Clear();
 
         List<GameObject> selectedEntities = new List<GameObject>(squares.Keys);
@@ -700,6 +968,7 @@ public class SelectionManager : MonoBehaviour
             EntitySpawnManager.Instance.OnEntityDestroyed.RemoveListener(HandleEntityDestroyed);
         }
 
+        UnregisterWatchedSelectionCell();
         UnsubscribeAllDeathHandlers();
     }
 

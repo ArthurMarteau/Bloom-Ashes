@@ -77,4 +77,18 @@ public static class UnitFreezer
                 animator.speed = 1f;
         }
     }
+
+    // Fige une unité puis programme son dégel sur une échéance de tick déterministe.
+    public static void FreezeForTicks(GameObject unit, int durationTicks)
+    {
+        if (unit == null || durationTicks <= 0)
+            return;
+
+        Freeze(unit, disableComponents: true, freezeAnimator: false);
+        long currentTick = SimulationClockManager.Instance?.CurrentTick ?? 0;
+        TimedUnitFreeze timer = unit.GetComponent<TimedUnitFreeze>();
+        if (timer == null)
+            timer = unit.AddComponent<TimedUnitFreeze>();
+        timer.Initialize(currentTick + durationTicks);
+    }
 }

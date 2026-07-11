@@ -54,13 +54,16 @@
     <Compile Include="Assets\Scripts\Components\Managers\SimulationClockManager.cs" />
     <Compile Include="Assets\Scripts\Systems\IEvictable.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
+    <Compile Include="Assets\Scripts\Systems\Network\CommandSerializer.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\IMultiTile.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipUI.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\UnitMovementType.cs" />
     <Compile Include="Assets\Scripts\Systems\SimulationClock.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\NetworkManager.cs" />
     <Compile Include="Assets\Scripts\Data\Systems\WatersapData.cs" />
     <Compile Include="Assets\Scripts\Shared\Enums\AnimationDirection.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\VFXPlayer.cs" />
+    <Compile Include="Assets\Scripts\Systems\Network\ICommandTransport.cs" />
     <Compile Include="Assets\Scripts\Components\Units\IdleMoveExitBehaviour.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AnimatorController.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionType.cs" />
@@ -69,6 +72,7 @@
     <Compile Include="Assets\Scripts\Shared\UnitFreezer.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\AbilityExecutor.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\WatersapManager.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\TimedUnitFreeze.cs" />
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionResolver.cs" />
@@ -100,6 +104,7 @@
     <Compile Include="Assets\Scripts\Data\Buildings\BuildingStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\RangeOffsets.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\OutlineController.cs" />
+    <Compile Include="Assets\Scripts\Systems\Network\LoopbackTransport.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipTrigger.cs" />
     <Compile Include="Assets\Scripts\Components\Units\TransformationController.cs" />
@@ -124,6 +129,7 @@
     <Compile Include="Assets\Scripts\Systems\Commands\CommandQueue.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Players\PlayerData.cs" />
+    <Compile Include="Assets\Scripts\Systems\Network\StateChecksum.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SpriteFlashController.cs" />
     <Compile Include="Assets\Scripts\Data\Environment\EnvironmentStatsData.cs" />
     <Compile Include="Assets\Scripts\Systems\Units\UnitStatsLogic.cs" />
@@ -132,6 +138,7 @@
     <Compile Include="Assets\Scripts\Data\Abilities\WatersapTransferAbility.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\SpawnRootbornExecutor.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\OrderManager.cs" />
+    <Compile Include="Assets\Scripts\Systems\Network\LockstepController.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\GridSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\PlayerManager.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\IDamageable.cs" />

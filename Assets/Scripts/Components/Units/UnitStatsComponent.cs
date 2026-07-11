@@ -201,17 +201,21 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         // Déclenche l'événement de mort
         OnDeath?.Invoke();
 
+        // Retire l'unité de la simulation au tick de mort ; le délai restant est uniquement visuel.
+        EntitySpawnManager spawnManager = EntitySpawnManager.Instance;
+        if (spawnManager != null)
+            spawnManager.DespawnEntity(gameObject, baseStats.deathDelay);
+        else
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"⚠️ UnitStatsComponent {gameObject.name}: EntitySpawnManager introuvable, Destroy différé non planifié", this);
+            EntityRegistry.Instance?.MarkDead(gameObject);
+        }
+
         if (baseStats.onDeathVFX != null)
             VFXApplier.Apply(baseStats.onDeathVFX, gameObject);
 
         // Désactive les composants de gameplay
         DisableGameplayComponents();
-
-        // Libère la case logique immédiatement — autres unités peuvent traverser le cadavre
-        if (EntityRegistry.Instance != null)
-        {
-            EntityRegistry.Instance.ReleaseLogicalPosition(gameObject);
-        }
 
         // Abaisse le sprite pour qu'il soit derrière les unités vivantes
         SpriteRenderer spriteRenderer = GetComponent<SpriteRenderer>();
@@ -230,10 +234,6 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
         {
             cachedAnimatorController.PlayDeathAnimation();
         }
-
-        // Détruit l'unité après l'animation
-        EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
-        Destroy(gameObject, baseStats.deathDelay);
     }
 
     // Désactive tous les composants de gameplay lors de la mort

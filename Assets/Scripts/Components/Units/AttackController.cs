@@ -35,6 +35,7 @@ public class AttackController : MonoBehaviour, ITickable
     private long approachRetryAtTick;
     private long preAttackUntilTick;
     private long simulationEntityID = -1;
+    private long performingTargetEntityID = -1;
     private IDamageable performingTargetDamageable;
     private IDamageable preAttackTargetDamageable;
     private Transform performingTargetTransform;
@@ -527,6 +528,7 @@ public class AttackController : MonoBehaviour, ITickable
         projectilePending = false;
         waitingPreAttack = false;
         performingTargetDamageable = null;
+        performingTargetEntityID = -1;
         preAttackTargetDamageable = null;
         performingTargetTransform = null;
 
@@ -661,6 +663,7 @@ public class AttackController : MonoBehaviour, ITickable
                 {
                     damagePending = false;
                     performingTargetDamageable = null;
+                    performingTargetEntityID = -1;
 
                     if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                     {
@@ -892,6 +895,7 @@ public class AttackController : MonoBehaviour, ITickable
         int attackRange = unitStatsComponent.GetAttackRange();
         performingRangedAttack = attackRange > 1;
         performingTargetDamageable = targetDamageable;
+        performingTargetEntityID = EntityRegistry.Instance?.GetEntityID(currentTarget) ?? -1;
         performingTargetTransform = currentTarget != null ? currentTarget.transform : null;
         performingDamage = unitStatsComponent.GetAttackDamage();
         performingProjectileTravelTime = 0f;
@@ -946,6 +950,7 @@ public class AttackController : MonoBehaviour, ITickable
         {
             currentState = AttackState.Ready;
             performingTargetDamageable = null;
+            performingTargetEntityID = -1;
             performingTargetTransform = null;
         }
     }
@@ -956,17 +961,21 @@ public class AttackController : MonoBehaviour, ITickable
         if (projectilePrefab == null || performingTargetTransform == null)
             return;
 
+        IDamageable visualTargetDamageable = ResolveScheduledTargetDamageable();
+        if (visualTargetDamageable == null)
+            return;
+
         Vector3 startPosition = transform.position;
         GameObject projectile = Instantiate(projectilePrefab, startPosition, Quaternion.identity);
         ProjectileVisual visual = projectile.GetComponent<ProjectileVisual>();
         if (visual != null)
-            visual.Initialize(startPosition, performingTargetTransform, performingProjectileTravelTime, null, null, 0);
+            visual.Initialize(startPosition, performingTargetTransform, performingProjectileTravelTime, visualTargetDamageable, null, 0);
     }
 
     // Applique les dégâts programmés sans dépendre du temps du projectile visuel
     private void ApplyScheduledDamage()
     {
-        IDamageable targetDamageable = performingTargetDamageable;
+        IDamageable targetDamageable = ResolveScheduledTargetDamageable();
         if (targetDamageable == null || targetDamageable.IsDead())
             return;
 
@@ -979,6 +988,19 @@ public class AttackController : MonoBehaviour, ITickable
         {
             GameLogger.Log(GameLogger.Category.Combat, $"💥 AttackController {gameObject.name}: Dégâts infligés ({performingDamage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable", this);
         }
+    }
+
+    // Résout la cible programmée via son entityID pour annuler les dégâts si elle est sortie de la simulation.
+    private IDamageable ResolveScheduledTargetDamageable()
+    {
+        if (performingTargetEntityID < 0 || EntityRegistry.Instance == null)
+            return null;
+
+        GameObject target = EntityRegistry.Instance.GetGameObjectByEntityID(performingTargetEntityID);
+        if (target == null || !EntityRegistry.Instance.IsEntityAlive(target))
+            return null;
+
+        return performingTargetDamageable ?? target.GetComponent<IDamageable>();
     }
 
     // Retourne le tick logique courant sans dépendre de l'horloge Unity

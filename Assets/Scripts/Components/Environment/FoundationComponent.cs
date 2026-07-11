@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.Events;
 
 // Composant de Foundation 2x2 : détecte les Rootborn idle sur ses 4 cellules et construit un bâtiment.
-public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISelectable
+public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISelectable, ITickable
 {
     [SerializeField] private FoundationStatsData foundationStats;
 
@@ -17,6 +17,12 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
 
     private bool cellsInitialized;
     private bool isBuildInProgress;
+    private bool initialSyncPending;
+    private long simulationEntityID = -1;
+    private long buildAtTick = -1;
+    private int pendingTeamID;
+    private BuildingStatsData pendingBuildingData;
+    private List<GameObject> pendingRootborns;
 
     private class TrackedRootbornIdleHandler
     {
@@ -27,24 +33,40 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
     private void Start()
     {
         InitializeCells();
+        RegisterFoundationCells();
         RegisterCellListeners();
-        StartCoroutine(SynchronizeInitialRootbornsNextFrame());
-    }
-
-    private IEnumerator SynchronizeInitialRootbornsNextFrame()
-    {
-        yield return null;
-        SynchronizeInitialRootborns();
+        simulationEntityID = EntityRegistry.Instance?.GetEntityID(gameObject) ?? -1;
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Register(simulationEntityID, this);
+        initialSyncPending = true;
     }
 
     private void OnDestroy()
     {
         EntityRegistry.Instance?.UnregisterAllCellListeners(this);
+        if (simulationEntityID >= 0)
+            SimulationClockManager.Instance?.Unregister(simulationEntityID, this);
+        ReleaseFoundationFromSimulation();
 
         foreach (GameObject rootborn in new List<GameObject>(trackedRootborns.Keys))
         {
             UnsubscribeIdleEvents(rootborn);
         }
+    }
+
+    // Libère l'index Foundation avant le démontage visuel ou OnDestroy Unity.
+    public void ReleaseFoundationFromSimulation()
+    {
+        if (EntityRegistry.Instance == null)
+            return;
+
+        if (cellsInitialized && foundationCells != null)
+        {
+            foreach (Vector2Int cell in foundationCells)
+                EntityRegistry.Instance.UnregisterFoundation(cell);
+        }
+
+        EntityRegistry.Instance.UnregisterFoundation(gameObject);
     }
 
     public int GetIdleRootbornCount()
@@ -61,6 +83,10 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
         foreach (GameObject rootborn in idleRootbornsPerCell.Values)
         {
             if (rootborn == null)
+                return false;
+
+            UnitStatsComponent stats = rootborn.GetComponent<UnitStatsComponent>();
+            if (stats == null || stats.IsDead() || EntityRegistry.Instance == null || !EntityRegistry.Instance.IsEntityAlive(rootborn))
                 return false;
 
             TeamComponent team = rootborn.GetComponent<TeamComponent>();
@@ -135,16 +161,32 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
             return;
         }
 
-        StartCoroutine(BuildSequence(buildingData, teamID));
+        StartBuild(buildingData, teamID);
     }
 
-    private IEnumerator BuildSequence(BuildingStatsData buildingData, int teamID)
+    // Exécute une commande BuildBuilding depuis l'index de bâtiment envoyé en lockstep.
+    public void ExecuteBuild(int buildingIndex, int teamID)
+    {
+        List<BuildingStatsData> buildings = foundationStats?.constructibleBuildings;
+        if (buildings == null || buildingIndex < 0 || buildingIndex >= buildings.Count)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : index bâtiment invalide {buildingIndex}", this);
+            return;
+        }
+
+        ExecuteBuild(buildings[buildingIndex], teamID);
+    }
+
+    // Lance la phase visuelle de build et programme la décision finale en ticks.
+    private void StartBuild(BuildingStatsData buildingData, int teamID)
     {
         isBuildInProgress = true;
         OnFoundationStateChanged.RemoveAllListeners();
 
-        List<GameObject> rootbornsToDestroy = GetIdleRootborns();
-        foreach (GameObject rootborn in rootbornsToDestroy)
+        pendingBuildingData = buildingData;
+        pendingTeamID = teamID;
+        pendingRootborns = GetIdleRootborns();
+        foreach (GameObject rootborn in pendingRootborns)
         {
             if (rootborn != null)
                 UnitFreezer.Freeze(rootborn, disableComponents: true, freezeAnimator: true);
@@ -156,36 +198,96 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
         float delay = foundationStats.buildDelay;
         if (foundationStats.onBuildVFX != null && foundationStats.onBuildVFX.spriteDuration > delay)
             delay = foundationStats.onBuildVFX.spriteDuration;
-        yield return new WaitForSeconds(delay);
 
-        Vector3 buildPosition = transform.position;
+        long currentTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
+        buildAtTick = currentTick + SimulationClock.SecondsToTicks(delay);
+    }
 
-        foreach (GameObject rootborn in rootbornsToDestroy)
+    // Termine la construction uniquement quand le tick déterministe est atteint.
+    public void SimTick(long tick)
+    {
+        if (initialSyncPending)
         {
-            if (rootborn == null)
-                continue;
-
-            EntitySpawnManager.Instance?.NotifyEntityDestroyed(rootborn);
-            Destroy(rootborn);
+            initialSyncPending = false;
+            SynchronizeInitialRootborns();
         }
 
-        GameObject buildingObject = Instantiate(buildingData.buildingPrefab, buildPosition, Quaternion.identity);
-        TeamComponent buildingTeam = buildingObject.GetComponent<TeamComponent>();
-        if (buildingTeam != null)
-            buildingTeam.SetTeamID(teamID);
+        if (!isBuildInProgress || buildAtTick < 0 || tick < buildAtTick)
+            return;
+
+        CompleteBuildAtTick();
+    }
+
+    // Revalide les Rootborn puis remplace la Foundation par le bâtiment.
+    private void CompleteBuildAtTick()
+    {
+        if (pendingBuildingData == null || pendingRootborns == null || !IsReadyToBuild() || GetTeamID() != pendingTeamID)
+        {
+            AbortBuild();
+            return;
+        }
+
+        Vector3 buildPosition = GetBuildWorldPosition();
+
+        foreach (GameObject rootborn in pendingRootborns)
+        {
+            if (rootborn != null)
+                EntitySpawnManager.Instance?.DespawnEntity(rootborn, 0f);
+        }
+
+        GameObject buildingObject = EntitySpawnManager.Instance != null
+            ? EntitySpawnManager.Instance.SpawnEntity(pendingBuildingData.buildingPrefab, buildPosition, pendingTeamID)
+            : null;
+        if (buildingObject == null)
+        {
+            AbortBuild();
+            return;
+        }
 
         BuildingStatsComponent buildingStats = buildingObject.GetComponent<BuildingStatsComponent>();
         if (buildingStats != null)
-        {
             buildingStats.SetOriginFoundation(foundationStats);
-            buildingStats.NotifySpawned();
-        }
 
         EntitySpawnManager.Instance?.NotifyEntitySpawned(gameObject, buildingObject);
-        EntitySpawnManager.Instance?.NotifyEntityDestroyed(gameObject);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : construction de {pendingBuildingData.buildingName} équipe {pendingTeamID}", this);
+        EntitySpawnManager.Instance?.DespawnEntity(gameObject, 0f);
+        ClearBuildState();
+    }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : construction de {buildingData.buildingName} équipe {teamID}", this);
-        Destroy(gameObject);
+    // Annule une construction si la revalidation échoue au tick final.
+    private void AbortBuild()
+    {
+        if (pendingRootborns != null)
+        {
+            foreach (GameObject rootborn in pendingRootborns)
+            {
+                if (rootborn != null && EntityRegistry.Instance != null && EntityRegistry.Instance.IsEntityAlive(rootborn))
+                    UnitFreezer.Unfreeze(rootborn, enableComponents: true, unfreezeAnimator: true);
+            }
+        }
+
+        GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : build annulé à l'échéance, état invalide", this);
+        ClearBuildState();
+        OnFoundationStateChanged.Invoke();
+    }
+
+    // Nettoie l'état de build planifié.
+    private void ClearBuildState()
+    {
+        isBuildInProgress = false;
+        buildAtTick = -1;
+        pendingTeamID = 0;
+        pendingBuildingData = null;
+        pendingRootborns = null;
+    }
+
+    // Retourne la position monde de l'ancre logique de la Foundation.
+    private Vector3 GetBuildWorldPosition()
+    {
+        if (foundationCells != null && foundationCells.Length > 0 && GridManager.Instance != null)
+            return GridManager.Instance.GridToWorld(foundationCells[0]);
+
+        return Vector3.zero;
     }
 
     public void OnUnitEntered(Vector2Int cell, GameObject unit)
@@ -257,6 +359,16 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
         {
             EntityRegistry.Instance.RegisterCellListener(cell, this);
         }
+    }
+
+    // Enregistre les cellules de Foundation pour les commandes et les recherches sans Physics2D.
+    private void RegisterFoundationCells()
+    {
+        if (!cellsInitialized || EntityRegistry.Instance == null)
+            return;
+
+        foreach (Vector2Int cell in foundationCells)
+            EntityRegistry.Instance.RegisterFoundation(cell, gameObject);
     }
 
     private void SynchronizeInitialRootborns()

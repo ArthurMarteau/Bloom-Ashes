@@ -3,6 +3,28 @@ using UnityEngine;
 // Résout le type métier d'un hit sélectionnable à partir de ses composants
 public static class SelectionResolver
 {
+    // Résout le contenu prioritaire d'une cellule logique : Unité > Bâtiment > Foundation/Environnement > Ground.
+    public static GameObject ResolveAtCell(Vector2Int cell)
+    {
+        EntityRegistry registry = EntityRegistry.Instance;
+        if (registry == null)
+            return null;
+
+        GameObject unit = registry.GetUnitAtLogicalPosition(cell);
+        if (unit != null)
+            return unit;
+
+        GameObject building = registry.GetBuildingAtLogicalPosition(cell);
+        if (building != null)
+            return building;
+
+        GameObject foundation = registry.GetFoundationAt(cell);
+        if (foundation != null)
+            return foundation;
+
+        return null;
+    }
+
     // Classifie un GameObject touché en unité, bâtiment ou obstacle
     public static SelectionType Classify(GameObject hit, out GameObject entity)
     {

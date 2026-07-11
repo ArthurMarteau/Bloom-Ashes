@@ -66,10 +66,12 @@ Once a building exists:
 
 ## Technical Implementation (Game Design)
 
-- **Grid**: 80x80 tiles, A* pathfinding with MinHeap
+- **Grid**: 80x80 tiles, A* pathfinding with MinHeap + budgeted scheduler (N paths per simulation tick)
+- **Terrain**: authored via `TerrainMapData` ScriptableObject + in-editor Terrain Painter window (3 walkability layers: terrain type / static obstacles & buildings / unit occupancy)
 - **Prefabs**: 1 prefab per unit per faction, stats via ScriptableObjects (no generic prefab)
 - **Rootborn → combat**: Destroy + Instantiate new prefab (fixed type via SO, not mutable state)
-- **Input**: Migration planned to New Input System with netcode
+- **Simulation**: deterministic lockstep architecture — see **Netcode (Lockstep)** section below
+- **Input**: Migration planned to New Input System
 
 ---
 
@@ -894,7 +896,7 @@ This section provides detailed mechanics for abilities that go beyond the unit t
 - A Rootborn standing on a Watersap source tile collects at **double rate** (2 Watersap every 5 seconds instead of 1).
 - All other rules of Watersap Collection still apply (storage cap, timer reset on order, etc.).
 
-**Implementation status**: Designed, not yet implemented.
+**Implementation status**: Implemented (part of the Watersap Collection system — double rate on source tiles).
 
 ---
 
@@ -942,13 +944,33 @@ Nice-to-have: unit upgrades, research tree in nexus, score system, cosmetic skin
 
 ---
 
-## TODO Netcode
+## Netcode (Lockstep)
 
-### Filtre équipe dans SelectionManager
-Actuellement le SelectionManager sélectionne toutes les unités sans filtrer par équipe.
-En multijoueur, il faudra :
-- Empêcher de sélectionner les unités/bâtiments ennemis (ou les afficher en lecture seule)
-- Filtrer `SelectGameObject()` pour ne sélectionner que les entités du joueur local
-- S'appuyer sur `PlayerManager.Instance.IsLocalPlayer(teamID)` déjà utilisé dans OrderManager
+**Model chosen**: deterministic lockstep (Warcraft/StarCraft-style) — only player commands travel over the network; every client runs the full simulation locally. Target: up to 6 players, Steam distribution (Steamworks lobbies + Steam Datagram Relay, host-relay topology).
 
-À implémenter quand le système netcode sera en place.
+### Architecture in place (done)
+
+- **SimulationClock / SimulationClockManager**: fixed logical tick (`TICKS_PER_SECOND` = 50/s), seeded deterministic RNG (`SimulationRandom`).
+- **SimulationTickManager**: central simulation loop — all gameplay decisions run in `SimTick`, iterated in stable order (entityID, then component type). No gameplay decisions in `Update`/coroutines.
+- **Tick-based movement**: cell-by-cell steps counted in ticks (anchor crossing, commit, collision, recede). `transform.position` is pure presentation (Lerp between tick poses) and is never read by the simulation.
+- **Command layer**: every player action (move, attack, chase, stop, ability, Rootborn spawn, Bud cancel) is a serializable `GameCommand` (entityIDs, no GameObject) executed at tick T+delay via `CommandExecutor`.
+- **Deterministic arbitration**: cell claims resolved by `(orderTick, playerID)`; intra-group cell reservation; timers/cooldowns in ticks; spawn/death centralized in `EntitySpawnManager`; projectiles are visual-only, damage resolved by the sim at tick.
+- **Transport abstraction (N5a)**: `ICommandTransport` + `LoopbackTransport` (solo), `LockstepController` tick barrier (a tick executes only when all players' commands are received), binary `CommandSerializer`, periodic `StateChecksum` for desync detection.
+
+### Remaining work (paused — resume at N5b)
+
+1. **N5b — SteamTransport**: Facepunch.Steamworks, host-relay implementation of `ICommandTransport`, SteamID → playerID mapping, checksum comparison between clients. Requires Facepunch plugin in `Plugins/` + `steam_appid.txt` (test AppID 480).
+2. **N5c — Lobby & match start**: create/invite/join via Steam friends, start synchronization (shared RNG seed, map selection, simultaneous GO).
+3. **N5d — Robustness**: disconnections, pause when a player's commands are missing, resync/abandon policy.
+4. **LAN offline** (debt): local UDP implementation of `ICommandTransport` — Steam relay works on LAN but routes traffic through the internet.
+5. **SelectionManager team filter**: prevent selecting enemy units/buildings — filter `SelectGameObject()` with `PlayerManager.Instance.IsLocalPlayer(teamID)` (already used by OrderManager).
+6. **Simulation debt**: remaining visual-only `WaitForSeconds`/delays are fine; any leftover gameplay timing found later must migrate to ticks.
+
+### Rules for all future gameplay code (mandatory)
+
+- Gameplay decisions in `SimTick`, never in `Update`/`LateUpdate`/coroutines (coroutines allowed for visuals only: VFX, death delays, animations).
+- Time in ticks (`TICKS_PER_SECOND`); never `Time.time`/`Time.deltaTime` in simulation code. SO values stay in seconds, converted to ticks at read time.
+- Randomness via `SimulationRandom` (seeded); never `UnityEngine.Random` in gameplay.
+- Player actions go through `GameCommand`/`CommandExecutor`; never direct input → controller calls.
+- Spawn/destroy gameplay entities via `EntitySpawnManager`; entities referenced by `entityID` (long) in commands/network types, never by GameObject.
+- The simulation never reads `transform.position` — logical grid positions (`EntityRegistry`) are the source of truth.

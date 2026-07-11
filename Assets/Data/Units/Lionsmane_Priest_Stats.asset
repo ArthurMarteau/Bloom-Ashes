@@ -17,12 +17,12 @@ MonoBehaviour:
   portrait: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
   maxHP: 25
   attackDamage: 400
-  attackRange: 1
+  attackRange: 2
   defense: 2
   attackSpeed: 2
   moveSpeed: 1
   isRootborn: 0
-  movementType: 0
+  movementType: 1
   abilityData: {fileID: 0}
   unitPrefab: {fileID: 6748851485159956997, guid: ba56b56aa1b16794583204c15f7c704b, type: 3}
   watersapCost: 20

@@ -168,7 +168,8 @@ public class ActionPanelUI : MonoBehaviour
             else
                 state = ProductionSlotUI.SlotState.Available;
 
-            slots[i].Setup(unitData, state, (ud) => { tc.ExecuteTransform(ud); HidePanel(); });
+            int unitIndex = i;
+            slots[i].Setup(unitData, state, (_) => { SubmitTransformCommand(currentTransformUnit, unitIndex); HidePanel(); });
         }
 
         GameLogger.Log(GameLogger.Category.UI, $"🌿 ActionPanelUI : production — {Mathf.Min(allUnits.Count, slots.Count)} slot(s) pour {building.GetBuildingName()}", this);
@@ -287,9 +288,10 @@ public class ActionPanelUI : MonoBehaviour
                 ? ProductionSlotUI.SlotState.Available
                 : ProductionSlotUI.SlotState.Locked;
 
-            slots[i].Setup(buildingData, state, (bd) =>
+            int buildingIndex = i;
+            slots[i].Setup(buildingData, state, (_) =>
             {
-                trackedFoundation?.ExecuteBuild(bd, teamID);
+                SubmitBuildCommand(trackedFoundation, buildingIndex, teamID);
                 HidePanel();
             });
         }
@@ -409,13 +411,53 @@ public class ActionPanelUI : MonoBehaviour
     private FoundationComponent FindFoundationUnderSelectedRootborn(GameObject unit)
     {
         MovementController movementController = unit.GetComponent<MovementController>();
-        if (movementController == null || GridManager.Instance == null)
+        if (movementController == null || EntityRegistry.Instance == null)
             return null;
 
         Vector2Int cell = movementController.GetCurrentGridPosition();
-        Vector3 cellWorldPosition = GridManager.Instance.GridToWorld(cell);
-        Collider2D hit = Physics2D.OverlapPoint(cellWorldPosition, LayerMask.GetMask("Environment_Walkable"));
-        return hit != null ? hit.GetComponent<FoundationComponent>() : null;
+        GameObject foundationObject = EntityRegistry.Instance.GetFoundationAt(cell);
+        return foundationObject != null ? foundationObject.GetComponent<FoundationComponent>() : null;
+    }
+
+    // Sérialise une demande de transformation Rootborn -> Bud via le lockstep.
+    private bool SubmitTransformCommand(GameObject unit, int unitIndex)
+    {
+        if (unit == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long unitEntityID = EntityRegistry.Instance.GetEntityID(unit);
+        ITeamMember teamMember = unit.GetComponent<ITeamMember>();
+        if (unitEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = CommandType.TransformUnit,
+            unitEntityIDs = new[] { unitEntityID },
+            buildingIndex = unitIndex
+        });
+        return true;
+    }
+
+    // Sérialise une demande de construction de bâtiment via le lockstep.
+    private bool SubmitBuildCommand(FoundationComponent foundation, int buildingIndex, int teamID)
+    {
+        if (foundation == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long foundationEntityID = EntityRegistry.Instance.GetEntityID(foundation.gameObject);
+        if (foundationEntityID < 0)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamID,
+            type = CommandType.BuildBuilding,
+            targetEntityID = foundationEntityID,
+            buildingIndex = buildingIndex
+        });
+        return true;
     }
 
     // Désabonne OnTierUpgraded du bâtiment tracké et efface la référence
