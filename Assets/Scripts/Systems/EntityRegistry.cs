@@ -18,6 +18,7 @@ public class EntityRegistry : MonoBehaviour
     private Dictionary<GameObject, ITeamMember> teamMembers = new Dictionary<GameObject, ITeamMember>();
     private Dictionary<GameObject, IEvictable> evictables = new Dictionary<GameObject, IEvictable>();
     private Dictionary<GameObject, long> entityIDs = new Dictionary<GameObject, long>();
+    private Dictionary<long, GameObject> entitiesByID = new Dictionary<long, GameObject>();
     private Dictionary<GameObject, MovementController> movementControllers = new Dictionary<GameObject, MovementController>();
     private HashSet<GameObject> movingUnits = new HashSet<GameObject>();
     private long nextEntityID = 1;
@@ -85,6 +86,7 @@ public class EntityRegistry : MonoBehaviour
             movementControllers[go] = movementController;
         if (!entityIDs.ContainsKey(go))
             entityIDs[go] = nextEntityID++;
+        entitiesByID[entityIDs[go]] = go;
 
         if (debugRegistry)
         {
@@ -101,6 +103,8 @@ public class EntityRegistry : MonoBehaviour
         entities.Remove(go);
         teamMembers.Remove(go);
         evictables.Remove(go);
+        if (entityIDs.TryGetValue(go, out long entityID))
+            entitiesByID.Remove(entityID);
         entityIDs.Remove(go);
         movementControllers.Remove(go);
         movingUnits.Remove(go);
@@ -518,6 +522,23 @@ public class EntityRegistry : MonoBehaviour
         return -1;
     }
 
+    // Retourne l'objet de scène associé à un identifiant stable, ou null s'il a disparu.
+    public GameObject GetGameObjectByEntityID(long entityID)
+    {
+        if (entitiesByID.TryGetValue(entityID, out GameObject go) && go != null)
+            return go;
+        return null;
+    }
+
+    // Indique si une entité enregistrée est encore vivante au tick courant.
+    public bool IsEntityAlive(GameObject go)
+    {
+        return go != null
+            && entities.TryGetValue(go, out IDamageable damageable)
+            && damageable != null
+            && !damageable.IsDead();
+    }
+
     // === Utilitaires ===
 
     // Notifie les listeners qu'une unité est entrée sur une cellule.
@@ -601,6 +622,8 @@ public class EntityRegistry : MonoBehaviour
 
         foreach (GameObject go in toRemove)
         {
+            if (entityIDs.TryGetValue(go, out long entityID))
+                entitiesByID.Remove(entityID);
             entities.Remove(go);
             teamMembers.Remove(go);
             evictables.Remove(go);

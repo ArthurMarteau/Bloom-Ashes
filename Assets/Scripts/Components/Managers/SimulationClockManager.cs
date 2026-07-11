@@ -43,6 +43,7 @@ public class SimulationClockManager : MonoBehaviour
     private void FixedUpdate()
     {
         clock.Advance();
+        CommandExecutor.Instance?.ExecuteTick(clock.CurrentTick);
         tickManager.TickAll(clock.CurrentTick);
         PathFindingManager.Instance?.ProcessTickBudget();
         lastFixedUpdateTime = Time.time;

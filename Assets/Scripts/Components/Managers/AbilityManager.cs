@@ -6,6 +6,10 @@ public class AbilityManager : MonoBehaviour
 {
     public static AbilityManager Instance { get; private set; }
 
+    public const int ENTITY_ABILITY_INDEX = 0;
+    public const int SACRIFICE_ABILITY_INDEX = 1;
+    [SerializeField] private SacrificeAbility sacrificeAbilityData;
+
     // Initialise le singleton
     private void Awake()
     {
@@ -37,6 +41,38 @@ public class AbilityManager : MonoBehaviour
 
         if (ability.Execute(caster) && abilityData.vfxOnExecute != null)
             VFXApplier.Apply(abilityData.vfxOnExecute, caster);
+    }
+
+    // Résout puis exécute une ability sérialisée par son index de commande.
+    public void TryExecuteAbility(GameObject caster, int abilityIndex)
+    {
+        AbilityData abilityData = ResolveAbilityData(caster, abilityIndex);
+        TryExecuteAbility(caster, abilityData);
+    }
+
+    // Enregistre l'asset de sacrifice fourni par l'UI de la scène.
+    public void RegisterSacrificeAbility(SacrificeAbility abilityData)
+    {
+        if (abilityData != null)
+            sacrificeAbilityData = abilityData;
+    }
+
+    // Retourne l'ability correspondant au contrat d'index des commandes.
+    private AbilityData ResolveAbilityData(GameObject caster, int abilityIndex)
+    {
+        if (caster == null)
+            return null;
+        if (abilityIndex == SACRIFICE_ABILITY_INDEX)
+            return sacrificeAbilityData;
+        if (abilityIndex != ENTITY_ABILITY_INDEX)
+            return null;
+
+        BuildingStatsComponent buildingStats = caster.GetComponent<BuildingStatsComponent>();
+        if (buildingStats != null)
+            return buildingStats.GetBaseStats()?.abilityData;
+
+        UnitStatsComponent unitStats = caster.GetComponent<UnitStatsComponent>();
+        return unitStats?.GetBaseStats()?.abilityData;
     }
 
     // Vérifie si une ability peut être exécutée (pour griser un bouton UI)

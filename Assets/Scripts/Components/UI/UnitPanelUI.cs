@@ -164,6 +164,7 @@ public class UnitPanelUI : MonoBehaviour
         if (abilityBtn != null) abilityBtn.onClick.AddListener(OnAbilityButtonClicked);
         Button btn = sacrificeCancelButton?.GetComponent<Button>();
         if (btn != null) btn.onClick.AddListener(OnSacrificeOrCancelButtonClicked);
+        AbilityManager.Instance?.RegisterSacrificeAbility(sacrificeAbilityData);
 
         // Masqué par défaut au démarrage
         if (panelRoot != null)
@@ -790,7 +791,7 @@ public class UnitPanelUI : MonoBehaviour
             return;
         }
 
-        AbilityManager.Instance.TryExecuteAbility(currentSelectedEntity, abilityData);
+        SubmitAbilityCommand(currentSelectedEntity, AbilityManager.ENTITY_ABILITY_INDEX);
     }
 
     // Appelé quand le bouton Sacrifice ou Cancel est cliqué — contextuel selon l'entité sélectionnée
@@ -800,11 +801,52 @@ public class UnitPanelUI : MonoBehaviour
 
         BudComponent bud = currentSelectedEntity.GetComponent<BudComponent>();
         if (bud != null)
-            bud.Cancel();
+            SubmitCancelBudCommand(currentSelectedEntity);
         else if (sacrificeAbilityData != null)
-            AbilityManager.Instance.TryExecuteAbility(currentSelectedEntity, sacrificeAbilityData);
+            SubmitAbilityCommand(currentSelectedEntity, AbilityManager.SACRIFICE_ABILITY_INDEX);
         else
             GameLogger.Warn(GameLogger.Category.UI, " SacrificeAbility non assigné dans UnitPanelUI", this);
+    }
+
+    // Sérialise une ability UI pour son exécution au tick lockstep.
+    private bool SubmitAbilityCommand(GameObject caster, int abilityIndex)
+    {
+        if (caster == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long casterEntityID = EntityRegistry.Instance.GetEntityID(caster);
+        ITeamMember teamMember = caster.GetComponent<ITeamMember>();
+        if (casterEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = CommandType.CastAbility,
+            unitEntityIDs = new[] { casterEntityID },
+            abilityIndex = abilityIndex
+        });
+        return true;
+    }
+
+    // Sérialise l'annulation d'un Bud sans appeler directement son composant gameplay.
+    private bool SubmitCancelBudCommand(GameObject budObject)
+    {
+        if (budObject == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long budEntityID = EntityRegistry.Instance.GetEntityID(budObject);
+        ITeamMember teamMember = budObject.GetComponent<ITeamMember>();
+        if (budEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = CommandType.CancelBud,
+            targetEntityID = budEntityID
+        });
+        return true;
     }
 
     // Récupère l'AbilityData d'une entité (bâtiment ou unité)

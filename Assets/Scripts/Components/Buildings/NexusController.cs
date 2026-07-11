@@ -77,7 +77,26 @@ public class NexusController : MonoBehaviour
         if (debugNexusInput)
             GameLogger.Log(GameLogger.Category.Spawn, $"️ NexusController {gameObject.name} : clic droit détecté sur Nexus sélectionné", this);
 
-        TrySpawnRootborn();
+        SubmitSpawnCommand();
+    }
+
+    // Sérialise la demande de spawn; le coût Watersap sera vérifié au tick d'exécution.
+    private void SubmitSpawnCommand()
+    {
+        if (CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return;
+
+        TeamComponent teamComponent = GetComponent<TeamComponent>();
+        long nexusEntityID = EntityRegistry.Instance.GetEntityID(gameObject);
+        if (teamComponent == null || nexusEntityID < 0)
+            return;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamComponent.GetTeamID(),
+            type = CommandType.SpawnRootborn,
+            targetEntityID = nexusEntityID
+        });
     }
 
     // Vérifie que le bâtiment sélectionné est bien ce Nexus

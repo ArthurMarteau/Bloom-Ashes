@@ -85,11 +85,11 @@ public class AbilityInputHandler : MonoBehaviour
             return;
         }
 
-        if (AbilityManager.Instance == null)
+        if (CommandExecutor.Instance == null)
         {
             if (debugAbilityInput)
             {
-                GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: AbilityManager absent, ability ignorée.", this);
+                GameLogger.Warn(GameLogger.Category.UI, "⌨️ AbilityInputHandler: CommandExecutor absent, ability ignorée.", this);
             }
             return;
         }
@@ -119,8 +119,7 @@ public class AbilityInputHandler : MonoBehaviour
 
         if (isNexus)
         {
-            NexusController nexus = unit.GetComponent<NexusController>();
-            nexus.TrySpawnRootborn();
+            SubmitAbilityCommand(unit);
 
             if (debugAbilityInput)
             {
@@ -149,7 +148,7 @@ public class AbilityInputHandler : MonoBehaviour
             return;
         }
 
-        AbilityManager.Instance.TryExecuteAbility(unit, baseStats.abilityData);
+        SubmitAbilityCommand(unit);
 
         if (debugAbilityInput)
         {
@@ -213,12 +212,33 @@ public class AbilityInputHandler : MonoBehaviour
             return false;
         }
 
-        nexus.TrySpawnRootborn();
+        SubmitAbilityCommand(selectedBuilding);
 
         if (debugAbilityInput)
         {
             GameLogger.Log(GameLogger.Category.UI, $"⌨️ AbilityInputHandler: ability Nexus lancée pour {selectedBuilding.name}.", this);
         }
+        return true;
+    }
+
+    // Sérialise l'ability principale de l'entité pour une exécution retardée au tick lockstep.
+    private bool SubmitAbilityCommand(GameObject caster)
+    {
+        if (caster == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long casterEntityID = EntityRegistry.Instance.GetEntityID(caster);
+        ITeamMember teamMember = caster.GetComponent<ITeamMember>();
+        if (casterEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = CommandType.CastAbility,
+            unitEntityIDs = new[] { casterEntityID },
+            abilityIndex = AbilityManager.ENTITY_ABILITY_INDEX
+        });
         return true;
     }
 }

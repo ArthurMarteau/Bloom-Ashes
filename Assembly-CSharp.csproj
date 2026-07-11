@@ -79,6 +79,7 @@
     <Compile Include="Assets\Scripts\Data\UI\CursorData.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
+    <Compile Include="Assets\Scripts\Systems\Commands\GameCommand.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
     <Compile Include="Assets\Scripts\Data\VFX\VFXData.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\WatersapTransferExecutor.cs" />
@@ -119,6 +120,8 @@
     <Compile Include="Assets\Scripts\Systems\WatersapSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\AttackController.cs" />
     <Compile Include="Assets\Scripts\Components\Units\MovementController.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\CommandExecutor.cs" />
+    <Compile Include="Assets\Scripts\Systems\Commands\CommandQueue.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BuildingStatsComponent.cs" />
     <Compile Include="Assets\Scripts\Data\Players\PlayerData.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SpriteFlashController.cs" />

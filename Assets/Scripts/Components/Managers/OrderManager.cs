@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 // Gère les ordres donnés aux unités sélectionnées
-// Fait le lien entre SelectionManager et les controllers d'unités (MovementController, AttackController, etc.)
+// Transforme la sélection et les inputs locaux en commandes sérialisables.
 // Extensible pour différents types d'ordres (mouvement, attaque, patrouille, etc.)
 // Consomme les events de InputManager — aucun accès direct à Input.*
 public class OrderManager : MonoBehaviour
@@ -119,7 +119,7 @@ public class OrderManager : MonoBehaviour
         ITeamMember targetTM = targetUnit.GetComponent<ITeamMember>();
 
         // Multi-target dispatch range-aware : groupage par range effectif.
-        // Attaque (ennemi) -> range r�el de l'unit�. Chase (alli�/neutre) -> range=1 forc� (adjacent).
+        // Attaque (ennemi) -> range réel de l'unité. Chase (allié/neutre) -> range=1 forcé (adjacent).
         Dictionary<GameObject, Vector2Int> approachAssignment = new Dictionary<GameObject, Vector2Int>();
         if (selectedUnits.Count > 1)
         {
@@ -168,9 +168,6 @@ public class OrderManager : MonoBehaviour
 
         foreach (GameObject unit in selectedUnits)
         {
-            MovementController movementController = unit.GetComponent<MovementController>();
-            if (movementController != null && !movementController.enabled) continue;
-
             // Ne peut pas se cibler soi-même
             if (unit == targetUnit)
             {
@@ -185,94 +182,20 @@ public class OrderManager : MonoBehaviour
                 continue;
             }
 
-            // Vérifie si la cible est ennemie via ITeamMember
-            ITeamMember targetTeamMember = targetUnit.GetComponent<ITeamMember>();
-            if (unitTeamMember.IsEnemy(targetTeamMember))
-            {
-                // ENNEMI → Ordre d'attaque
-                AttackController attackController = unit.GetComponent<AttackController>();
-                if (attackController != null)
-                {
-                    // Arrête la chase si active
-                    ChaseController chaseController = unit.GetComponent<ChaseController>();
-                    if (chaseController != null && chaseController.IsChasing())
-                    {
-                        chaseController.StopChase();
-                    }
+            Vector2Int approachCell = approachAssignment.TryGetValue(unit, out Vector2Int assignedCell)
+                ? assignedCell
+                : GameCommand.NO_TARGET_CELL;
+            long targetEntityID = EntityRegistry.Instance?.GetEntityID(targetUnit) ?? -1;
+            CommandType commandType = unitTeamMember.IsEnemy(targetTM)
+                ? CommandType.AttackTarget
+                : CommandType.ChaseTarget;
+            if (!SubmitUnitCommand(unit, commandType, targetEntityID, approachCell))
+                continue;
 
-                    if (approachAssignment.TryGetValue(unit, out Vector2Int assignedAttackCell) && movementController != null)
-                    {
-                        if (movementController.GetCurrentGridPosition() != assignedAttackCell)
-                        {
-                            UnityEngine.Events.UnityAction startAttackOnArrive = null;
-                            startAttackOnArrive = () =>
-                            {
-                                movementController.OnArrived.RemoveListener(startAttackOnArrive);
-                                if (movementController.GetCurrentGridPosition() == assignedAttackCell && targetUnit != null && attackController != null) attackController.StartAttack(targetUnit);
-                            };
-                            movementController.OnArrived.AddListener(startAttackOnArrive);
-
-                            if (movementController.MoveTo(assignedAttackCell))
-                            {
-                                attackOrders++;
-                                continue;
-                            }
-
-                            movementController.OnArrived.RemoveListener(startAttackOnArrive);
-                        }
-                    }
-
-                    attackController.StartAttack(targetUnit);
-                    attackOrders++;
-                }
-                else
-                {
-                    GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: {unit.name} n'a pas de AttackController", this);
-                }
-            }
+            if (commandType == CommandType.AttackTarget)
+                attackOrders++;
             else
-            {
-                // ALLIÉ/NEUTRE → Ordre de chase
-                ChaseController chaseController = unit.GetComponent<ChaseController>();
-                if (chaseController != null)
-                {
-                    // Arrête l'attaque si active
-                    AttackController attackController = unit.GetComponent<AttackController>();
-                    if (attackController != null && attackController.IsAttacking())
-                    {
-                        attackController.StopAttack();
-                    }
-
-                    if (approachAssignment.TryGetValue(unit, out Vector2Int assignedChaseCell) && movementController != null)
-                    {
-                        if (movementController.GetCurrentGridPosition() != assignedChaseCell)
-                        {
-                            UnityEngine.Events.UnityAction startChaseOnArrive = null;
-                            startChaseOnArrive = () =>
-                            {
-                                movementController.OnArrived.RemoveListener(startChaseOnArrive);
-                                if (movementController.GetCurrentGridPosition() == assignedChaseCell && targetUnit != null && chaseController != null) chaseController.StartChase(targetUnit);
-                            };
-                            movementController.OnArrived.AddListener(startChaseOnArrive);
-
-                            if (movementController.MoveTo(assignedChaseCell))
-                            {
-                                chaseOrders++;
-                                continue;
-                            }
-
-                            movementController.OnArrived.RemoveListener(startChaseOnArrive);
-                        }
-                    }
-
-                    chaseController.StartChase(targetUnit);
-                    chaseOrders++;
-                }
-                else
-                {
-                    GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: {unit.name} n'a pas de ChaseController", this);
-                }
-            }
+                chaseOrders++;
         }
 
         if (attackOrders > 0)
@@ -314,7 +237,7 @@ public class OrderManager : MonoBehaviour
 
         int successfulOrders = 0;
 
-        // Multi-target dispatch : si plusieurs unit�s, chacune re�oit une case distincte en spirale autour de la cible
+        // Multi-target dispatch : si plusieurs unités, chacune reçoit une case distincte en spirale autour de la cible
         if (selectedUnits.Count > 1)
         {
             List<Vector2Int> dispatchCells = DispatchHelper.ComputeSpiral(targetGridPosition, selectedUnits.Count * 2 + 4, selectedUnits[0]);
@@ -322,66 +245,50 @@ public class OrderManager : MonoBehaviour
 
             foreach (GameObject unit in selectedUnits)
             {
-                MovementController movementController = unit.GetComponent<MovementController>();
-                if (movementController == null || !movementController.enabled) continue;
-
-                // Annule la chase
-                ChaseController chaseController = unit.GetComponent<ChaseController>();
-                if (chaseController != null && chaseController.IsChasing())
-                {
-                    chaseController.StopChase();
-                }
-
-                // Annule l'attaque + flag manuel
-                AttackController attackController = unit.GetComponent<AttackController>();
-                if (attackController != null)
-                {
-                    if (attackController.IsAttacking()) attackController.StopAttack();
-                    attackController.SetManualOrder(true);
-                }
-
-                // R�cup�re la case assign�e (fallback : case cible si dispatch a �chou� pour cette unit�)
+                // Récupère la case assignée (fallback : case cible si dispatch a échoué pour cette unité)
                 Vector2Int targetForThisUnit = assignment.TryGetValue(unit, out Vector2Int assignedCell)
                     ? assignedCell
                     : targetGridPosition;
 
-                if (movementController.MoveTo(targetForThisUnit))
-                {
+                if (SubmitUnitCommand(unit, CommandType.Move, -1, targetForThisUnit))
                     successfulOrders++;
-                }
             }
 
-            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre group� vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s dispatch�es sur {dispatchCells.Count} cases", this);
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre groupé vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités dispatchées sur {dispatchCells.Count} cases", this);
         }
         else
         {
-            // Unit� unique : ordre direct sans dispatch
+            // Unité unique : ordre direct sans dispatch
             foreach (GameObject unit in selectedUnits)
             {
-                MovementController movementController = unit.GetComponent<MovementController>();
-                if (movementController == null || !movementController.enabled) continue;
-
-                ChaseController chaseController = unit.GetComponent<ChaseController>();
-                if (chaseController != null && chaseController.IsChasing())
-                {
-                    chaseController.StopChase();
-                }
-
-                AttackController attackController = unit.GetComponent<AttackController>();
-                if (attackController != null)
-                {
-                    if (attackController.IsAttacking()) attackController.StopAttack();
-                    attackController.SetManualOrder(true);
-                }
-
-                if (movementController.MoveTo(targetGridPosition))
-                {
+                if (SubmitUnitCommand(unit, CommandType.Move, -1, targetGridPosition))
                     successfulOrders++;
-                }
             }
 
-            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unit�s", this);
+            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités", this);
         }
+    }
+
+    // Sérialise un ordre unitaire après le dispatch local sans appeler les contrôleurs gameplay.
+    private bool SubmitUnitCommand(GameObject unit, CommandType commandType, long targetEntityID, Vector2Int targetCell)
+    {
+        if (unit == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long unitEntityID = EntityRegistry.Instance.GetEntityID(unit);
+        ITeamMember teamMember = unit.GetComponent<ITeamMember>();
+        if (unitEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = commandType,
+            unitEntityIDs = new[] { unitEntityID },
+            targetEntityID = targetEntityID,
+            targetCell = targetCell
+        });
+        return true;
     }
 
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
