@@ -546,7 +546,7 @@ public class EntityRegistry : MonoBehaviour
     }
 
     // Retourne les ennemis vivants de myTeamID dans un rayon (distance Chebyshev)
-    // Filtre automatiquement : vivant + équipe différente + non-neutre + dans la portée
+    // Filtre automatiquement : vivant + alliance hostile + dans la portée
     // Utilisé par AttackController pour remplacer Physics2D.OverlapBoxAll
     public List<GameObject> FindEnemiesInRange(Vector2Int center, int range, int myTeamID)
     {
@@ -569,8 +569,7 @@ public class EntityRegistry : MonoBehaviour
                     if (!teamMembers.TryGetValue(go, out ITeamMember otherTeam) || otherTeam == null) continue;
 
                     int otherTeamID = otherTeam.GetTeamID();
-                    if (myTeamID == 0 || otherTeamID == 0) continue;
-                    if (otherTeamID == myTeamID) continue;
+                    if (PlayerManager.Instance == null || !PlayerManager.Instance.AreEnemies(myTeamID, otherTeamID)) continue;
 
                     if (addedEnemies.Add(go))
                         result.Add(go);
@@ -612,6 +611,15 @@ public class EntityRegistry : MonoBehaviour
     }
 
     // Retourne un snapshot déterministe des entités vivantes pour le checksum lockstep.
+    // Retourne le composant de stats d'unité déjà enregistré comme IDamageable.
+    public UnitStatsComponent GetUnitStats(GameObject go)
+    {
+        if (go == null)
+            return null;
+
+        return entities.TryGetValue(go, out IDamageable entity) ? entity as UnitStatsComponent : null;
+    }
+
     public List<EntityChecksumEntry> GetChecksumEntries()
     {
         List<long> ids = new List<long>(entitiesByID.Keys);

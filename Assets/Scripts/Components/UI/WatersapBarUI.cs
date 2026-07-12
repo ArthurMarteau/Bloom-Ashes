@@ -38,7 +38,7 @@ public class WatersapBarUI : MonoBehaviour
     private void Start()
     {
         if (PlayerManager.Instance != null)
-            trackedTeamID = PlayerManager.Instance.LocalPlayer.teamID;
+            trackedTeamID = PlayerManager.Instance.LocalPlayerID;
 
         if (WatersapManager.Instance == null)
         {

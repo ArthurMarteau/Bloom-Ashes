@@ -8,12 +8,19 @@ public class SimulationClockManager : MonoBehaviour
 
     private readonly SimulationClock clock = new SimulationClock();
     private readonly SimulationTickManager tickManager = new SimulationTickManager();
+    private readonly PendingDamageResolver pendingDamageResolver = new PendingDamageResolver();
     private float lastFixedUpdateTime;
 
     public long CurrentTick => clock.CurrentTick;
     public SimulationClock SimulationRandom => clock;
     public float InterpolationAlpha => Mathf.Clamp01(
         (Time.time - lastFixedUpdateTime) / Mathf.Max(Time.fixedDeltaTime, 0.0001f));
+
+    // Réinitialise la source aléatoire avec la graine partagée du match.
+    public void Reseed(int seed)
+    {
+        clock.Reseed(seed);
+    }
 
     // Crée le manager si la scène chargée n'en fournit pas
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -59,6 +66,7 @@ public class SimulationClockManager : MonoBehaviour
             : System.Array.Empty<GameCommand>();
         CommandExecutor.Instance?.ExecuteTick(clock.CurrentTick, commands);
         tickManager.TickAll(clock.CurrentTick);
+        pendingDamageResolver.SimTick(clock.CurrentTick);
         PathFindingManager.Instance?.ProcessTickBudget();
         NetworkManager.Instance?.LogChecksum(clock.CurrentTick);
         lastFixedUpdateTime = Time.time;
@@ -80,6 +88,12 @@ public class SimulationClockManager : MonoBehaviour
     public void Unregister(long entityID, ITickable tickable)
     {
         tickManager.Unregister(entityID, tickable);
+    }
+
+    // Programme un dégât qui survivra au retrait de l'attaquant de la simulation
+    public void ScheduleDamage(long targetEntityID, long attackerEntityID, int damage, long atTick)
+    {
+        pendingDamageResolver.Schedule(targetEntityID, attackerEntityID, damage, atTick);
     }
 
     // Nettoie la référence globale lors de la destruction

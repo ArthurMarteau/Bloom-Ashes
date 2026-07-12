@@ -97,6 +97,7 @@
     <Compile Include="Assets\Scripts\Systems\SimulationTickManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\PathFinding.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitType.cs" />
+    <Compile Include="Assets\Scripts\Systems\Combat\PendingDamageResolver.cs" />
     <Compile Include="Assets\Scripts\Shared\GameLoggerSettings.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\CombatSystem.cs" />
     <Compile Include="Assets\Scripts\Systems\Units\WatersapCollectionSystem.cs" />
@@ -107,6 +108,7 @@
     <Compile Include="Assets\Scripts\Systems\Network\LoopbackTransport.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\SelectionSquare.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipTrigger.cs" />
+    <Compile Include="Assets\Scripts\Systems\Match\MatchConfig.cs" />
     <Compile Include="Assets\Scripts\Components\Units\TransformationController.cs" />
     <Compile Include="Assets\Scripts\Shared\Constants\AnimationNames.cs" />
     <Compile Include="Assets\Scripts\Components\Units\UnitStatsComponent.cs" />
@@ -142,6 +144,7 @@
     <Compile Include="Assets\Scripts\Systems\Grid\GridSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\PlayerManager.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\IDamageable.cs" />
+    <Compile Include="Assets\Scripts\Systems\Match\AllianceSystem.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ProductionSlotUI.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\CameraController.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\IAbility.cs" />

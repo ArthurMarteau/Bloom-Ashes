@@ -90,11 +90,23 @@ public class OrderManager : MonoBehaviour
     }
 
     // Gère l'ordre sur une entité cible (unité ou bâtiment)
-    // Attaque si ennemi (via IDamageable + ITeamMember), chase si allié/neutre
+    // Attaque si la cible est hostile ou passive, chase sinon
     // Détermine automatiquement le comportement selon la relation d'équipe
     private void HandleUnitTargetOrder(GameObject targetUnit)
     {
         // Anti-spam : ignore si même cible que le dernier ordre
+        var selectedUnits = selectionManager.GetSelectedUnits();
+
+        // Filtre équipe : en mode multijoueur, ne traite que les unités du joueur local
+        if (GameManager.Instance != null && !GameManager.Instance.DevModeAllTeams && PlayerManager.Instance != null)
+            selectedUnits = selectedUnits.FindAll(u => {
+                ITeamMember tm = u.GetComponent<ITeamMember>();
+                return tm != null && PlayerManager.Instance.IsLocalPlayer(tm.GetTeamID());
+            });
+
+        if (TryHandleRootbornSelfTransfer(targetUnit, selectedUnits))
+            return;
+
         if (targetUnit == lastTargetUnit)
         {
             return;
@@ -103,7 +115,7 @@ public class OrderManager : MonoBehaviour
         // Mémorise la nouvelle cible
         lastTargetUnit = targetUnit;
 
-        var selectedUnits = selectionManager.GetSelectedUnits();
+        selectedUnits = selectionManager.GetSelectedUnits();
 
         // Filtre équipe : en mode multijoueur, ne traite que les unités du joueur local
         if (GameManager.Instance != null && !GameManager.Instance.DevModeAllTeams && PlayerManager.Instance != null)
@@ -119,7 +131,7 @@ public class OrderManager : MonoBehaviour
         ITeamMember targetTM = targetUnit.GetComponent<ITeamMember>();
 
         // Multi-target dispatch range-aware : groupage par range effectif.
-        // Attaque (ennemi) -> range réel de l'unité. Chase (allié/neutre) -> range=1 forcé (adjacent).
+        // Attaque (hostile ou passif) -> portée réelle. Chase -> portée 1 forcée (adjacent).
         Dictionary<GameObject, Vector2Int> approachAssignment = new Dictionary<GameObject, Vector2Int>();
         if (selectedUnits.Count > 1)
         {
@@ -127,10 +139,11 @@ public class OrderManager : MonoBehaviour
             foreach (GameObject u in selectedUnits)
             {
                 ITeamMember utm = u.GetComponent<ITeamMember>();
-                bool isEnemyTarget = utm != null && targetTM != null && utm.IsEnemy(targetTM);
+                bool isAttackableTarget = utm != null && targetTM != null && PlayerManager.Instance != null
+                    && PlayerManager.Instance.CanBeAttacked(utm.GetTeamID(), targetTM.GetTeamID());
 
                 int effectiveRange;
-                if (isEnemyTarget)
+                if (isAttackableTarget)
                 {
                     UnitStatsComponent stats = u.GetComponent<UnitStatsComponent>();
                     effectiveRange = stats != null ? stats.GetAttackRange() : 1;
@@ -186,7 +199,9 @@ public class OrderManager : MonoBehaviour
                 ? assignedCell
                 : GameCommand.NO_TARGET_CELL;
             long targetEntityID = EntityRegistry.Instance?.GetEntityID(targetUnit) ?? -1;
-            CommandType commandType = unitTeamMember.IsEnemy(targetTM)
+            bool isAttackableTarget = targetTM != null && PlayerManager.Instance != null
+                && PlayerManager.Instance.CanBeAttacked(unitTeamMember.GetTeamID(), targetTM.GetTeamID());
+            CommandType commandType = isAttackableTarget
                 ? CommandType.AttackTarget
                 : CommandType.ChaseTarget;
             if (!SubmitUnitCommand(unit, commandType, targetEntityID, approachCell))
@@ -210,6 +225,32 @@ public class OrderManager : MonoBehaviour
 
     // Gère l'ordre de mouvement simple vers une position monde
     // Reçoit directement la position monde depuis HandleRightClickOrder
+    // Intercepte le clic droit d'un Rootborn sélectionné sur lui-même pour lancer WatersapTransfer.
+    private bool TryHandleRootbornSelfTransfer(GameObject targetUnit, List<GameObject> selectedUnits)
+    {
+        if (targetUnit == null || selectedUnits == null || !selectedUnits.Contains(targetUnit))
+            return false;
+
+        if (EntityRegistry.Instance == null)
+            return false;
+
+        UnitStatsComponent targetStats = EntityRegistry.Instance.GetUnitStats(targetUnit);
+        if (targetStats == null || !targetStats.IsRootborn())
+            return false;
+
+        if (AbilityManager.Instance == null
+            || !AbilityManager.Instance.TryGetEntityAbilityIndex<WatersapTransferAbility>(targetUnit, out int abilityIndex))
+        {
+            GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: WatersapTransfer introuvable sur {targetUnit.name}", this);
+            return true;
+        }
+
+        if (!SubmitAbilityCommand(targetUnit, abilityIndex))
+            GameLogger.Warn(GameLogger.Category.Selection, $"OrderManager: commande WatersapTransfer non soumise pour {targetUnit.name}", this);
+
+        return true;
+    }
+
     private void HandleSimpleMovementOrder(Vector3 worldPosition)
     {
         // Convertit la position monde en coordonnées de grille
@@ -292,6 +333,29 @@ public class OrderManager : MonoBehaviour
     }
 
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
+    // Sérialise une ability unitaire pour exécution lockstep sans appel direct à l'executor.
+    private bool SubmitAbilityCommand(GameObject unit, int abilityIndex)
+    {
+        if (unit == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
+            return false;
+
+        long unitEntityID = EntityRegistry.Instance.GetEntityID(unit);
+        ITeamMember teamMember = unit.GetComponent<ITeamMember>();
+        if (unitEntityID < 0 || teamMember == null)
+            return false;
+
+        CommandExecutor.Instance.Submit(new GameCommand
+        {
+            playerID = teamMember.GetTeamID(),
+            type = CommandType.CastAbility,
+            unitEntityIDs = new[] { unitEntityID },
+            targetEntityID = -1,
+            targetCell = GameCommand.NO_TARGET_CELL,
+            abilityIndex = abilityIndex
+        });
+        return true;
+    }
+
     private void OnDestroy()
     {
         if (inputManager != null)

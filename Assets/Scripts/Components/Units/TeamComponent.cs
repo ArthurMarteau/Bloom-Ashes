@@ -6,7 +6,7 @@
 public class TeamComponent : MonoBehaviour, ITeamMember
 {
     [Header("Team Settings")]
-    [SerializeField] private int teamID = 1; // 0 = Neutre, 1-6 = Joueurs
+    [SerializeField] private int teamID = 1; // -1 = Wildlife hostile, 1-6 = Joueurs
 
     // Couleurs de fallback utilisées si PlayerManager est absent ou si le PlayerData est null
     private static readonly Color[] fallbackColors = new Color[]
@@ -62,12 +62,11 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     // Priorité : PlayerData.teamColor → fallback par index → Color.white (neutre)
     public Color GetTeamColor()
     {
-        if (teamID == 0)
+        if (teamID == AllianceSystem.NEUTRAL_ALLIANCE)
             return Color.white;
 
-        PlayerData data = PlayerManager.Instance?.GetPlayerData(teamID);
-        if (data != null)
-            return data.teamColor;
+        if (PlayerManager.Instance != null && PlayerManager.Instance.GetPlayerSlot(teamID) != null)
+            return PlayerManager.Instance.GetPlayerColor(teamID);
 
         // Fallback si PlayerManager absent ou joueur non trouvé
         if (teamID >= 0 && teamID < fallbackColors.Length)
@@ -83,11 +82,8 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         if (other == null)
             return false;
 
-        // Neutres (teamID = 0) ne sont ennemis avec personne
-        if (teamID == 0 || other.GetTeamID() == 0)
-            return false;
-
-        bool isEnemy = teamID != other.GetTeamID();
+        bool isEnemy = PlayerManager.Instance != null
+            && PlayerManager.Instance.AreEnemies(teamID, other.GetTeamID());
 
         if (debugTeam && isEnemy)
             GameLogger.Log(GameLogger.Category.Combat, $"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ENNEMI", this);
@@ -101,15 +97,12 @@ public class TeamComponent : MonoBehaviour, ITeamMember
         if (other == null)
             return false;
 
-        // Soi-même est toujours allié
+        // La même instance est toujours alliée à elle-même, y compris pour la wildlife.
         if (other == (ITeamMember)this)
             return true;
 
-        // Neutres ne sont alliés avec personne (sauf eux-mêmes)
-        if (teamID == 0 || other.GetTeamID() == 0)
-            return false;
-
-        bool isAlly = teamID == other.GetTeamID();
+        bool isAlly = PlayerManager.Instance != null
+            && PlayerManager.Instance.AreAllied(teamID, other.GetTeamID());
 
         if (debugTeam && isAlly)
             GameLogger.Log(GameLogger.Category.Combat, $"TeamComponent {gameObject.name} (Team {teamID}): ITeamMember Team {other.GetTeamID()} est ALLIÉ", this);
@@ -120,7 +113,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     // Vérifie si l'unité est neutre
     public bool IsNeutral()
     {
-        return teamID == 0;
+        return teamID == AllianceSystem.NEUTRAL_ALLIANCE;
     }
 
     // Retourne l'ID de l'équipe
@@ -132,7 +125,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     // Modifie l'ID de l'équipe et met à jour la couleur
     public void SetTeamID(int newTeamID)
     {
-        teamID = Mathf.Clamp(newTeamID, 0, 6);
+        teamID = Mathf.Clamp(newTeamID, AllianceSystem.NEUTRAL_ALLIANCE, 6);
         ApplyTeamColor();
 
         if (debugTeam)
@@ -142,7 +135,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     // Retourne une description textuelle de l'équipe
     public string GetTeamName()
     {
-        return teamID == 0 ? "Neutre" : $"Joueur {teamID}";
+        return teamID == AllianceSystem.NEUTRAL_ALLIANCE ? "Wildlife" : $"Joueur {teamID}";
     }
 
     // Méthode de debug pour afficher les infos d'équipe

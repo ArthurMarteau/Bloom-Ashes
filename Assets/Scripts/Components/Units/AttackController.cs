@@ -29,19 +29,15 @@ public class AttackController : MonoBehaviour, ITickable
     private long lastAutoAttackCheckTick;
     private long lastAttackLogicCheckTick;
     private long cooldownUntilTick;
-    private long damageAtTick;
     private long projectileAtTick;
     private long performingUntilTick;
     private long approachRetryAtTick;
     private long preAttackUntilTick;
     private long simulationEntityID = -1;
     private long performingTargetEntityID = -1;
-    private IDamageable performingTargetDamageable;
     private IDamageable preAttackTargetDamageable;
     private Transform performingTargetTransform;
-    private int performingDamage;
     private float performingProjectileTravelTime;
-    private bool damagePending;
     private bool projectilePending;
     private bool waitingPreAttack;
     private bool performingRangedAttack;
@@ -135,7 +131,8 @@ public class AttackController : MonoBehaviour, ITickable
         }
 
         ITeamMember attackerTeamMember = attacker.GetComponent<ITeamMember>();
-        if (teamMember == null || attackerTeamMember == null || !teamMember.IsEnemy(attackerTeamMember))
+        if (teamMember == null || attackerTeamMember == null || PlayerManager.Instance == null
+            || !PlayerManager.Instance.AreEnemies(teamMember.GetTeamID(), attackerTeamMember.GetTeamID()))
         {
             return;
         }
@@ -460,13 +457,14 @@ public class AttackController : MonoBehaviour, ITickable
             return;
         }
 
-        // Vérifie que la cible est bien ennemie (via ITeamMember)
+        // Vérifie que la cible peut être attaquée sur ordre explicite (via ITeamMember)
         if (teamMember != null)
         {
             ITeamMember targetTeamMember = target.GetComponent<ITeamMember>();
-            if (targetTeamMember == null || !teamMember.IsEnemy(targetTeamMember))
+            if (targetTeamMember == null || PlayerManager.Instance == null
+                || !PlayerManager.Instance.CanBeAttacked(teamMember.GetTeamID(), targetTeamMember.GetTeamID()))
             {
-                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: {target.name} n'est pas un ennemi ou n'a pas d'ITeamMember", this);
+                GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: {target.name} ne peut pas être attaqué ou n'a pas d'ITeamMember", this);
                 return;
             }
         }
@@ -524,10 +522,8 @@ public class AttackController : MonoBehaviour, ITickable
         currentState = AttackState.Idle;
         currentTarget = null;
         approachRetryAtTick = 0;
-        damagePending = false;
         projectilePending = false;
         waitingPreAttack = false;
-        performingTargetDamageable = null;
         performingTargetEntityID = -1;
         preAttackTargetDamageable = null;
         performingTargetTransform = null;
@@ -658,19 +654,6 @@ public class AttackController : MonoBehaviour, ITickable
                     currentState = AttackState.Approaching;
                 }
 
-                // Hors portée → annule les dégâts en cours et déplace vers la cible
-                if (damagePending)
-                {
-                    damagePending = false;
-                    performingTargetDamageable = null;
-                    performingTargetEntityID = -1;
-
-                    if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
-                    {
-                        GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Cible hors portée, annulation des dégâts en cours", this);
-                    }
-                }
-
                 MoveToRange();
             }
     }
@@ -698,11 +681,12 @@ public class AttackController : MonoBehaviour, ITickable
             return false;
         }
 
-        // Cible plus ennemie (changement d'équipe) — comparaison via ITeamMember
+        // Cible plus attaquable (changement d'équipe) — comparaison via ITeamMember
         if (teamMember != null)
         {
             ITeamMember targetTeamMember = currentTarget.GetComponent<ITeamMember>();
-            if (targetTeamMember == null || !teamMember.IsEnemy(targetTeamMember))
+            if (targetTeamMember == null || PlayerManager.Instance == null
+                || !PlayerManager.Instance.CanBeAttacked(teamMember.GetTeamID(), targetTeamMember.GetTeamID()))
             {
                 return false;
             }
@@ -894,10 +878,8 @@ public class AttackController : MonoBehaviour, ITickable
         int animationTicks = SimulationClock.SecondsToTicks(0.2f);
         int attackRange = unitStatsComponent.GetAttackRange();
         performingRangedAttack = attackRange > 1;
-        performingTargetDamageable = targetDamageable;
         performingTargetEntityID = EntityRegistry.Instance?.GetEntityID(currentTarget) ?? -1;
         performingTargetTransform = currentTarget != null ? currentTarget.transform : null;
-        performingDamage = unitStatsComponent.GetAttackDamage();
         performingProjectileTravelTime = 0f;
         projectilePending = false;
 
@@ -917,9 +899,14 @@ public class AttackController : MonoBehaviour, ITickable
         }
 
         int travelTicks = SimulationClock.SecondsToTicks(performingProjectileTravelTime);
-        damageAtTick = currentTick + animationTicks + travelTicks;
+        long damageAtTick = currentTick + animationTicks + travelTicks;
+        int damage = unitStatsComponent.GetAttackDamage();
+        SimulationClockManager.Instance?.ScheduleDamage(
+            performingTargetEntityID,
+            simulationEntityID,
+            damage,
+            damageAtTick);
         performingUntilTick = System.Math.Max(cooldownUntilTick, damageAtTick);
-        damagePending = true;
     }
 
     // Avance les échéances d'une attaque Performing sur le tick courant
@@ -940,16 +927,9 @@ public class AttackController : MonoBehaviour, ITickable
             SpawnVisualProjectile();
         }
 
-        if (damagePending && tick >= damageAtTick)
-        {
-            damagePending = false;
-            ApplyScheduledDamage();
-        }
-
         if (currentState == AttackState.Performing && !waitingPreAttack && tick >= performingUntilTick)
         {
             currentState = AttackState.Ready;
-            performingTargetDamageable = null;
             performingTargetEntityID = -1;
             performingTargetTransform = null;
         }
@@ -972,24 +952,6 @@ public class AttackController : MonoBehaviour, ITickable
             visual.Initialize(startPosition, performingTargetTransform, performingProjectileTravelTime, visualTargetDamageable, null, 0);
     }
 
-    // Applique les dégâts programmés sans dépendre du temps du projectile visuel
-    private void ApplyScheduledDamage()
-    {
-        IDamageable targetDamageable = ResolveScheduledTargetDamageable();
-        if (targetDamageable == null || targetDamageable.IsDead())
-            return;
-
-        if (!performingRangedAttack && (targetDamageable.IsInvulnerable() || !IsTargetInRange()))
-            return;
-
-        targetDamageable.TakeDamage(performingDamage, unitGameObject);
-
-        if (debugAttack)
-        {
-            GameLogger.Log(GameLogger.Category.Combat, $"💥 AttackController {gameObject.name}: Dégâts infligés ({performingDamage}) à {(currentTarget != null ? currentTarget.name : "cible")} via IDamageable", this);
-        }
-    }
-
     // Résout la cible programmée via son entityID pour annuler les dégâts si elle est sortie de la simulation.
     private IDamageable ResolveScheduledTargetDamageable()
     {
@@ -1000,7 +962,7 @@ public class AttackController : MonoBehaviour, ITickable
         if (target == null || !EntityRegistry.Instance.IsEntityAlive(target))
             return null;
 
-        return performingTargetDamageable ?? target.GetComponent<IDamageable>();
+        return target.GetComponent<IDamageable>();
     }
 
     // Retourne le tick logique courant sans dépendre de l'horloge Unity

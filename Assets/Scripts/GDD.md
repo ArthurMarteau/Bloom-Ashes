@@ -32,6 +32,18 @@ Old school 2D RTS inspired by **Blood and Magic** (1996), modernized with dynami
 - **Biomes**: Meadows, Gardens, Dark Forest, Caves, Scorched Lands, Volcano, Desert, Jungle, Beach, Ocean Palace
 - One game object per tile
 
+### MapData (map selection system)
+
+Each playable map is a **MapData** ScriptableObject (Data/Maps) — the complete package referenced by `MatchConfig.map` (stable ID for network sync):
+
+- Name, description, thumbnail, biome(s)
+- `TerrainMapData` reference (painted terrain)
+- Min/max supported players
+- Spawn points per player slot (Nexus + starting foundation)
+- Neutral foundations, Watersap veins, points of interest
+
+Match setup lists MapData assets compatible with the selected player count. **Status**: connector planned in Step 3 (MatchInitializer reads MapData); full map authoring in the map creation step.
+
 ## Foundations & Buildings
 
 ### Foundations
@@ -922,19 +934,41 @@ Units can equip one item dropped by destroying a point of interest (building, st
 
 ---
 
-## Victory Conditions
+## Victory Conditions & Game Modes
 
-- **Elimination**: Destroy all enemy units and buildings
-- **Fort Destruction**: Destroy the enemy Nexus (if not invulnerable)
-- **Point Capture**: Control designated points for a set duration
-- **Survival**: Resist enemy waves for a set duration
+### Match modes
 
-## Game Modes
+| Mode | Status | Rule |
+| ---- | ------ | ---- |
+| **Eradication** | v1 (base mode) | Eliminate every enemy unit and building. The Nexus is invulnerable and excluded: a player is defeated when they have **no units and no buildings left** — even with Watersap in stock, if no Rootborn was spawned in time, it's a defeat. |
+| **Domination** | To be designed | Capture-based — control foundations (with a constructed building) and/or Watersap veins. Detailed rules TBD in a dedicated design pass. |
+| **Défense** | To be designed | Protect a "fort" structure (NOT the Nexus — the fort entity is TBD) against the enemy. |
+| **Survie** | Planned | Co-op (2-6 allied players) against escalating waves of Hostile Wildlife. Reuses the neutral wildlife roster and AI. |
 
-- **Solo Campaign**: Narrative with factions, betrayals, artifacts, abyssal spiral
-- **Multiplayer**: Up to 6 players, network
-- **vs AI**: Skirmish against AI opponents
-- **Tutorial**: Learn game mechanics
+### Backlog mode ideas (unscheduled)
+
+- **Relic Hunt**: neutral points of interest drop relics; first alliance to bring N relics back to their Nexus wins.
+- **Regicide**: each player has a unique "Elder" unit — if it dies, the player is eliminated regardless of their army.
+- **King of the Source**: a single mega Watersap vein at map center accumulates victory points while controlled.
+
+### Elimination & end of match
+
+- An eliminated player chooses: **Spectator** mode or go to the **end-of-match stats screen**.
+- End-of-match **stats screen** for all players: units produced/lost/killed, buildings built/destroyed, Watersap collected (counters instrumented by a MatchStatsSystem from game events).
+
+### Match setup
+
+- Players: 2 to 6, each assigned to an alliance (fixed for the whole match in v1).
+- Starting state per player: 1 Nexus (invulnerable), 1 nearby foundation, **2 to 6 starting Rootborn (configurable, default 3)**.
+- Camera starts centered on the player's own Nexus.
+- Match parameters (map, mode, seed, player slots, alliances, starting Rootborn) live in a serializable **MatchConfig** — the same structure the Steam lobby will share before match start (N5c).
+
+### Play contexts
+
+- **Solo Campaign** (Histoire): narrative with factions, betrayals, artifacts, abyssal spiral
+- **vs AI**: skirmish against AI opponents (any match mode)
+- **Multiplayer**: up to 6 players over network (any match mode)
+- **Tutorial**: learn game mechanics
 
 ## Progression
 

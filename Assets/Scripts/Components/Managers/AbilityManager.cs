@@ -57,6 +57,20 @@ public class AbilityManager : MonoBehaviour
             sacrificeAbilityData = abilityData;
     }
 
+    // Retourne l'index de commande d'une ability portée par l'entité si son type correspond.
+    public bool TryGetEntityAbilityIndex<TAbility>(GameObject caster, out int abilityIndex) where TAbility : AbilityData
+    {
+        abilityIndex = -1;
+        AbilityData abilityData = ResolveAbilityData(caster, ENTITY_ABILITY_INDEX);
+        if (abilityData is TAbility)
+        {
+            abilityIndex = ENTITY_ABILITY_INDEX;
+            return true;
+        }
+
+        return false;
+    }
+
     // Retourne l'ability correspondant au contrat d'index des commandes.
     private AbilityData ResolveAbilityData(GameObject caster, int abilityIndex)
     {

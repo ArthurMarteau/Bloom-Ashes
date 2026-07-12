@@ -83,6 +83,7 @@ public class TransformationController : MonoBehaviour, ITickable
             if (!isRootborn && !baseStats.isNexus) continue;
 
             TeamComponent buildingTeam = buildingObject.GetComponent<TeamComponent>();
+            // Égalité stricte : une transformation utilise uniquement le bâtiment du même joueur.
             if (buildingTeam == null || buildingTeam.GetTeamID() != teamID) continue;
 
             Log($"FindAdjacentCompatibleBuilding - batiment compatible trouve en {adjacentCell}");

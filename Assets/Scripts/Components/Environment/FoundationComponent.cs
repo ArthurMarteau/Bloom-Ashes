@@ -96,6 +96,7 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
             int rootbornTeamID = team.GetTeamID();
             if (teamID == -1)
                 teamID = rootbornTeamID;
+            // Égalité stricte : les quatre Rootborn doivent appartenir au même joueur, pas seulement à des alliés.
             else if (teamID != rootbornTeamID)
                 return false;
         }
@@ -155,6 +156,7 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
             return;
         }
 
+        // Égalité stricte : seul le propriétaire des Rootborn peut lancer leur construction.
         if (!IsReadyToBuild() || GetTeamID() != teamID)
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : construction refusée, Rootborn incomplets ou équipes différentes", this);
@@ -221,6 +223,7 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
     // Revalide les Rootborn puis remplace la Foundation par le bâtiment.
     private void CompleteBuildAtTick()
     {
+        // Égalité stricte : la propriété doit rester inchangée jusqu'à la résolution du build.
         if (pendingBuildingData == null || pendingRootborns == null || !IsReadyToBuild() || GetTeamID() != pendingTeamID)
         {
             AbortBuild();
