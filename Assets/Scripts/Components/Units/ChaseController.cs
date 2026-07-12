@@ -77,7 +77,7 @@ public class ChaseController : MonoBehaviour, ITickable
         {
             lastTargetPosition = currentTargetPosition;
 
-            if (debugChase)
+            if (debugChase && GameLogger.IsEnabled(GameLogger.Category.Movement))
             {
                 GameLogger.Log(GameLogger.Category.Movement, $"⚡ ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition} ! Recalcul immédiat", this);
             }
@@ -179,7 +179,7 @@ public class ChaseController : MonoBehaviour, ITickable
         {
             lastTargetPosition = currentTargetPosition;
 
-            if (debugChase)
+            if (debugChase && GameLogger.IsEnabled(GameLogger.Category.Movement))
             {
                 GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Cible a bougé vers {currentTargetPosition}, recalcul", this);
             }
@@ -216,7 +216,7 @@ public class ChaseController : MonoBehaviour, ITickable
         // Vérifie si déjà adjacent
         if (IsAdjacentTo(myPosition, targetPosition))
         {
-            if (debugChase)
+            if (debugChase && GameLogger.IsEnabled(GameLogger.Category.Movement))
             {
                 GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Déjà adjacent à {currentTarget.name}, surveillance", this);
             }
@@ -228,7 +228,7 @@ public class ChaseController : MonoBehaviour, ITickable
 
         if (bestCell == Vector2Int.zero)
         {
-            if (debugChase)
+            if (debugChase && GameLogger.IsEnabled(GameLogger.Category.Movement))
             {
                 GameLogger.Warn(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Aucune case accessible vers {currentTarget.name}", this);
             }
@@ -236,14 +236,15 @@ public class ChaseController : MonoBehaviour, ITickable
         }
 
         // Envoie l'ordre de mouvement
-        GameLogger.Log(GameLogger.Category.Movement, $"📤 Chase: Envoi ordre mouvement vers {bestCell}", this);
+        if (GameLogger.IsEnabled(GameLogger.Category.Movement))
+            GameLogger.Log(GameLogger.Category.Movement, $"📤 Chase: Envoi ordre mouvement vers {bestCell}", this);
         if (!movementController.MoveToInternal(bestCell))
         {
             // Un ordre joueur en attente reste prioritaire ; la chase réessaiera lors de son prochain check.
             return;
         }
 
-        if (debugChase)
+        if (debugChase && GameLogger.IsEnabled(GameLogger.Category.Movement))
         {
             GameLogger.Log(GameLogger.Category.Movement, $"ChaseController {gameObject.name}: Mouvement vers {bestCell} (cible: {targetPosition})", this);
         }

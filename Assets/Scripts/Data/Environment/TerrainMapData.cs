@@ -1,4 +1,21 @@
+using System;
+using System.Collections.Generic;
 using UnityEngine;
+
+// Types de marqueurs disponibles pour l'authoring déterministe d'une carte.
+public enum MapMarkerType
+{
+    NexusSpawn,
+    FoundationAnchor
+}
+
+// Associe un rôle de gameplay à une cellule peinte de la carte.
+[Serializable]
+public struct MapMarker
+{
+    public MapMarkerType type;
+    public Vector2Int cell;
+}
 
 // Données sérialisées d'une carte de terrain stockées dans un tableau unidimensionnel
 [CreateAssetMenu(fileName = "TerrainMap", menuName = "Bloom and Ashes/Terrain Map")]
@@ -7,6 +24,7 @@ public class TerrainMapData : ScriptableObject
     [SerializeField, Min(1)] private int width = 80;
     [SerializeField, Min(1)] private int height = 80;
     [SerializeField] private GroundType[] cells;
+    [SerializeField] private List<MapMarker> markers = new List<MapMarker>();
 
     public int Width => width;
     public int Height => height;
@@ -41,6 +59,62 @@ public class TerrainMapData : ScriptableObject
 
         EnsureStorage();
         cells[x + y * width] = groundType;
+    }
+
+    // Ajoute un marqueur ou remplace celui qui occupe déjà cette cellule.
+    public void AddMarker(MapMarkerType type, Vector2Int cell)
+    {
+        if (!IsInBounds(cell.x, cell.y))
+            return;
+
+        EnsureMarkers();
+        for (int index = 0; index < markers.Count; index++)
+        {
+            if (markers[index].cell != cell)
+                continue;
+
+            markers[index] = new MapMarker { type = type, cell = cell };
+            return;
+        }
+
+        markers.Add(new MapMarker { type = type, cell = cell });
+    }
+
+    // Retire le marqueur présent sur une cellule et indique si un retrait a eu lieu.
+    public bool RemoveMarkerAt(Vector2Int cell)
+    {
+        EnsureMarkers();
+        for (int index = 0; index < markers.Count; index++)
+        {
+            if (markers[index].cell != cell)
+                continue;
+
+            markers.RemoveAt(index);
+            return true;
+        }
+
+        return false;
+    }
+
+    // Retourne les marqueurs d'un type dans leur ordre stable de pose.
+    public List<MapMarker> GetMarkers(MapMarkerType type)
+    {
+        EnsureMarkers();
+        List<MapMarker> result = new List<MapMarker>();
+        foreach (MapMarker marker in markers)
+        {
+            if (marker.type == type)
+                result.Add(marker);
+        }
+
+        return result;
+    }
+
+    // Retire tous les marqueurs du type demandé sans modifier l'ordre des autres.
+    public void ClearMarkers(MapMarkerType type)
+    {
+        EnsureMarkers();
+        markers.RemoveAll(marker => marker.type == type);
     }
 
     // Redimensionne la carte en préservant l'intersection avec les anciennes dimensions
@@ -80,6 +154,8 @@ public class TerrainMapData : ScriptableObject
         width = newWidth;
         height = newHeight;
         cells = resizedCells;
+        EnsureMarkers();
+        markers.RemoveAll(marker => !IsInBounds(marker.cell.x, marker.cell.y));
     }
 
     // Garantit que le tableau plat correspond aux dimensions courantes
@@ -89,6 +165,13 @@ public class TerrainMapData : ScriptableObject
         {
             Resize(width, height);
         }
+    }
+
+    // Garantit que les anciens assets disposent d'une liste de marqueurs valide.
+    private void EnsureMarkers()
+    {
+        if (markers == null)
+            markers = new List<MapMarker>();
     }
 
     // Vérifie les limites d'une cellule dans la carte

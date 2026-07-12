@@ -1,5 +1,6 @@
 ﻿using UnityEngine;
 using UnityEngine.Events;
+using System;
 
 // Coordinateur centralisé pour tous les spawns/replacements d'entités
 // Permet un découplage total entre spawners et SelectionManager
@@ -7,11 +8,15 @@ using UnityEngine.Events;
 public class EntitySpawnManager : MonoBehaviour
 {
     public static EntitySpawnManager Instance { get; private set; }
+    private GameObject entityBeingReplaced;
 
     // Event déclenché quand une entité est spawnée SANS remplacement
     // Exemple : Nexus spawn un Rootborn (le Nexus reste)
     // Paramètres : (spawner, spawnedEntity)
     public UnityEvent<GameObject, GameObject> OnEntitySpawned = new UnityEvent<GameObject, GameObject>();
+
+    // Event générique déclenché après l'initialisation de chaque entité spawnée.
+    public UnityEvent<GameObject> OnEntitySpawnCompleted = new UnityEvent<GameObject>();
 
     // Event déclenché quand une entité est REMPLACÉE par une autre
     // Exemple : Rootborn → Bud, Bud → Unité finale
@@ -21,6 +26,9 @@ public class EntitySpawnManager : MonoBehaviour
     // Event déclenché quand une entité est détruite (mort, sacrifice, destruction bâtiment)
     // Paramètre : entité détruite (encore valide au moment de l'appel, démontage visuel déjà planifié)
     public UnityEvent<GameObject> OnEntityDestroyed = new UnityEvent<GameObject>();
+
+    // Event générique déclenché quand une entité quitte la simulation.
+    public UnityEvent<GameObject> OnEntityDespawned = new UnityEvent<GameObject>();
 
     private void Awake()
     {
@@ -46,11 +54,15 @@ public class EntitySpawnManager : MonoBehaviour
         TeamComponent teamComponent = spawnedEntity.GetComponent<TeamComponent>();
         if (teamComponent != null)
             teamComponent.SetTeamID(teamID);
-        else
+        // Les identifiants négatifs désignent des entités neutres pouvant légitimement ne pas avoir d'équipe.
+        else if (teamID >= 0)
             GameLogger.Warn(GameLogger.Category.Spawn, $"⚠️ EntitySpawnManager : TeamComponent manquant sur {spawnedEntity.name} — équipe non assignée", this);
 
         spawnedEntity.GetComponent<UnitStatsComponent>()?.NotifySpawned();
         spawnedEntity.GetComponent<BuildingStatsComponent>()?.NotifySpawned();
+
+        if (entityBeingReplaced == null)
+            OnEntitySpawnCompleted.Invoke(spawnedEntity);
 
         GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawnedEntity.name} instancié en {position} (équipe {teamID})", this);
         return spawnedEntity;
@@ -69,12 +81,52 @@ public class EntitySpawnManager : MonoBehaviour
             return;
 
         EntityRegistry.Instance?.MarkDead(entity);
+        OnEntityDespawned.Invoke(entity);
 
         if (notifyDestroyed)
             NotifyEntityDestroyed(entity);
 
         GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {entity.name} démontage visuel dans {visualDelay}s", this);
         Destroy(entity, Mathf.Max(0f, visualDelay));
+    }
+
+    // Remplace une entité en libérant sa cellule avant de créer et enregistrer son remplaçant.
+    public GameObject ReplaceEntity(GameObject oldEntity, Func<Vector2Int, GameObject> spawnReplacement)
+    {
+        if (oldEntity == null || spawnReplacement == null)
+            return null;
+
+        Vector2Int replacementCell = Vector2Int.zero;
+        EntityRegistry.Instance?.TryGetLogicalPosition(oldEntity, out replacementCell);
+        GameObject replacement = null;
+        entityBeingReplaced = oldEntity;
+
+        try
+        {
+            EntityRegistry.Instance?.MarkDead(oldEntity);
+            OnEntityDespawned.Invoke(oldEntity);
+            replacement = spawnReplacement(replacementCell);
+
+            if (replacement != null)
+            {
+                EntityRegistry.Instance?.UpdateLogicalPosition(replacement, replacementCell);
+                NotifyEntityReplaced(oldEntity, replacement);
+            }
+
+            return replacement;
+        }
+        finally
+        {
+            entityBeingReplaced = null;
+            GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {oldEntity.name} démontage visuel dans 0s", this);
+            Destroy(oldEntity, 0f);
+        }
+    }
+
+    // Indique si une entité est l'ancienne entité du remplacement synchrone courant.
+    public bool IsBeingReplaced(GameObject entity)
+    {
+        return entity != null && entity == entityBeingReplaced;
     }
 
     // Notifie qu'une entité a été spawnée (SANS détruire le spawner)

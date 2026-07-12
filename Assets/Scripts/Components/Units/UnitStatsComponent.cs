@@ -13,6 +13,7 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
     [Header("Runtime State")]
     private int currentHP;
     private bool isDead = false;
+    private int lastAttackerTeamID = -1;
 
     [Header("Events")]
     // Initialisation directe pour éviter NullRef lors des AddListener
@@ -118,6 +119,10 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
             GameLogger.Log(GameLogger.Category.Combat, $"🔔 UnitStatsComponent {gameObject.name}: Event OnDamaged déclenché, {OnDamaged.GetPersistentEventCount()} listeners", this);
         }
 
+        ITeamMember attackerTeam = attacker != null ? attacker.GetComponent<ITeamMember>() : null;
+        if (attackerTeam != null)
+            lastAttackerTeamID = attackerTeam.GetTeamID();
+
         if (attacker != null)
         {
             OnDamagedBy?.Invoke(attacker);
@@ -141,6 +146,12 @@ public class UnitStatsComponent : MonoBehaviour, IDamageable, ISelectable
             }
         }
 
+    }
+
+    // Retourne l'équipe du dernier attaquant connu pour les statistiques de mort.
+    public int GetLastAttackerTeamID()
+    {
+        return lastAttackerTeamID;
     }
 
     // Soigne l'unité d'un certain montant

@@ -80,7 +80,9 @@ public class SelectionManager : MonoBehaviour, ICellListener
         if (EntitySpawnManager.Instance != null)
         {
             EntitySpawnManager.Instance.OnEntitySpawned.AddListener(HandleEntitySpawned);
+            EntitySpawnManager.Instance.OnEntitySpawnCompleted.AddListener(HandleEntitySpawnCompleted);
             EntitySpawnManager.Instance.OnEntityReplaced.AddListener(HandleEntityReplaced);
+            EntitySpawnManager.Instance.OnEntityDespawned.AddListener(HandleEntityDespawned);
             EntitySpawnManager.Instance.OnEntityDestroyed.AddListener(HandleEntityDestroyed);
         }
     }
@@ -106,7 +108,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     private void OnLeftClickDownHandler(Vector3 worldPosition)
     {
         isDragging = false;
-        GameLogger.Log(GameLogger.Category.Selection, $"🎯 START Selection — monde {worldPosition}", this);
+        if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+            GameLogger.Log(GameLogger.Category.Selection, $"🎯 START Selection — monde {worldPosition}", this);
     }
 
     // Début du drag — enregistre la position initiale et active le rectangle
@@ -247,12 +250,14 @@ public class SelectionManager : MonoBehaviour, ICellListener
 
         if (selectableUnits.Count > MAX_SELECTED_UNITS)
         {
-            GameLogger.Log(GameLogger.Category.Selection, $"⚠️ Drag-select : {selectableUnits.Count} unités valides dans la zone → cap à {MAX_SELECTED_UNITS} (plus proches du centre)", this);
+            if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+                GameLogger.Log(GameLogger.Category.Selection, $"⚠️ Drag-select : {selectableUnits.Count} unités valides dans la zone → cap à {MAX_SELECTED_UNITS} (plus proches du centre)", this);
             selectableUnits.RemoveRange(MAX_SELECTED_UNITS, selectableUnits.Count - MAX_SELECTED_UNITS);
         }
 
         ApplyUnitListSelection(selectableUnits);
-        GameLogger.Log(GameLogger.Category.Selection, $"📦 Rectangle sélection : {state.Units.Count} unités sélectionnées (zone contenait {unitsInArea.Length})", this);
+        if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+            GameLogger.Log(GameLogger.Category.Selection, $"📦 Rectangle sélection : {state.Units.Count} unités sélectionnées (zone contenait {unitsInArea.Length})", this);
     }
 
     // Applique une transition de sélection unique ou unité depuis clic ou API externe
@@ -281,7 +286,6 @@ public class SelectionManager : MonoBehaviour, ICellListener
         }
 
         SynchronizeSelectionVisuals(worldClickPosition);
-        SynchronizeDeathHandlers();
         FireSelectionEvent();
         if (state.Type == SelectionType.Units && state.Units.Count != 1)
             ClearSelectionAnchor();
@@ -327,7 +331,6 @@ public class SelectionManager : MonoBehaviour, ICellListener
         ClearSelectionAnchor();
         state.SetUnits(units);
         SynchronizeSelectionVisuals(null);
-        SynchronizeDeathHandlers();
         FireSelectionEvent();
         UpdateWatchedSelectionCell(null);
     }
@@ -450,47 +453,6 @@ public class SelectionManager : MonoBehaviour, ICellListener
         }
     }
 
-    // Synchronise les handlers de mort avec les entités sélectionnées
-    private void SynchronizeDeathHandlers()
-    {
-        // No-op : la destruction est suivie centralement via EntitySpawnManager.OnEntityDestroyed.
-    }
-
-    // Retourne les entités sélectionnées qui exposent un event de destruction
-    private List<GameObject> GetTrackableSelectedEntities()
-    {
-        List<GameObject> trackableEntities = new List<GameObject>();
-
-        if (state.Type == SelectionType.Units)
-        {
-            foreach (GameObject unit in state.Units)
-            {
-                if (unit != null)
-                {
-                    trackableEntities.Add(unit);
-                }
-            }
-        }
-        else if (state.Type == SelectionType.Building && state.Single != null)
-        {
-            trackableEntities.Add(state.Single);
-        }
-
-        return trackableEntities;
-    }
-
-    // Abonne un handler de destruction pour une entité sélectionnée
-    private void SubscribeDeathHandler(GameObject entity)
-    {
-        // No-op : conservé pour compatibilité interne avec l'ancien flux.
-    }
-
-    // Désabonne le handler de destruction stocké pour une entité
-    private void UnsubscribeDeathHandler(GameObject entity)
-    {
-        // No-op : conservé pour compatibilité interne avec l'ancien flux.
-    }
-
     // Réagit à la destruction d'une entité sélectionnée
     private void HandleTrackedEntityDestroyed(GameObject destroyedEntity)
     {
@@ -500,7 +462,6 @@ public class SelectionManager : MonoBehaviour, ICellListener
         }
 
         Vector3 lastPosition = destroyedEntity.transform.position;
-        UnsubscribeDeathHandler(destroyedEntity);
         RemoveSelectionSquare(destroyedEntity);
 
         if (state.Type == SelectionType.Units)
@@ -509,7 +470,6 @@ public class SelectionManager : MonoBehaviour, ICellListener
             if (state.Units.Count > 0)
             {
                 SynchronizeSelectionVisuals(null);
-                SynchronizeDeathHandlers();
                 OnUnitsSelected.Invoke(GetSelectedUnits());
                 GameLogger.Log(GameLogger.Category.Selection, $"💀 SelectionManager : entité retirée de la sélection, {state.Units.Count} restantes", this);
                 return;
@@ -761,6 +721,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Réagit à l'arrivée d'une unité sur la cellule suivie.
     public void OnUnitEntered(Vector2Int cell, GameObject unit)
     {
+        if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(unit))
+            return;
         if (!watchedSelectionCells.Contains(cell))
             return;
         if (watchedSelectionFromAutoSwitch && selectionAnchorCell.HasValue && cell != selectionAnchorCell.Value)
@@ -772,6 +734,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Réagit au départ d'une unité depuis la cellule suivie.
     public void OnUnitLeft(Vector2Int cell, GameObject unit)
     {
+        if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(unit))
+            return;
         if (!watchedSelectionCells.Contains(cell))
             return;
 
@@ -906,6 +870,7 @@ public class SelectionManager : MonoBehaviour, ICellListener
 
         if (state.Contains(spawner))
         {
+            SetManualSelectionAnchor(TryGetEntityCell(spawnedEntity, out Vector2Int spawnedCell) ? spawnedCell : (Vector2Int?)null);
             SelectGameObject(spawnedEntity);
             GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Sélection auto {spawnedEntity.name} (spawné par {spawner.name})", this);
         }
@@ -921,6 +886,7 @@ public class SelectionManager : MonoBehaviour, ICellListener
 
         if (state.Contains(oldEntity))
         {
+            SetManualSelectionAnchor(TryGetEntityCell(newEntity, out Vector2Int newEntityCell) ? newEntityCell : (Vector2Int?)null);
             SelectGameObject(newEntity);
             GameLogger.Log(GameLogger.Category.Selection, $"🔄 SelectionManager : Sélection auto {newEntity.name} (remplace {oldEntity.name})", this);
         }
@@ -949,6 +915,55 @@ public class SelectionManager : MonoBehaviour, ICellListener
         // No-op : la destruction est suivie centralement via EntitySpawnManager.OnEntityDestroyed.
     }
 
+    // Réagit à tout spawn sur l'ancre suivie ou dans le voisinage de la sélection.
+    private void HandleEntitySpawnCompleted(GameObject spawnedEntity)
+    {
+        if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(spawnedEntity))
+            return;
+        if (spawnedEntity == null || !TryGetEntityCell(spawnedEntity, out Vector2Int spawnedCell))
+            return;
+
+        bool isWatchedCell = watchedSelectionCells.Contains(spawnedCell)
+            || (selectionAnchorCell.HasValue && selectionAnchorCell.Value == spawnedCell);
+        if (isWatchedCell)
+        {
+            ResolveWatchedCellSelection(selectionAnchorCell.HasValue ? selectionAnchorCell.Value : spawnedCell);
+            return;
+        }
+
+        if (spawnedEntity.GetComponent<BuildingStatsComponent>() == null
+            || state.Type != SelectionType.Units
+            || state.Units.Count != 1
+            || !TryGetEntityCell(state.Units[0], out Vector2Int selectedUnitCell))
+        {
+            return;
+        }
+
+        Vector2Int distance = spawnedCell - selectedUnitCell;
+        if (Mathf.Abs(distance.x) <= 1 && Mathf.Abs(distance.y) <= 1)
+        {
+            // Republie la sélection sans la modifier pour réévaluer le contexte du panneau d'actions.
+            FireSelectionEvent();
+        }
+    }
+
+    // Re-résout l'ancre quand l'entité retirée était la sélection courante.
+    private void HandleEntityDespawned(GameObject despawnedEntity)
+    {
+        if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(despawnedEntity))
+            return;
+        if (despawnedEntity == null || !state.Contains(despawnedEntity))
+            return;
+
+        if (selectionAnchorCell.HasValue)
+        {
+            ResolveWatchedCellSelection(selectionAnchorCell.Value);
+            return;
+        }
+
+        HandleTrackedEntityDestroyed(despawnedEntity);
+    }
+
     // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
     private void OnDestroy()
     {
@@ -964,7 +979,9 @@ public class SelectionManager : MonoBehaviour, ICellListener
         if (EntitySpawnManager.Instance != null)
         {
             EntitySpawnManager.Instance.OnEntitySpawned.RemoveListener(HandleEntitySpawned);
+            EntitySpawnManager.Instance.OnEntitySpawnCompleted.RemoveListener(HandleEntitySpawnCompleted);
             EntitySpawnManager.Instance.OnEntityReplaced.RemoveListener(HandleEntityReplaced);
+            EntitySpawnManager.Instance.OnEntityDespawned.RemoveListener(HandleEntityDespawned);
             EntitySpawnManager.Instance.OnEntityDestroyed.RemoveListener(HandleEntityDestroyed);
         }
 

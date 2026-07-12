@@ -27,6 +27,7 @@ public class CameraController : MonoBehaviour
 
     [Header("Bornes")]
     [SerializeField] private bool clampToGrid = true;       // Limite caméra aux bornes GridManager
+    [SerializeField] private float boundsMargin = 4f;       // Marge extérieure exprimée en cellules
 
     [Header("Debug")]
     [SerializeField] private bool debugCamera = false;
@@ -142,6 +143,15 @@ public class CameraController : MonoBehaviour
         }
     }
 
+    // Centre la caméra initiale sur le Nexus du joueur local.
+    public void FocusOnNexus(GameObject nexus)
+    {
+        if (nexus == null)
+            return;
+
+        MoveTo(nexus.transform.position);
+    }
+
     public void SetEdgeScrollEnabled(bool enabled) => edgeScrollEnabled = enabled;
     public bool GetEdgeScrollEnabled() => edgeScrollEnabled;
 
@@ -208,6 +218,7 @@ public class CameraController : MonoBehaviour
         return direction;
     }
 
+    // Limite le centre de la caméra à la grille étendue de la marge configurée.
     private void ClampPositionToGrid()
     {
         if (cam == null || GridManager.Instance == null) return;
@@ -216,10 +227,11 @@ public class CameraController : MonoBehaviour
         float cellSize = GridManager.Instance.GetCellSize();
         var (originX, originY) = GridSystem.CalculateOrigin(gridSize.x, gridSize.y, cellSize);
 
-        float minX = originX;
-        float minY = originY;
-        float maxX = originX + gridSize.x * cellSize;
-        float maxY = originY + gridSize.y * cellSize;
+        float marginInWorldUnits = boundsMargin * cellSize;
+        float minX = originX - marginInWorldUnits;
+        float minY = originY - marginInWorldUnits;
+        float maxX = originX + gridSize.x * cellSize + marginInWorldUnits;
+        float maxY = originY + gridSize.y * cellSize + marginInWorldUnits;
 
         float vertExtent = cam.orthographicSize;
         float horizExtent = vertExtent * cam.aspect;

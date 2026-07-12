@@ -34,6 +34,9 @@ public class ActionPanelUI : MonoBehaviour
     private MovementController trackedMovementController;
     private BuildingStatsComponent trackedBuilding;
     private FoundationComponent trackedFoundation;
+    private List<GameObject> trackedFoundationUnits = new List<GameObject>();
+    private readonly List<MovementController> trackedFoundationMovementControllers = new List<MovementController>();
+    private bool isMultiFoundationSelection;
     private GameObject currentTransformUnit;
     private int trackedTeamID;
 
@@ -56,6 +59,7 @@ public class ActionPanelUI : MonoBehaviour
         selectionManager.OnSelectionCleared.AddListener(HandleSelectionCleared);
         selectionManager.OnGroundSelected.AddListener(OnGroundSelectedAdapter);
         selectionManager.OnObstacleSelected.AddListener(OnObstacleSelectedAdapter);
+        selectionManager.OnEnvironmentSelected.AddListener(OnEnvironmentSelectedAdapter);
 
         HidePanel();
     }
@@ -70,6 +74,7 @@ public class ActionPanelUI : MonoBehaviour
             selectionManager.OnSelectionCleared.RemoveListener(HandleSelectionCleared);
             selectionManager.OnGroundSelected.RemoveListener(OnGroundSelectedAdapter);
             selectionManager.OnObstacleSelected.RemoveListener(OnObstacleSelectedAdapter);
+            selectionManager.OnEnvironmentSelected.RemoveListener(OnEnvironmentSelectedAdapter);
         }
 
         UnsubscribeMovementEvents();
@@ -94,7 +99,26 @@ public class ActionPanelUI : MonoBehaviour
         UnsubscribeFoundationEvents();
         currentTransformUnit = null;
 
-        if (units == null || units.Count != 1)
+        if (units == null)
+        {
+            HidePanel();
+            return;
+        }
+
+        if (units.Count >= 2 && units.Count <= 4)
+        {
+            if (!AreAllRootborns(units))
+            {
+                HidePanel();
+                return;
+            }
+
+            SubscribeMultiFoundationUnitEvents(units);
+            RefreshMultiFoundationContext();
+            return;
+        }
+
+        if (units.Count != 1)
         {
             HidePanel();
             return;
@@ -121,16 +145,10 @@ public class ActionPanelUI : MonoBehaviour
             return;
         }
 
-        FoundationComponent foundation = FindFoundationUnderSelectedRootborn(unit);
+        FoundationComponent foundation = FindSharedFoundationUnderRootborns(units);
         GameLogger.Log(GameLogger.Category.UI, $"️ Foundation={(foundation != null ? foundation.gameObject.name : "null")}, idleCount={(foundation != null ? foundation.GetIdleRootbornCount() : -1)}", this);
-        if (foundation != null && foundation.GetIdleRootbornCount() > 0)
-        {
-            currentContext = PanelContext.Foundation;
-            trackedFoundation = foundation;
-            trackedFoundation.OnFoundationStateChanged.AddListener(RefreshPanel);
-            RefreshPanel();
+        if (TryShowFoundationContext(units, foundation))
             return;
-        }
 
         HidePanel();
     }
@@ -254,8 +272,16 @@ public class ActionPanelUI : MonoBehaviour
     // Met à jour les slots de construction selon l'état des Rootborn sur la Foundation
     private void RefreshFoundation()
     {
-        if (trackedFoundation == null || trackedFoundation.GetIdleRootbornCount() == 0)
+        FoundationComponent selectedFoundation = isMultiFoundationSelection
+            ? FindPreferredFoundationUnderIdleRootborns(trackedFoundationUnits)
+            : FindSharedFoundationUnderRootborns(trackedFoundationUnits);
+        if (trackedFoundation == null || selectedFoundation != trackedFoundation || trackedFoundation.GetIdleRootbornCount() == 0)
         {
+            currentContext = PanelContext.None;
+            if (isMultiFoundationSelection)
+                UnsubscribeFoundationStateEvent();
+            else
+                UnsubscribeFoundationEvents();
             HidePanel();
             return;
         }
@@ -292,6 +318,7 @@ public class ActionPanelUI : MonoBehaviour
             slots[i].Setup(buildingData, state, (_) =>
             {
                 SubmitBuildCommand(trackedFoundation, buildingIndex, teamID);
+                UnsubscribeFoundationEvents();
                 HidePanel();
             });
         }
@@ -343,6 +370,9 @@ public class ActionPanelUI : MonoBehaviour
 
     // Adapte la signature OnObstacleSelected (GameObject) vers HandleSelectionCleared
     private void OnObstacleSelectedAdapter(GameObject _) => HandleSelectionCleared();
+
+    // Adapte la signature OnEnvironmentSelected (GameObject) vers HandleSelectionCleared.
+    private void OnEnvironmentSelectedAdapter(GameObject _) => HandleSelectionCleared();
 
     // Désabonne les events du MovementController tracké (try/catch pour objets détruits)
     private void UnsubscribeMovementEvents()
@@ -407,14 +437,178 @@ public class ActionPanelUI : MonoBehaviour
         HandleUnitsSelected(new List<GameObject> { currentTransformUnit });
     }
 
-    // Trouve une Foundation statique sous le Rootborn sélectionné pour le clic initial ou le fallback UI.
-    private FoundationComponent FindFoundationUnderSelectedRootborn(GameObject unit)
+    // Active le contexte Foundation commun au mono et à la multi-sélection.
+    private bool TryShowFoundationContext(List<GameObject> units, FoundationComponent foundation = null)
     {
-        MovementController movementController = unit.GetComponent<MovementController>();
-        if (movementController == null || EntityRegistry.Instance == null)
+        foundation ??= FindSharedFoundationUnderRootborns(units);
+        if (foundation == null || foundation.GetIdleRootbornCount() == 0)
+            return false;
+
+        isMultiFoundationSelection = false;
+        currentContext = PanelContext.Foundation;
+        trackedFoundation = foundation;
+        trackedFoundationUnits = new List<GameObject>(units);
+        trackedFoundation.OnFoundationStateChanged.AddListener(RefreshPanel);
+        RefreshPanel();
+        return true;
+    }
+
+    // Vérifie que la multi-sélection contient uniquement des Rootborn connus du registre.
+    private bool AreAllRootborns(List<GameObject> units)
+    {
+        if (units == null || units.Count < 2 || units.Count > 4 || EntityRegistry.Instance == null)
+            return false;
+
+        foreach (GameObject unit in units)
+        {
+            UnitStatsComponent unitStats = unit != null ? EntityRegistry.Instance.GetUnitStats(unit) : null;
+            if (unitStats == null || !unitStats.IsRootborn())
+                return false;
+        }
+
+        return true;
+    }
+
+    // Choisit la Foundation avec le plus de Rootborn sélectionnés posés idle, puis le plus petit entityID.
+    private FoundationComponent FindPreferredFoundationUnderIdleRootborns(List<GameObject> units)
+    {
+        if (!AreAllRootborns(units))
             return null;
 
-        Vector2Int cell = movementController.GetCurrentGridPosition();
+        Dictionary<FoundationComponent, int> counts = new Dictionary<FoundationComponent, int>();
+        foreach (GameObject unit in units)
+        {
+            MovementController movementController = unit.GetComponent<MovementController>();
+            if (EntityRegistry.Instance.IsMoving(unit) || movementController == null
+                || movementController.GetCurrentState() != MovementController.MovementState.Idle)
+            {
+                continue;
+            }
+
+            FoundationComponent foundation = FindFoundationUnderRootborn(unit);
+            if (foundation == null)
+                continue;
+
+            counts[foundation] = counts.TryGetValue(foundation, out int count) ? count + 1 : 1;
+        }
+
+        FoundationComponent preferredFoundation = null;
+        int preferredCount = 0;
+        long preferredEntityID = long.MaxValue;
+        foreach (KeyValuePair<FoundationComponent, int> pair in counts)
+        {
+            long foundationEntityID = EntityRegistry.Instance.GetEntityID(pair.Key.gameObject);
+            if (pair.Value > preferredCount
+                || (pair.Value == preferredCount && foundationEntityID < preferredEntityID))
+            {
+                preferredFoundation = pair.Key;
+                preferredCount = pair.Value;
+                preferredEntityID = foundationEntityID;
+            }
+        }
+
+        return preferredFoundation;
+    }
+
+    // Réévalue la Foundation cible et conserve le même flux de bouton que le mono.
+    private void RefreshMultiFoundationContext()
+    {
+        if (!isMultiFoundationSelection)
+            return;
+
+        FoundationComponent foundation = FindPreferredFoundationUnderIdleRootborns(trackedFoundationUnits);
+        if (foundation == null || foundation.GetIdleRootbornCount() == 0)
+        {
+            currentContext = PanelContext.None;
+            UnsubscribeFoundationStateEvent();
+            HidePanel();
+            return;
+        }
+
+        if (trackedFoundation != foundation)
+        {
+            UnsubscribeFoundationStateEvent();
+            trackedFoundation = foundation;
+            trackedFoundation.OnFoundationStateChanged.AddListener(RefreshMultiFoundationContext);
+        }
+
+        currentContext = PanelContext.Foundation;
+        RefreshFoundation();
+    }
+
+    // Surveille les arrivées idle des Rootborn sélectionnés, y compris avant qu'une Foundation soit ciblée.
+    private void SubscribeMultiFoundationUnitEvents(List<GameObject> units)
+    {
+        trackedFoundationUnits = new List<GameObject>(units);
+        isMultiFoundationSelection = true;
+
+        foreach (GameObject unit in units)
+        {
+            MovementController movementController = unit != null ? unit.GetComponent<MovementController>() : null;
+            if (movementController == null)
+                continue;
+
+            trackedFoundationMovementControllers.Add(movementController);
+            movementController.OnIdleStateChanged.AddListener(HandleMultiRootbornIdleChanged);
+        }
+    }
+
+    // Programme la réévaluation après que la Foundation a traité le changement d'idle.
+    private void HandleMultiRootbornIdleChanged(bool isIdle)
+    {
+        if (!isIdle || !isMultiFoundationSelection)
+            return;
+
+        if (idleRefreshCoroutine != null)
+            selectionManager.StopCoroutine(idleRefreshCoroutine);
+
+        idleRefreshCoroutine = selectionManager.StartCoroutine(RefreshMultiFoundationAfterIdleEvent());
+    }
+
+    // Attend une frame avant de rechercher la Foundation qui vient d'accueillir le Rootborn.
+    private IEnumerator RefreshMultiFoundationAfterIdleEvent()
+    {
+        yield return null;
+
+        idleRefreshCoroutine = null;
+        RefreshMultiFoundationContext();
+    }
+
+    // Retourne la Foundation commune si toutes les unités sont des Rootborn posés sur ses cases.
+    private FoundationComponent FindSharedFoundationUnderRootborns(List<GameObject> units)
+    {
+        if (units == null || units.Count == 0 || units.Count > 4)
+            return null;
+
+        FoundationComponent sharedFoundation = null;
+        foreach (GameObject unit in units)
+        {
+            FoundationComponent foundation = FindFoundationUnderRootborn(unit);
+            if (foundation == null)
+                return null;
+
+            if (sharedFoundation == null)
+                sharedFoundation = foundation;
+            else if (sharedFoundation != foundation)
+                return null;
+        }
+
+        return sharedFoundation;
+    }
+
+    // Résout la Foundation sous un Rootborn depuis sa position logique dans le registre.
+    private FoundationComponent FindFoundationUnderRootborn(GameObject unit)
+    {
+        if (unit == null || EntityRegistry.Instance == null)
+            return null;
+
+        UnitStatsComponent unitStats = EntityRegistry.Instance.GetUnitStats(unit);
+        if (unitStats == null || !unitStats.IsRootborn()
+            || !EntityRegistry.Instance.TryGetLogicalPosition(unit, out Vector2Int cell))
+        {
+            return null;
+        }
+
         GameObject foundationObject = EntityRegistry.Instance.GetFoundationAt(cell);
         return foundationObject != null ? foundationObject.GetComponent<FoundationComponent>() : null;
     }
@@ -471,8 +665,34 @@ public class ActionPanelUI : MonoBehaviour
     // Désabonne les events de la Foundation trackée
     private void UnsubscribeFoundationEvents()
     {
-        if (trackedFoundation == null) return;
-        trackedFoundation.OnFoundationStateChanged.RemoveListener(RefreshPanel);
+        UnsubscribeFoundationStateEvent();
+
+        foreach (MovementController movementController in trackedFoundationMovementControllers)
+        {
+            if (movementController != null)
+                movementController.OnIdleStateChanged.RemoveListener(HandleMultiRootbornIdleChanged);
+        }
+        trackedFoundationMovementControllers.Clear();
+
+        if (idleRefreshCoroutine != null && selectionManager != null)
+        {
+            selectionManager.StopCoroutine(idleRefreshCoroutine);
+            idleRefreshCoroutine = null;
+        }
+
+        trackedFoundationUnits.Clear();
+        isMultiFoundationSelection = false;
+    }
+
+    // Désabonne uniquement l'event de la Foundation courante sans perdre le suivi de la multi-sélection.
+    private void UnsubscribeFoundationStateEvent()
+    {
+        if (trackedFoundation != null)
+        {
+            trackedFoundation.OnFoundationStateChanged.RemoveListener(RefreshPanel);
+            trackedFoundation.OnFoundationStateChanged.RemoveListener(RefreshMultiFoundationContext);
+        }
+
         trackedFoundation = null;
     }
 

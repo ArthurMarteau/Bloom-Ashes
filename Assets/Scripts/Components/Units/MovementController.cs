@@ -83,8 +83,8 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
             GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: {movementSpeed} cases/s -> {ticksPerCell} ticks/case", this);
     }
 
-    // Initialise les références et la cellule de spawn avant l'entrée dans la simulation.
-    private void Start()
+    // Initialise les champs requis par les appels pouvant survenir dès le tick de spawn.
+    private void Awake()
     {
         unitGameObject = gameObject;
         logicalPath = new Queue<Vector2Int>();
@@ -92,6 +92,13 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
         statsComponent = GetComponent<UnitStatsComponent>();
         attackController = GetComponent<AttackController>();
         teamMember = GetComponent<ITeamMember>();
+        ownerPlayerID = teamMember != null ? teamMember.GetTeamID() : 0;
+    }
+
+    // Initialise la cellule et l'enregistrement après les Awake des composants d'entité.
+    private void Start()
+    {
+        // SpawnEntity assigne l'équipe après Awake ; synchronise sa valeur définitive avant la simulation.
         ownerPlayerID = teamMember != null ? teamMember.GetTeamID() : 0;
 
         if (GridManager.Instance != null)
@@ -1066,10 +1073,13 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
     public void StopMovement()
     {
         ResetMovementState();
-        EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
-        Vector3 center = GridManager.Instance.GridToWorld(currentCell);
-        previousTickWorldPosition = center;
-        currentTickWorldPosition = center;
+        if (GridManager.Instance != null)
+        {
+            EntityRegistry.Instance?.UpdateLogicalPosition(unitGameObject, currentCell);
+            Vector3 center = GridManager.Instance.GridToWorld(currentCell);
+            previousTickWorldPosition = center;
+            currentTickWorldPosition = center;
+        }
         visualFrozen = false;
         animatorController?.StopAllAnimations();
     }
@@ -1096,7 +1106,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
         orderedDestination = null;
         pendingDestination = null;
         recoveryDestination = null;
-        logicalPath.Clear();
+        logicalPath?.Clear();
         SetState(MoveState.Idle);
         isFirstMoveOfSession = true;
     }

@@ -15,6 +15,8 @@ public static class GameLogger
         Spawn = 1 << 4,
         Grid = 1 << 5,
         UI = 1 << 6,
+        Match = 1 << 7,
+        Network = 1 << 8,
         All = ~0
     }
 

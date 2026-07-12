@@ -16,7 +16,7 @@ MonoBehaviour:
   description: Melee support unit. Heals adjacent allies with regenerating spores.
   portrait: {fileID: 21300000, guid: 0344690a6907e664fa44778c38634ca6, type: 3}
   maxHP: 25
-  attackDamage: 400
+  attackDamage: 500
   attackRange: 2
   defense: 2
   attackSpeed: 2

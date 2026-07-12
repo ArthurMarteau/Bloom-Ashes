@@ -75,7 +75,15 @@ public class OrderManager : MonoBehaviour
         // Vérifie s'il y a une entité ciblable sous le curseur (unité ou bâtiment) via overlap 2D
         Collider2D targetCollider = Physics2D.OverlapPoint(new Vector2(worldPosition.x, worldPosition.y), targetableLayer);
         Vector2Int debugCell = GridManager.Instance.WorldToGrid(worldPosition);
-        GameLogger.Log(GameLogger.Category.Selection, $"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}", this);
+        if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+            GameLogger.Log(GameLogger.Category.Selection, $"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}", this);
+
+        // Un ordre groupé sur n'importe quelle case d'une Foundation reste un ordre de mouvement.
+        if (selectionManager.GetSelectedUnitCount() > 1 && EntityRegistry.Instance?.GetFoundationAt(debugCell) != null)
+        {
+            HandleSimpleMovementOrder(worldPosition);
+            return;
+        }
 
         if (targetCollider != null)
         {
@@ -281,10 +289,15 @@ public class OrderManager : MonoBehaviour
         // Multi-target dispatch : si plusieurs unités, chacune reçoit une case distincte en spirale autour de la cible
         if (selectedUnits.Count > 1)
         {
-            List<Vector2Int> dispatchCells = DispatchHelper.ComputeSpiral(targetGridPosition, selectedUnits.Count * 2 + 4, selectedUnits[0]);
-            Dictionary<GameObject, Vector2Int> assignment = DispatchHelper.AssignCellsGreedy(selectedUnits, dispatchCells, targetGridPosition);
+            List<GameObject> unitsToOrder = selectedUnits;
+            Dictionary<GameObject, Vector2Int> assignment;
+            if (!TryBuildFoundationMovementAssignment(targetGridPosition, selectedUnits, out unitsToOrder, out assignment))
+            {
+                List<Vector2Int> dispatchCells = DispatchHelper.ComputeSpiral(targetGridPosition, selectedUnits.Count * 2 + 4, selectedUnits[0]);
+                assignment = DispatchHelper.AssignCellsGreedy(selectedUnits, dispatchCells, targetGridPosition);
+            }
 
-            foreach (GameObject unit in selectedUnits)
+            foreach (GameObject unit in unitsToOrder)
             {
                 // Récupère la case assignée (fallback : case cible si dispatch a échoué pour cette unité)
                 Vector2Int targetForThisUnit = assignment.TryGetValue(unit, out Vector2Int assignedCell)
@@ -295,7 +308,8 @@ public class OrderManager : MonoBehaviour
                     successfulOrders++;
             }
 
-            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre groupé vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités dispatchées sur {dispatchCells.Count} cases", this);
+            if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+                GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre groupé vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités, {assignment.Count} destinations assignées", this);
         }
         else
         {
@@ -306,12 +320,99 @@ public class OrderManager : MonoBehaviour
                     successfulOrders++;
             }
 
-            GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités", this);
+            if (GameLogger.IsEnabled(GameLogger.Category.Selection))
+                GameLogger.Log(GameLogger.Category.Selection, $"OrderManager: Ordre de mouvement vers {targetGridPosition} : {successfulOrders}/{selectedUnits.Count} unités", this);
         }
+    }
+
+    // Assigne d'abord les cases libres de la Foundation, puis place le surplus avec la spirale existante.
+    private bool TryBuildFoundationMovementAssignment(
+        Vector2Int targetGridPosition,
+        List<GameObject> selectedUnits,
+        out List<GameObject> unitsToOrder,
+        out Dictionary<GameObject, Vector2Int> assignment)
+    {
+        unitsToOrder = selectedUnits;
+        assignment = new Dictionary<GameObject, Vector2Int>();
+
+        EntityRegistry registry = EntityRegistry.Instance;
+        GameObject foundationObject = registry?.GetFoundationAt(targetGridPosition);
+        IMultiTile foundation = foundationObject != null ? foundationObject.GetComponent<IMultiTile>() : null;
+        if (foundation == null)
+            return false;
+
+        List<Vector2Int> foundationCells = foundation.GetOccupiedTiles();
+        HashSet<Vector2Int> foundationCellSet = new HashSet<Vector2Int>(foundationCells);
+        unitsToOrder = selectedUnits.FindAll(unit =>
+        {
+            if (unit == null || registry.IsMoving(unit) || !registry.TryGetLogicalPosition(unit, out Vector2Int unitCell))
+                return true;
+
+            return !foundationCellSet.Contains(unitCell);
+        });
+
+        if (unitsToOrder.Count == 0)
+            return true;
+
+        unitsToOrder.Sort((a, b) => registry.GetEntityID(a).CompareTo(registry.GetEntityID(b)));
+        GameObject referenceUnit = unitsToOrder[0];
+        List<Vector2Int> availableFoundationCells = foundationCells.FindAll(cell =>
+        {
+            if (!GridManager.Instance.IsWalkableFor(cell, referenceUnit))
+                return false;
+
+            GameObject occupant = registry.GetUnitAtLogicalPosition(cell);
+            return occupant == null || registry.IsMoving(occupant);
+        });
+
+        Dictionary<GameObject, Vector2Int> foundationAssignment = DispatchHelper.AssignClosestUnitsFirst(
+            unitsToOrder, availableFoundationCells);
+        foreach (KeyValuePair<GameObject, Vector2Int> pair in foundationAssignment)
+            assignment[pair.Key] = pair.Value;
+
+        // Copie locale requise pour éviter la capture du paramètre out assignment dans la lambda (CS1628).
+        Dictionary<GameObject, Vector2Int> assignmentLocal = assignment;
+        List<GameObject> remainingUnits = unitsToOrder.FindAll(unit => !assignmentLocal.ContainsKey(unit));
+        if (remainingUnits.Count == 0)
+            return true;
+
+        List<Vector2Int> spiralCells = DispatchHelper.ComputeSpiral(
+            targetGridPosition, remainingUnits.Count * 2 + foundationCells.Count + 4, referenceUnit);
+        HashSet<Vector2Int> assignedCells = new HashSet<Vector2Int>(assignment.Values);
+        spiralCells.RemoveAll(cell => assignedCells.Contains(cell));
+
+        Dictionary<GameObject, Vector2Int> spiralAssignment = DispatchHelper.AssignCellsGreedy(
+            remainingUnits, spiralCells, targetGridPosition);
+        foreach (KeyValuePair<GameObject, Vector2Int> pair in spiralAssignment)
+            assignment[pair.Key] = pair.Value;
+
+        return true;
     }
 
     // Sérialise un ordre unitaire après le dispatch local sans appeler les contrôleurs gameplay.
     private bool SubmitUnitCommand(GameObject unit, CommandType commandType, long targetEntityID, Vector2Int targetCell)
+    {
+        return SubmitCommand(unit, commandType, targetEntityID, targetCell, 0);
+    }
+
+    // Sérialise une ability unitaire pour exécution lockstep sans appel direct à l'executor.
+    private bool SubmitAbilityCommand(GameObject unit, int abilityIndex)
+    {
+        return SubmitCommand(
+            unit,
+            CommandType.CastAbility,
+            -1,
+            GameCommand.NO_TARGET_CELL,
+            abilityIndex);
+    }
+
+    // Résout l'identité lockstep commune puis soumet une commande unitaire.
+    private bool SubmitCommand(
+        GameObject unit,
+        CommandType commandType,
+        long targetEntityID,
+        Vector2Int targetCell,
+        int abilityIndex)
     {
         if (unit == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
             return false;
@@ -327,35 +428,13 @@ public class OrderManager : MonoBehaviour
             type = commandType,
             unitEntityIDs = new[] { unitEntityID },
             targetEntityID = targetEntityID,
-            targetCell = targetCell
-        });
-        return true;
-    }
-
-    // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire
-    // Sérialise une ability unitaire pour exécution lockstep sans appel direct à l'executor.
-    private bool SubmitAbilityCommand(GameObject unit, int abilityIndex)
-    {
-        if (unit == null || CommandExecutor.Instance == null || EntityRegistry.Instance == null)
-            return false;
-
-        long unitEntityID = EntityRegistry.Instance.GetEntityID(unit);
-        ITeamMember teamMember = unit.GetComponent<ITeamMember>();
-        if (unitEntityID < 0 || teamMember == null)
-            return false;
-
-        CommandExecutor.Instance.Submit(new GameCommand
-        {
-            playerID = teamMember.GetTeamID(),
-            type = CommandType.CastAbility,
-            unitEntityIDs = new[] { unitEntityID },
-            targetEntityID = -1,
-            targetCell = GameCommand.NO_TARGET_CELL,
+            targetCell = targetCell,
             abilityIndex = abilityIndex
         });
         return true;
     }
 
+    // Nettoie les listeners lors de la destruction pour éviter les fuites mémoire.
     private void OnDestroy()
     {
         if (inputManager != null)

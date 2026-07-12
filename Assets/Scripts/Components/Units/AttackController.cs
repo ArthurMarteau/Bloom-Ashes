@@ -711,7 +711,7 @@ public class AttackController : MonoBehaviour, ITickable
         {
             bool inRange = CombatSystem.IsInRangeOfOccupiedTiles(
                 myPosition, EntityRegistry.Instance.GetBuildingOccupiedCells(currentTarget), attackRange);
-            if (debugAttack && inRange)
+            if (debugAttack && inRange && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: À portée du bâtiment multi-tiles", this);
             return inRange;
         }
@@ -720,7 +720,7 @@ public class AttackController : MonoBehaviour, ITickable
         Vector2Int targetPosition = GetLogicalPosition(currentTarget);
         bool inRangeStandard = CombatSystem.IsInRange(myPosition, targetPosition, attackRange);
 
-        if (debugAttack && inRangeStandard)
+        if (debugAttack && inRangeStandard && GameLogger.IsEnabled(GameLogger.Category.Combat))
             GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Au centre ET à portée → Prêt à attaquer", this);
 
         return inRangeStandard;
@@ -754,7 +754,7 @@ public class AttackController : MonoBehaviour, ITickable
                 pos => GridManager.Instance.IsInBounds(pos) && GridManager.Instance.IsWalkableFor(pos, unitGameObject)
             );
 
-            if (debugAttack)
+            if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
             {
                 Vector2Int anchor = GetLogicalPosition(currentTarget);
                 GameLogger.Log(GameLogger.Category.Combat, $"🔍 MoveToRange (bâtiment): Position {myPosition}, Ancre {anchor}, Taille {buildingTarget.GetSize()}", this);
@@ -765,7 +765,7 @@ public class AttackController : MonoBehaviour, ITickable
             // Cible standard (unité 1x1)
             Vector2Int targetPosition = GetLogicalPosition(currentTarget);
 
-            if (debugAttack)
+            if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
             {
                 int currentDistance = CombatSystem.CalculateChebyshevDistance(myPosition, targetPosition);
                 GameLogger.Log(GameLogger.Category.Combat, $"🔍 MoveToRange: Position {myPosition}, Cible {targetPosition}, Distance {currentDistance}/{attackRange}", this);
@@ -781,7 +781,7 @@ public class AttackController : MonoBehaviour, ITickable
 
         if (bestPosition == Vector2Int.zero)
         {
-            if (debugAttack)
+            if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 GameLogger.Warn(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Aucune position accessible à portée de {currentTarget.name} — retry dans 1s", this);
 
             approachRetryAtTick = currentTick + SimulationClock.TICKS_PER_SECOND;
@@ -791,7 +791,7 @@ public class AttackController : MonoBehaviour, ITickable
 
         if (bestPosition == myPosition)
         {
-            if (debugAttack)
+            if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
                 GameLogger.Warn(GameLogger.Category.Combat, $"⚠️ MoveToRange: bestPosition == myPosition ! Pas de mouvement nécessaire", this);
             return;
         }
@@ -804,7 +804,7 @@ public class AttackController : MonoBehaviour, ITickable
 
         approachRetryAtTick = 0;
 
-        if (debugAttack)
+        if (debugAttack && GameLogger.IsEnabled(GameLogger.Category.Combat))
             GameLogger.Log(GameLogger.Category.Combat, $"AttackController {gameObject.name}: Déplacement vers {bestPosition} (portée: {attackRange})", this);
     }
 

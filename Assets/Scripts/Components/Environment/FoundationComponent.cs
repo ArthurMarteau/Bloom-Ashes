@@ -157,9 +157,36 @@ public class FoundationComponent : MonoBehaviour, ICellListener, IMultiTile, ISe
         }
 
         // Égalité stricte : seul le propriétaire des Rootborn peut lancer leur construction.
-        if (!IsReadyToBuild() || GetTeamID() != teamID)
+        bool isReadyToBuild = IsReadyToBuild();
+        int foundationTeamID = GetTeamID();
+        if (!isReadyToBuild || foundationTeamID != teamID)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🏗️ Foundation {gameObject.name} : construction refusée, Rootborn incomplets ou équipes différentes", this);
+            if (GameLogger.IsEnabled(GameLogger.Category.Spawn))
+            {
+                List<Vector2Int> orderedCells = new List<Vector2Int>(idleRootbornsPerCell.Keys);
+                orderedCells.Sort((first, second) =>
+                {
+                    int xComparison = first.x.CompareTo(second.x);
+                    return xComparison != 0 ? xComparison : first.y.CompareTo(second.y);
+                });
+
+                List<string> rootbornDetails = new List<string>(orderedCells.Count);
+                foreach (Vector2Int cell in orderedCells)
+                {
+                    GameObject rootborn = idleRootbornsPerCell[cell];
+                    TeamComponent rootbornTeam = rootborn != null ? rootborn.GetComponent<TeamComponent>() : null;
+                    MovementController movement = rootborn != null ? rootborn.GetComponent<MovementController>() : null;
+                    string rootbornName = rootborn != null ? rootborn.name : "null";
+                    string rootbornTeamID = rootbornTeam != null ? rootbornTeam.GetTeamID().ToString() : "absent";
+                    string movementState = movement != null ? movement.GetCurrentState().ToString() : "absent";
+                    bool isMoving = rootborn != null && EntityRegistry.Instance != null
+                        && EntityRegistry.Instance.IsMoving(rootborn);
+                    rootbornDetails.Add($"{cell} → {rootbornName}, team={rootbornTeamID}, state={movementState}, registryMoving={isMoving}");
+                }
+
+                GameLogger.Warn(GameLogger.Category.Spawn,
+                    $"🏗️ Foundation {gameObject.name} : construction refusée — idle={idleRootbornsPerCell.Count}/4, ready={isReadyToBuild}, foundationTeam={foundationTeamID}, commandTeam={teamID}, Rootborn [{string.Join(" ; ", rootbornDetails)}]", this);
+            }
             return;
         }
 

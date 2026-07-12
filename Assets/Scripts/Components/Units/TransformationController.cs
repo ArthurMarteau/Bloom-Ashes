@@ -241,32 +241,29 @@ public class TransformationController : MonoBehaviour, ITickable
         if (col != null)
             col.enabled = false;
 
-        Vector2Int budCell = GetCurrentLogicalCell();
-        Vector3 budPosition = GridManager.Instance != null ? GridManager.Instance.GridToWorld(budCell) : Vector3.zero;
-        GameObject budObject = EntitySpawnManager.Instance != null
-            ? EntitySpawnManager.Instance.SpawnEntity(budPrefab, budPosition, pendingTeamID)
-            : null;
+        GameObject budObject = EntitySpawnManager.Instance?.ReplaceEntity(gameObject, budCell =>
+        {
+            Vector3 budPosition = GridManager.Instance != null ? GridManager.Instance.GridToWorld(budCell) : Vector3.zero;
+            GameObject replacement = EntitySpawnManager.Instance.SpawnEntity(budPrefab, budPosition, pendingTeamID);
+            BudComponent budComponent = replacement != null ? replacement.GetComponent<BudComponent>() : null;
+            if (budComponent == null)
+            {
+                if (replacement != null)
+                {
+                    LogError("ExecuteTransform - budPrefab sans BudComponent");
+                    EntitySpawnManager.Instance.DespawnEntity(replacement, 0f);
+                }
+                return null;
+            }
+
+            budComponent.Initialize(pendingUnitData, pendingSelfData, pendingCurrentHP, pendingMaxHP, pendingTeamID);
+            return replacement;
+        });
         if (budObject == null)
         {
             AbortTransform();
             return;
         }
-
-        BudComponent budComponent = budObject.GetComponent<BudComponent>();
-        if (budComponent == null)
-        {
-            LogError("ExecuteTransform - budPrefab sans BudComponent");
-            EntitySpawnManager.Instance?.DespawnEntity(budObject, 0f);
-            AbortTransform();
-            return;
-        }
-
-        budComponent.Initialize(pendingUnitData, pendingSelfData, pendingCurrentHP, pendingMaxHP, pendingTeamID);
-        if (EntityRegistry.Instance != null)
-            EntityRegistry.Instance.UpdateLogicalPosition(budObject, budCell);
-
-        EntitySpawnManager.Instance?.NotifyEntityReplaced(gameObject, budObject);
-        EntitySpawnManager.Instance?.DespawnEntity(gameObject, 0f, false);
 
         Log($"ExecuteTransform - Bud cree vers {pendingUnitData.unitName} (equipe {pendingTeamID}, cout {pendingUnitData.watersapCost}, HP herites {pendingCurrentHP}/{pendingMaxHP})");
         ClearTransformState();
@@ -289,19 +286,6 @@ public class TransformationController : MonoBehaviour, ITickable
         pendingTeamID = 0;
         pendingCurrentHP = 0;
         pendingMaxHP = 0;
-    }
-
-    // Retourne la cellule logique de l'unité sans lire sa position visuelle.
-    private Vector2Int GetCurrentLogicalCell()
-    {
-        MovementController movementController = GetComponent<MovementController>();
-        if (movementController != null)
-            return movementController.GetCurrentGridPosition();
-
-        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(gameObject, out Vector2Int cell))
-            return cell;
-
-        return Vector2Int.zero;
     }
 
     [ContextMenu("Debug: Test Transform")]

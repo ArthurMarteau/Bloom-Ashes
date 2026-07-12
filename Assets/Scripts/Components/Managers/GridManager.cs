@@ -114,8 +114,31 @@ public class GridManager : MonoBehaviour
         }
     }
 
+    // Charge le terrain fourni par MapData et réinitialise les caches dépendants de ses dimensions.
+    public void SetTerrainMap(TerrainMapData newTerrainMap)
+    {
+        if (newTerrainMap == null)
+        {
+            GameLogger.Error("🗺️ GridManager : SetTerrainMap appelé avec un terrain null.", this);
+            return;
+        }
+
+        terrainMap = newTerrainMap;
+        LoadTerrainMap();
+        CalculateGridOrigin();
+        staticBlockedGrid = new bool[gridWidth, gridHeight];
+        GameLogger.Log(GameLogger.Category.Grid,
+            $"🗺️ GridManager : terrain chargé ({gridWidth}x{gridHeight}).", this);
+    }
+
     // Construit le snapshot statique après synchronisation des Transforms et colliders de la scène.
     private void Start()
+    {
+        RefreshStaticBlockedGrid();
+    }
+
+    // Reconstruit le snapshot des obstacles après les spawns initiaux du match.
+    public void RefreshStaticBlockedGrid()
     {
         Physics2D.SyncTransforms();
         InitializeStaticBlockedGrid();
@@ -265,7 +288,8 @@ public class GridManager : MonoBehaviour
         }
 
         groundTypeGrid[gridPosition.x, gridPosition.y] = groundType;
-        GameLogger.Log(GameLogger.Category.Grid, $"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}", this);
+        if (GameLogger.IsEnabled(GameLogger.Category.Grid))
+            GameLogger.Log(GameLogger.Category.Grid, $"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}", this);
     }
 
     // Retourne l'unité présente sur une position de grille via Collider2D (null si aucune)

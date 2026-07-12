@@ -54,6 +54,7 @@
     <Compile Include="Assets\Scripts\Components\Managers\SimulationClockManager.cs" />
     <Compile Include="Assets\Scripts\Systems\IEvictable.cs" />
     <Compile Include="Assets\Scripts\Data\Units\UnitStatsData.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\DevMatchLauncher.cs" />
     <Compile Include="Assets\Scripts\Systems\Network\CommandSerializer.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\IMultiTile.cs" />
     <Compile Include="Assets\Scripts\Components\UI\TooltipUI.cs" />
@@ -76,6 +77,8 @@
     <Compile Include="Assets\Scripts\Tests\PathFindingTests.cs" />
     <Compile Include="Assets\Scripts\Components\Interfaces\ITeamMember.cs" />
     <Compile Include="Assets\Scripts\Systems\Selection\SelectionResolver.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\EntityRegistry.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\VictoryManager.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\AbilityManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\DispatchHelper.cs" />
     <Compile Include="Assets\Scripts\Shared\GameLogger.cs" />
@@ -83,6 +86,7 @@
     <Compile Include="Assets\Scripts\Data\UI\CursorData.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\NexusController.cs" />
     <Compile Include="Assets\Scripts\Shared\GroundType.cs" />
+    <Compile Include="Assets\Scripts\Systems\Match\VictorySystem.cs" />
     <Compile Include="Assets\Scripts\Systems\Commands\GameCommand.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GameManager.cs" />
     <Compile Include="Assets\Scripts\Data\VFX\VFXData.cs" />
@@ -90,15 +94,16 @@
     <Compile Include="Assets\Scripts\Systems\Grid\PathFindingScheduler.cs" />
     <Compile Include="Assets\Scripts\Components\Abilities\SacrificeExecutor.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\CursorManager.cs" />
+    <Compile Include="Assets\Scripts\Systems\Match\MatchStatsSystem.cs" />
+    <Compile Include="Assets\Scripts\Components\Managers\MatchInitializer.cs" />
+    <Compile Include="Assets\Scripts\Data\Logging\GameLoggerSettings.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\InputManager.cs" />
-    <Compile Include="Assets\Scripts\Shared\UnitProductionStatus.cs" />
+    <Compile Include="Assets\Scripts\Data\Maps\MapData.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\WaveFillController.cs" />
     <Compile Include="Assets\Scripts\Components\Visual\ProjectileVisual.cs" />
     <Compile Include="Assets\Scripts\Systems\SimulationTickManager.cs" />
     <Compile Include="Assets\Scripts\Systems\Grid\PathFinding.cs" />
-    <Compile Include="Assets\Scripts\Components\Units\UnitType.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\PendingDamageResolver.cs" />
-    <Compile Include="Assets\Scripts\Shared\GameLoggerSettings.cs" />
     <Compile Include="Assets\Scripts\Systems\Combat\CombatSystem.cs" />
     <Compile Include="Assets\Scripts\Systems\Units\WatersapCollectionSystem.cs" />
     <Compile Include="Assets\Scripts\Components\Units\RootbornStockComponent.cs" />
@@ -119,8 +124,9 @@
     <Compile Include="Assets\Scripts\Components\Units\ChaseController.cs" />
     <Compile Include="Assets\Scripts\Tests\Selection\SelectionResolverTests.cs" />
     <Compile Include="Assets\Scripts\Components\UI\ActionPanelUI.cs" />
-    <Compile Include="Assets\Scripts\Systems\EntityRegistry.cs" />
     <Compile Include="Assets\Scripts\Components\Buildings\BudComponent.cs" />
+    <Compile Include="Assets\Scripts\Components\Units\UnitTypeHelper.cs" />
+    <Compile Include="Assets\Scripts\Components\UI\MatchEndUI.cs" />
     <Compile Include="Assets\Scripts\Components\Environment\FoundationComponent.cs" />
     <Compile Include="Assets\Scripts\Components\Managers\GridManager.cs" />
     <Compile Include="Assets\Scripts\Systems\VFX\VFXApplier.cs" />

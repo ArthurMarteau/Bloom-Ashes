@@ -1,12 +1,13 @@
 ﻿using UnityEngine;
+using UnityEngine.Events;
 using UnityEngine.UI;
 
-// Slot rond représentant une unité produisible dans le ProductionPanel
-// Configuré dynamiquement par ProductionPanelUI selon la disponibilité et le Watersap
+// Slot rond représentant une unité produisible dans l'ActionPanel
+// Configuré dynamiquement par ActionPanelUI selon la disponibilité et le Watersap
 // Chaque slot est réutilisé via Setup() — pas de création/destruction de GameObjects
 public class ProductionSlotUI : MonoBehaviour
 {
-    // État de disponibilité d'un slot — déterminé par ProductionPanelUI
+    // État de disponibilité d'un slot — déterminé par ActionPanelUI
     public enum SlotState
     {
         Available,          // Watersap suffisant et tier débloqué
@@ -26,6 +27,8 @@ public class ProductionSlotUI : MonoBehaviour
 
     [SerializeField] private TooltipTrigger tooltipTrigger;
 
+    private UnityAction buttonClickListener;
+
     // Overlay bleu léger pour l'état NotEnoughWatersap
     private static readonly Color ColorOverlayNotEnoughWatersap = new Color(0.1f, 0.3f, 0.8f, 0.45f);
 
@@ -33,7 +36,7 @@ public class ProductionSlotUI : MonoBehaviour
     private static readonly Color ColorPortraitLocked = new Color(0.4f, 0.4f, 0.4f, 1f);
 
     // Configure le slot avec l'unité, l'état et le callback de clic
-    // Appelé par ProductionPanelUI.RefreshPanel() à chaque mise à jour de la sélection
+    // Appelé par ActionPanelUI lors de chaque mise à jour de la sélection
     public void Setup(UnitStatsData unitData, SlotState state, System.Action<UnitStatsData> onClick, int tooltipCost = -1)
     {
         // Unité null : masque le slot entier
@@ -56,8 +59,8 @@ public class ProductionSlotUI : MonoBehaviour
         if (portraitImage != null)
             portraitImage.sprite = unitData.portrait;
 
-        // Nettoie les listeners précédents pour éviter les doublons sur les appels successifs
-        slotButton?.onClick.RemoveAllListeners();
+        // Nettoie le listener dynamique précédent pour éviter les doublons.
+        RemoveButtonListener();
 
         switch (state)
         {
@@ -73,7 +76,8 @@ public class ProductionSlotUI : MonoBehaviour
                     if (onClick != null)
                     {
                         GameLogger.Log(GameLogger.Category.UI, $"🌿 ProductionSlotUI : listener ajouté pour {unitData.unitName}", this);
-                        slotButton.onClick.AddListener(() => onClick(unitData));
+                        buttonClickListener = () => onClick(unitData);
+                        slotButton.onClick.AddListener(buttonClickListener);
                     }
                 }
                 break;
@@ -120,7 +124,7 @@ public class ProductionSlotUI : MonoBehaviour
         if (portraitImage != null)
             portraitImage.sprite = buildingData.portrait;
 
-        slotButton?.onClick.RemoveAllListeners();
+        RemoveButtonListener();
 
         switch (state)
         {
@@ -133,7 +137,10 @@ public class ProductionSlotUI : MonoBehaviour
                 {
                     slotButton.interactable = true;
                     if (onClick != null)
-                        slotButton.onClick.AddListener(() => onClick(buildingData));
+                    {
+                        buttonClickListener = () => onClick(buildingData);
+                        slotButton.onClick.AddListener(buttonClickListener);
+                    }
                 }
                 break;
 
@@ -155,5 +162,20 @@ public class ProductionSlotUI : MonoBehaviour
                     slotButton.interactable = false;
                 break;
         }
+    }
+
+    // Retire uniquement le listener dynamique installé par ce slot.
+    private void RemoveButtonListener()
+    {
+        if (slotButton != null && buttonClickListener != null)
+            slotButton.onClick.RemoveListener(buttonClickListener);
+
+        buttonClickListener = null;
+    }
+
+    // Nettoie le listener dynamique lorsque le slot est détruit.
+    private void OnDestroy()
+    {
+        RemoveButtonListener();
     }
 }

@@ -100,44 +100,50 @@ public static class DispatchHelper
         return result;
     }
 
-    // Assignment spirale : les cases sont triées par proximité à la destination (centre en premier).
-    // Pour chaque case dans cet ordre, on assigne l'unité la plus proche de cette case.
-    // Garantit que la case cliquée et l'anneau 1 sont pris en priorité absolue.
+    // Assignment spirale : les cases sont triÃ©es par proximitÃ© Ã  la destination (centre en premier).
+    // Pour chaque case dans cet ordre, on assigne l'unitÃ© la plus proche de cette case.
+    // Garantit que la case cliquÃ©e et l'anneau 1 sont pris en prioritÃ© absolue.
     public static Dictionary<GameObject, Vector2Int> AssignCellsGreedy(
         List<GameObject> units, List<Vector2Int> cells, Vector2Int destination)
     {
         Dictionary<GameObject, Vector2Int> assignment = new Dictionary<GameObject, Vector2Int>();
         if (units == null || units.Count == 0 || cells == null || cells.Count == 0) return assignment;
 
-        // Trie les cases par distance Chebyshev à la destination (spirale : centre d'abord)
+        // Trie les cases par distance Chebyshev Ã  la destination (spirale : centre d'abord)
         List<Vector2Int> sortedCells = new List<Vector2Int>(cells);
         sortedCells.Sort((a, b) =>
-            CombatSystem.CalculateChebyshevDistance(a, destination)
-                .CompareTo(CombatSystem.CalculateChebyshevDistance(b, destination)));
+        {
+            int distanceComparison = CombatSystem.CalculateChebyshevDistance(a, destination)
+                .CompareTo(CombatSystem.CalculateChebyshevDistance(b, destination));
+            if (distanceComparison != 0) return distanceComparison;
+
+            int xComparison = a.x.CompareTo(b.x);
+            return xComparison != 0 ? xComparison : a.y.CompareTo(b.y);
+        });
 
         HashSet<GameObject> assignedUnits = new HashSet<GameObject>();
 
-        // Pour chaque case (du centre vers l'extérieur), prend l'unité la plus proche
+        // Pour chaque case (du centre vers l'extÃ©rieur), prend l'unitÃ© la plus proche
         foreach (Vector2Int cell in sortedCells)
         {
             if (assignedUnits.Count >= units.Count) break;
 
             GameObject bestUnit = null;
             int bestDist = int.MaxValue;
+            long bestEntityID = long.MaxValue;
 
             foreach (GameObject unit in units)
             {
                 if (unit == null || assignedUnits.Contains(unit)) continue;
 
-                MovementController mc = unit.GetComponent<MovementController>();
-                Vector2Int unitPos = mc != null
-                    ? mc.GetCurrentGridPosition()
-                    : GridManager.Instance.WorldToGrid(unit.transform.position);
+                Vector2Int unitPos = GetUnitGridPosition(unit);
 
                 int dist = CombatSystem.CalculateChebyshevDistance(unitPos, cell);
-                if (dist < bestDist)
+                long entityID = EntityRegistry.Instance?.GetEntityID(unit) ?? long.MaxValue;
+                if (dist < bestDist || (dist == bestDist && entityID < bestEntityID))
                 {
                     bestDist = dist;
+                    bestEntityID = entityID;
                     bestUnit = unit;
                 }
             }
@@ -150,5 +156,69 @@ public static class DispatchHelper
         }
 
         return assignment;
+    }
+
+    // Assigne les paires unitÃ©-case par distance croissante, avec prioritÃ© stable Ã  l'entityID.
+    public static Dictionary<GameObject, Vector2Int> AssignClosestUnitsFirst(
+        List<GameObject> units, List<Vector2Int> cells)
+    {
+        Dictionary<GameObject, Vector2Int> assignment = new Dictionary<GameObject, Vector2Int>();
+        if (units == null || units.Count == 0 || cells == null || cells.Count == 0)
+            return assignment;
+
+        List<GameObject> remainingUnits = new List<GameObject>(units);
+        List<Vector2Int> remainingCells = new List<Vector2Int>(cells);
+        while (remainingUnits.Count > 0 && remainingCells.Count > 0)
+        {
+            GameObject bestUnit = null;
+            Vector2Int bestCell = default(Vector2Int);
+            int bestDistance = int.MaxValue;
+            long bestEntityID = long.MaxValue;
+
+            foreach (GameObject unit in remainingUnits)
+            {
+                if (unit == null)
+                    continue;
+
+                Vector2Int unitPosition = GetUnitGridPosition(unit);
+                long entityID = EntityRegistry.Instance?.GetEntityID(unit) ?? long.MaxValue;
+                foreach (Vector2Int cell in remainingCells)
+                {
+                    int distance = CombatSystem.CalculateChebyshevDistance(unitPosition, cell);
+                    bool isBetterCell = distance == bestDistance && entityID == bestEntityID
+                        && (cell.x < bestCell.x || (cell.x == bestCell.x && cell.y < bestCell.y));
+                    if (distance < bestDistance
+                        || (distance == bestDistance && entityID < bestEntityID)
+                        || isBetterCell)
+                    {
+                        bestUnit = unit;
+                        bestCell = cell;
+                        bestDistance = distance;
+                        bestEntityID = entityID;
+                    }
+                }
+            }
+
+            if (bestUnit == null)
+                break;
+
+            assignment[bestUnit] = bestCell;
+            remainingUnits.Remove(bestUnit);
+            remainingCells.Remove(bestCell);
+        }
+
+        return assignment;
+    }
+
+    // Retourne la position logique d'une unitÃ© pour les calculs dÃ©terministes de dispatch.
+    private static Vector2Int GetUnitGridPosition(GameObject unit)
+    {
+        if (EntityRegistry.Instance != null && EntityRegistry.Instance.TryGetLogicalPosition(unit, out Vector2Int logicalPosition))
+            return logicalPosition;
+
+        MovementController movementController = unit.GetComponent<MovementController>();
+        return movementController != null
+            ? movementController.GetCurrentGridPosition()
+            : GridManager.Instance.WorldToGrid(unit.transform.position);
     }
 }

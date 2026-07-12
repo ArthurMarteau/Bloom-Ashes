@@ -29,6 +29,7 @@ public class WatersapManager : MonoBehaviour, ITickable
 
     // Événement déclenché à chaque changement de watersap → (teamID, newAmount)
     public UnityEvent<int, int> OnWatersapChanged = new UnityEvent<int, int>();
+    public UnityEvent<int, int> OnWatersapAdded = new UnityEvent<int, int>();
 
     // Initialise le singleton
     private void Awake()
@@ -80,7 +81,7 @@ public class WatersapManager : MonoBehaviour, ITickable
                 passiveTimerByTeam[teamID] = 0;
                 AddWatersap(teamID, watersapData.passiveIncomeAmount);
 
-                if (debugWatersap)
+                if (debugWatersap && GameLogger.IsEnabled(GameLogger.Category.Watersap))
                     GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : revenu passif appliqué à l'équipe {teamID}.", this);
             }
         }
@@ -153,6 +154,10 @@ public class WatersapManager : MonoBehaviour, ITickable
 
         int newAmount = watersapSystem.CalculateNewAmount(current, amount, watersapData.maxWatersap);
         watersapByTeam[teamID] = newAmount;
+
+        int actualGain = newAmount - current;
+        if (actualGain > 0)
+            OnWatersapAdded.Invoke(teamID, actualGain);
 
         if (debugWatersap)
             GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} +{amount} watersap → {newAmount}/{watersapData.maxWatersap}", this);

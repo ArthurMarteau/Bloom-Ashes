@@ -54,7 +54,7 @@ public class PlayerManager : MonoBehaviour
         if (matchConfig == null)
         {
             Initialize(MatchConfig.CreateDefault());
-            GameLogger.Log(GameLogger.Category.Selection, "👥 PlayerManager : aucune MatchConfig reçue, configuration 1v1 par défaut appliquée.", this);
+            GameLogger.Log(GameLogger.Category.Match, "👥 PlayerManager : aucune MatchConfig reçue, configuration 1v1 par défaut appliquée.", this);
         }
     }
 
@@ -64,7 +64,6 @@ public class PlayerManager : MonoBehaviour
         matchConfig = config ?? MatchConfig.CreateDefault();
         matchConfig.ClampValues();
         allianceSystem.Initialize(matchConfig);
-        SimulationClockManager.Instance?.Reseed(matchConfig.seed);
 
         if (GetPlayerSlot(localPlayerID) == null && matchConfig.players != null && matchConfig.players.Length > 0)
             localPlayerID = matchConfig.players[0].playerID;
@@ -79,12 +78,12 @@ public class PlayerManager : MonoBehaviour
         {
             if (player == null)
             {
-                GameLogger.Warn(GameLogger.Category.Selection, "👥 PlayerManager : un slot joueur est null, ignoré.", this);
+                GameLogger.Warn(GameLogger.Category.Match, "👥 PlayerManager : un slot joueur est null, ignoré.", this);
                 continue;
             }
 
             WatersapManager.Instance.RegisterTeam(player.playerID);
-            GameLogger.Log(GameLogger.Category.Selection, $"👥 PlayerManager : joueur {player.playerID} (alliance {player.allianceID}) enregistré.", this);
+            GameLogger.Log(GameLogger.Category.Match, $"👥 PlayerManager : joueur {player.playerID} (alliance {player.allianceID}) enregistré.", this);
         }
     }
 
@@ -101,7 +100,7 @@ public class PlayerManager : MonoBehaviour
         PlayerSlot slot = GetPlayerSlot(teamID);
         if (slot == null)
         {
-            GameLogger.Warn(GameLogger.Category.Selection, $"👥 PlayerManager : IsHumanPlayer — équipe {teamID} non trouvée.", this);
+            GameLogger.Warn(GameLogger.Category.Match, $"👥 PlayerManager : IsHumanPlayer — équipe {teamID} non trouvée.", this);
             return false;
         }
         return !slot.isAI;
@@ -163,21 +162,21 @@ public class PlayerManager : MonoBehaviour
     {
         if (matchConfig?.players == null || matchConfig.players.Length == 0)
         {
-            GameLogger.Log(GameLogger.Category.Selection, "👥 PlayerManager : aucun joueur dans la liste.", this);
+            GameLogger.Log(GameLogger.Category.Match, "👥 PlayerManager : aucun joueur dans la liste.", this);
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Selection, $"👥 PlayerManager : {matchConfig.players.Length} joueur(s) dans la session :", this);
+        GameLogger.Log(GameLogger.Category.Match, $"👥 PlayerManager : {matchConfig.players.Length} joueur(s) dans la session :", this);
         foreach (PlayerSlot player in matchConfig.players)
         {
             if (player == null)
             {
-                GameLogger.Log(GameLogger.Category.Selection, "  — slot null", this);
+                GameLogger.Log(GameLogger.Category.Match, "  — slot null", this);
                 continue;
             }
             string type = player.isAI ? "IA" : "Humain";
             string local = player.playerID == localPlayerID ? " ← LOCAL" : "";
-            GameLogger.Log(GameLogger.Category.Selection, $"  — [{player.playerID}] alliance {player.allianceID} ({type}){local}", this);
+            GameLogger.Log(GameLogger.Category.Match, $"  — [{player.playerID}] alliance {player.allianceID} ({type}){local}", this);
         }
     }
 }
