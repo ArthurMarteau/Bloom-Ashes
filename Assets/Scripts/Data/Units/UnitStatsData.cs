@@ -26,13 +26,13 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("Dégâts infligés par attaque")]
     public int attackDamage = 10;
 
-    [Tooltip("Portée d'attaque (1 = mêlée, 2+ = distance)")]
+    [Tooltip("Portée d'attaque en cases, distance Chebyshev (1 = mêlée, 2+ = distance)")]
     public int attackRange = 1;
 
     [Tooltip("Réduction de dégâts (soustraction simple)")]
     public int defense = 0;
 
-    [Tooltip("Temps entre chaque attaque (secondes)")]
+    [Tooltip("Intervalle entre attaques en secondes d'authoring, converties en ticks à l'initialisation")]
     public float attackSpeed = 1.0f;
 
     [Header("Movement")]
@@ -54,18 +54,15 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("Prefab de l'unité à instancier lors de la production")]
     public GameObject unitPrefab = null;
 
-    [Tooltip("Coût en Watersap pour produire cette unité (0 = non produisible)")]
+    [Tooltip("Coût en Watersap pour produire cette unité ; la présence dans producibleUnits détermine si elle est produisible")]
     public int watersapCost = 0;
 
-    [Tooltip("Durée de production en secondes")]
+    [Tooltip("Durée de production en secondes d'authoring, converties en ticks à l'initialisation")]
     public float buildTime = 0f;
 
     [Tooltip("Tier du bâtiment requis pour débloquer (1 = disponible de base, 2/3/4 = nécessite upgrade)")]
     [Range(1, 4)]
     public int tierRequired = 1;
-
-    [Tooltip("Icône affichée dans l'UI de production (peut être null si non produisible)")]
-    public Sprite productionIcon = null;
 
     [Header("VFX Lifecycle")]
     [Tooltip("VFX joué au spawn de l'unité")]
@@ -77,10 +74,10 @@ public class UnitStatsData : ScriptableObject
     [Tooltip("VFX joué au début de la séquence de mort")]
     public VFXData onDeathVFX;
 
-    [Tooltip("Durée d'attente avant Destroy après la mort (remplace le 10f hardcodé)")]
+    [Tooltip("Durée visuelle en secondes avant Destroy après la sortie immédiate de la simulation")]
     public float deathDelay = 2f;
 
-    [Tooltip("Durée de l'animation de transformation avant spawn du Bud")]
+    [Tooltip("Durée de l'animation de transformation en secondes d'authoring, converties en ticks à l'initialisation")]
     public float transformDelay = 1f;
 
     // Validation dans l'inspecteur Unity

@@ -1,15 +1,12 @@
 ﻿using System.Collections.Generic;
 using UnityEngine;
 
-// Gère la liste des joueurs de la session et expose le joueur local
+// Gère la configuration des joueurs de la session et expose le propriétaire local
 // S'initialise avant les autres managers grâce à DefaultExecutionOrder
 [DefaultExecutionOrder(-75)]
 public class PlayerManager : MonoBehaviour
 {
     public static PlayerManager Instance { get; private set; }
-
-    [Header("Configuration")]
-    [SerializeField] private List<PlayerData> players;
 
     // ID du joueur local, conservé à 1 pour reproduire la scène actuelle.
     [SerializeField] private int localPlayerID = 1;
@@ -28,12 +25,6 @@ public class PlayerManager : MonoBehaviour
 
     private MatchConfig matchConfig;
     private readonly AllianceSystem allianceSystem = new AllianceSystem();
-
-    // Retourne les données du joueur local
-    public PlayerData LocalPlayer => GetPlayerData(localPlayerID);
-
-    // Retourne la liste complète des joueurs (lecture seule)
-    public List<PlayerData> AllPlayers => players;
 
     // Retourne la configuration active en lecture seule.
     public MatchConfig CurrentMatchConfig => matchConfig;
@@ -141,20 +132,6 @@ public class PlayerManager : MonoBehaviour
 
     // Retourne vrai si la cible peut recevoir un ordre d'attaque explicite.
     public bool CanBeAttacked(int attackerTeamID, int targetTeamID) => allianceSystem.CanBeAttacked(attackerTeamID, targetTeamID);
-
-    // Retourne les données du joueur correspondant à l'équipe donnée, null si non trouvé
-    public PlayerData GetPlayerData(int teamID)
-    {
-        if (players == null) return null;
-
-        foreach (PlayerData player in players)
-        {
-            // Égalité stricte : PlayerData décrit le propriétaire précis, pas l'alliance.
-            if (player != null && player.teamID == teamID)
-                return player;
-        }
-        return null;
-    }
 
     // Affiche la liste de tous les joueurs dans la console
     [ContextMenu("Debug: List All Players")]

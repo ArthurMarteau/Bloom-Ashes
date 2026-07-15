@@ -6,8 +6,8 @@ using UnityEngine;
 public class WatersapTransferAbility : AbilityData
 {
     // Crée l'executor associé à cette ability
-    public override IAbility CreateExecutor()
+    public override IAbility CreateExecutor(long lastUsedTick, System.Action<long> recordLastUsedTick)
     {
-        return new WatersapTransferExecutor(this);
+        return new WatersapTransferExecutor(this, lastUsedTick, recordLastUsedTick);
     }
 }

@@ -11,18 +11,10 @@ public class EnvironmentStatsData : ScriptableObject
     public Sprite portrait = null;
 
     [Header("Size")]
+    [Tooltip("Largeur en cases de grille depuis l'ancrage bas-gauche")]
     public int sizeX = 1;
+    [Tooltip("Hauteur en cases de grille depuis l'ancrage bas-gauche")]
     public int sizeY = 1;
-
-    public enum EnvironmentType
-    {
-        Obstacle,  // Bloque le passage (layer Obstacle, ex: Tree)
-        Walkable   // Traversable (layer EnvironmentWalkable, ex: Bush)
-    }
-
-    [Header("Type")]
-    [Tooltip("Obstacle = bloque le passage / Walkable = traversable")]
-    public EnvironmentType environmentType = EnvironmentType.Obstacle;
 
     [Header("VFX Lifecycle")]
     [Tooltip("VFX joué au spawn de l'entité d'environnement")]

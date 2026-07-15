@@ -10,7 +10,7 @@ public interface IAbility
     bool CanExecute(GameObject caster);
 
     /// <summary>
-    /// Exécute l'ability (vérifie CanExecute en interne avant d'agir)
+    /// Exécute l'ability avec une validation CanExecute unique avant d'agir
     /// Retourne true si l'action interne a réussi, false sinon
     /// </summary>
     bool Execute(GameObject caster);

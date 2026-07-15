@@ -9,16 +9,12 @@ public abstract class AbilityData : ScriptableObject
     [Tooltip("Nom de l'ability affiché dans l'UI")]
     public string abilityName = "Ability";
 
-    [Header("Visuel")]
-    [Tooltip("Icône affichée sur le bouton d'ability")]
-    public Sprite icon;
-
     [Header("Coût")]
     [Tooltip("Coût en Watersap pour utiliser l'ability (0 = gratuit ou géré en interne)")]
     public int watersapCost = 0;
 
     [Header("Cooldown")]
-    [Tooltip("Temps de recharge en secondes (0 = pas de cooldown)")]
+    [Tooltip("Temps de recharge en secondes d'authoring, converties en ticks à l'exécution (0 = pas de cooldown)")]
     public float cooldownDuration = 0f;
 
     [Header("VFX")]
@@ -31,5 +27,5 @@ public abstract class AbilityData : ScriptableObject
     public string description = "";
 
     // Méthode abstraite : chaque ability concrète implémente sa propre logique d'executor
-    public abstract IAbility CreateExecutor();
+    public abstract IAbility CreateExecutor(long lastUsedTick, System.Action<long> recordLastUsedTick);
 }

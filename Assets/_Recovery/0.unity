@@ -3159,7 +3159,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::DevMatchLauncher
   devConfig:
     seed: 12345
-    mapID: default
+    mapID: DevMap
     mode: 0
     startingRootborn: 4
     players:
@@ -12881,13 +12881,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 3e4b7fba1fa531848b24ea290a9a8597, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerManager
-  players:
-  - {fileID: 11400000, guid: dd6f68067f6fb0545abeaaa43f971b0e, type: 2}
-  - {fileID: 11400000, guid: 243115a4107d35e469364126df29d99e, type: 2}
-  - {fileID: 11400000, guid: 6bbb871ce9ccb1347a894e68375e340d, type: 2}
-  - {fileID: 11400000, guid: 6f94ed4fe7680f646bf4d20b7e71b2da, type: 2}
-  - {fileID: 11400000, guid: eb19fc50fdb98b540bc449acfba37279, type: 2}
-  - {fileID: 11400000, guid: 10e132419c4baf2479aa1db43d7b0e4c, type: 2}
   localPlayerID: 1
   playerColors:
   - {r: 1, g: 1, b: 1, a: 1}

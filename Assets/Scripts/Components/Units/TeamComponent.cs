@@ -8,7 +8,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     [Header("Team Settings")]
     [SerializeField] private int teamID = 1; // -1 = Wildlife hostile, 1-6 = Joueurs
 
-    // Couleurs de fallback utilisées si PlayerManager est absent ou si le PlayerData est null
+    // Couleurs de fallback utilisées si PlayerManager est absent ou si le joueur est inconnu
     private static readonly Color[] fallbackColors = new Color[]
     {
         Color.white,                    // 0 = Neutre
@@ -59,7 +59,7 @@ public class TeamComponent : MonoBehaviour, ITeamMember
     }
 
     // Retourne la couleur associée à l'équipe courante
-    // Priorité : PlayerData.teamColor → fallback par index → Color.white (neutre)
+    // Priorité : palette PlayerManager indexée par PlayerSlot.colorIndex, puis fallback local.
     public Color GetTeamColor()
     {
         if (teamID == AllianceSystem.NEUTRAL_ALLIANCE)

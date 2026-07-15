@@ -4,7 +4,11 @@
 // Délègue à RootbornStockComponent.TryTransfer()
 public class WatersapTransferExecutor : AbilityExecutor
 {
-    public WatersapTransferExecutor(AbilityData data) : base(data) { }
+    public WatersapTransferExecutor(
+        AbilityData data,
+        long lastUsedTick,
+        System.Action<long> recordLastUsedTick)
+        : base(data, lastUsedTick, recordLastUsedTick) { }
 
     public override bool CanExecute(GameObject caster)
     {

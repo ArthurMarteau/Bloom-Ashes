@@ -6,12 +6,21 @@
 public abstract class AbilityExecutor : IAbility
 {
     protected AbilityData abilityData;
-    protected long lastUsedTick = -1;
-    protected int cooldownTicks;
+    private readonly long lastUsedTick;
+    private readonly System.Action<long> recordLastUsedTick;
+    private readonly int cooldownTicks;
 
-    public AbilityExecutor(AbilityData data)
+    // Indique si la classe de base doit débiter le coût avant la logique spécifique.
+    protected virtual bool SpendWatersapCost => true;
+
+    protected AbilityExecutor(
+        AbilityData data,
+        long lastUsedTick,
+        System.Action<long> recordLastUsedTick)
     {
         abilityData = data;
+        this.lastUsedTick = lastUsedTick;
+        this.recordLastUsedTick = recordLastUsedTick;
         cooldownTicks = data != null ? SimulationClock.SecondsToTicks(data.cooldownDuration) : 0;
     }
 
@@ -50,25 +59,27 @@ public abstract class AbilityExecutor : IAbility
         return true;
     }
 
-    // Exécute l'ability : vérifie les conditions, dépense le Watersap, puis délègue à ExecuteAbility()
-    // Retourne true si l'action interne a réussi, false si CanExecute échoue ou si l'action est rejetée
+    // Exécute l'ability avec une validation unique, puis mémorise le cooldown en cas de succès.
     public bool Execute(GameObject caster)
     {
         if (!CanExecute(caster)) return false;
 
         // Dépense le Watersap si un coût est défini
-        if (abilityData.watersapCost > 0)
+        if (SpendWatersapCost && abilityData.watersapCost > 0)
         {
             TeamComponent team = caster.GetComponent<TeamComponent>();
             if (team != null)
                 WatersapManager.Instance.SpendWatersap(team.GetTeamID(), abilityData.watersapCost);
         }
 
-        // Enregistre le temps d'utilisation pour le cooldown
-        lastUsedTick = SimulationClockManager.Instance != null ? SimulationClockManager.Instance.CurrentTick : 0;
+        if (!ExecuteAbility(caster))
+            return false;
 
-        // Exécute la logique spécifique et propage son résultat
-        return ExecuteAbility(caster);
+        long currentTick = SimulationClockManager.Instance != null
+            ? SimulationClockManager.Instance.CurrentTick
+            : 0;
+        recordLastUsedTick?.Invoke(currentTick);
+        return true;
     }
 
     // Méthode abstraite : chaque ability concrète implémente sa logique ici

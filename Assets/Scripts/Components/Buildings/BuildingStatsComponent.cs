@@ -394,16 +394,17 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
     // Retourne le tier actuel du bâtiment (1 à 4)
     public int GetCurrentTier() => currentTier;
 
-    // Retourne le tier maximum — toujours 4 pour toutes les factions
-    public int GetMaxTier() => 4;
+    // Retourne le tier maximum configuré pour ce bâtiment.
+    public int GetMaxTier() => baseStats != null ? baseStats.maxTier : 1;
 
     // Tente de monter le bâtiment d'un tier — dépense le Watersap si possible
     // Retourne true si la montée de tier a réussi, false sinon
     public bool UpgradeTier(int teamID, int cost)
     {
-        if (currentTier >= 4)
+        int maxTier = GetMaxTier();
+        if (currentTier >= maxTier)
         {
-            GameLogger.Log(GameLogger.Category.Combat, $"🏛️ BuildingStatsComponent {gameObject.name} : tier max atteint ({currentTier}/4)", this);
+            GameLogger.Log(GameLogger.Category.Combat, $"🏛️ BuildingStatsComponent {gameObject.name} : tier max atteint ({currentTier}/{maxTier})", this);
             return false;
         }
 

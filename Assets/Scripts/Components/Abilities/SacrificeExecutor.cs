@@ -4,7 +4,11 @@ public class SacrificeExecutor : AbilityExecutor
 {
     private readonly SacrificeAbility sacrificeData;
 
-    public SacrificeExecutor(SacrificeAbility data) : base(data)
+    public SacrificeExecutor(
+        SacrificeAbility data,
+        long lastUsedTick,
+        System.Action<long> recordLastUsedTick)
+        : base(data, lastUsedTick, recordLastUsedTick)
     {
         sacrificeData = data;
     }

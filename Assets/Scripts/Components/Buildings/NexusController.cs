@@ -139,6 +139,14 @@ public class NexusController : MonoBehaviour
             return false;
         }
 
+        SpawnRootbornAbility spawnAbility = baseStats.abilityData as SpawnRootbornAbility;
+        if (spawnAbility == null)
+        {
+            GameLogger.Warn(GameLogger.Category.Spawn,
+                $"🏛️ NexusController {gameObject.name} : SpawnRootbornAbility manquante — coût de spawn indéterminé", this);
+            return false;
+        }
+
         if (EntitySpawnManager.Instance == null)
         {
             GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : EntitySpawnManager introuvable — spawn annulé", this);
@@ -158,10 +166,11 @@ public class NexusController : MonoBehaviour
         }
 
         // Tente de dépenser le Watersap
-        if (!WatersapManager.Instance.SpendWatersap(teamID, rootbornData.watersapCost))
+        int spawnCost = spawnAbility.watersapCost;
+        if (!WatersapManager.Instance.SpendWatersap(teamID, spawnCost))
         {
             if (debugNexus)
-                GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Watersap insuffisant pour spawner {rootbornData.unitName} (coût : {rootbornData.watersapCost})", this);
+                GameLogger.Warn(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Watersap insuffisant pour spawner {rootbornData.unitName} (coût : {spawnCost})", this);
             return false;
         }
 
@@ -171,7 +180,7 @@ public class NexusController : MonoBehaviour
             return false;
 
         if (debugNexus)
-            GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {rootbornData.watersapCost} Watersap)", this);
+            GameLogger.Log(GameLogger.Category.Spawn, $"🏛️ NexusController {gameObject.name} : Rootborn spawné (équipe {teamID}, coût {spawnCost} Watersap)", this);
 
         // Notifie le système de spawn pour sélection automatique
         if (EntitySpawnManager.Instance != null)

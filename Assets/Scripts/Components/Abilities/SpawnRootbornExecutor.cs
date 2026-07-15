@@ -1,11 +1,16 @@
 ﻿using UnityEngine;
 
 // Logique d'exécution de l'ability Spawn Rootborn du Nexus
-// Délègue à NexusController.TrySpawnRootborn() qui gère déjà le coût Watersap en interne
-// Le watersapCost dans SpawnRootbornAbility doit donc rester à 0
+// Délègue à NexusController.TrySpawnRootborn(), qui débite l'unique coût défini par l'ability.
 public class SpawnRootbornExecutor : AbilityExecutor
 {
-    public SpawnRootbornExecutor(AbilityData data) : base(data) { }
+    protected override bool SpendWatersapCost => false;
+
+    public SpawnRootbornExecutor(
+        AbilityData data,
+        long lastUsedTick,
+        System.Action<long> recordLastUsedTick)
+        : base(data, lastUsedTick, recordLastUsedTick) { }
 
     protected override bool ExecuteAbility(GameObject caster)
     {
@@ -16,7 +21,7 @@ public class SpawnRootbornExecutor : AbilityExecutor
             return false;
         }
 
-        // TrySpawnRootborn gère la vérification et la dépense du Watersap en interne
+        // Le Nexus débite le coût porté par son AbilityData afin de servir aussi la commande directe.
         bool success = nexus.TrySpawnRootborn();
 
         if (success)
