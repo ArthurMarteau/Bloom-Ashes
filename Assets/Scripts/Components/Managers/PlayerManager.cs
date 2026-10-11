@@ -8,11 +8,7 @@ public class PlayerManager : MonoBehaviour
 {
     public static PlayerManager Instance { get; private set; }
 
-    // ID du joueur local, conservé à 1 pour reproduire la scène actuelle.
-    [SerializeField] private int localPlayerID = 1;
-
-    // Palette indexée par PlayerSlot.colorIndex.
-    [SerializeField] private Color[] playerColors =
+    private static readonly Color[] DefaultPlayerColors =
     {
         Color.white,
         new Color(0f, 0.3724656f, 1f),
@@ -22,6 +18,12 @@ public class PlayerManager : MonoBehaviour
         new Color(0.5655279f, 0f, 1f),
         new Color(1f, 0.5571841f, 0f)
     };
+
+    // ID du joueur local, conservé à 1 pour reproduire la scène actuelle.
+    [SerializeField] private int localPlayerID = 1;
+
+    // Palette indexée par PlayerSlot.colorIndex.
+    [SerializeField] private Color[] playerColors = CreateDefaultPlayerColors();
 
     private MatchConfig matchConfig;
     private readonly AllianceSystem allianceSystem = new AllianceSystem();
@@ -119,6 +121,28 @@ public class PlayerManager : MonoBehaviour
             return playerColors[slot.colorIndex];
 
         return Color.white;
+    }
+
+    // Retourne directement une couleur de palette à partir du colorIndex sérialisé.
+    public Color GetPlayerColorByIndex(int colorIndex)
+    {
+        return playerColors != null && colorIndex > 0 && colorIndex < playerColors.Length
+            ? playerColors[colorIndex]
+            : Color.white;
+    }
+
+    // Retourne une couleur de la palette par défaut sans exiger une instance de scène.
+    public static Color GetDefaultPlayerColorByIndex(int colorIndex)
+    {
+        return colorIndex > 0 && colorIndex < DefaultPlayerColors.Length
+            ? DefaultPlayerColors[colorIndex]
+            : Color.white;
+    }
+
+    // Crée une copie sérialisable afin de ne pas exposer le tableau par défaut partagé.
+    private static Color[] CreateDefaultPlayerColors()
+    {
+        return (Color[])DefaultPlayerColors.Clone();
     }
 
     // Retourne l'alliance statique associée à une équipe.

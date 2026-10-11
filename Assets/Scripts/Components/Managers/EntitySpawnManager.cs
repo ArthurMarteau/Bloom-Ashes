@@ -64,7 +64,7 @@ public class EntitySpawnManager : MonoBehaviour
         if (entityBeingReplaced == null)
             OnEntitySpawnCompleted.Invoke(spawnedEntity);
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawnedEntity.name} instancié en {position} (équipe {teamID})", this);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawnedEntity.name} instancié en {position} (équipe {teamID})", this, teamID);
         return spawnedEntity;
     }
 
@@ -86,7 +86,7 @@ public class EntitySpawnManager : MonoBehaviour
         if (notifyDestroyed)
             NotifyEntityDestroyed(entity);
 
-        GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {entity.name} démontage visuel dans {visualDelay}s", this);
+        LogForEntity($" EntitySpawnManager : {entity.name} démontage visuel dans {visualDelay}s", entity);
         Destroy(entity, Mathf.Max(0f, visualDelay));
     }
 
@@ -118,7 +118,7 @@ public class EntitySpawnManager : MonoBehaviour
         finally
         {
             entityBeingReplaced = null;
-            GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {oldEntity.name} démontage visuel dans 0s", this);
+            LogForEntity($" EntitySpawnManager : {oldEntity.name} démontage visuel dans 0s", oldEntity);
             Destroy(oldEntity, 0f);
         }
     }
@@ -139,7 +139,7 @@ public class EntitySpawnManager : MonoBehaviour
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 EntitySpawnManager : {spawner.name} a spawné {spawnedEntity.name}", this);
+        LogForEntity($"🌱 EntitySpawnManager : {spawner.name} a spawné {spawnedEntity.name}", spawnedEntity);
         OnEntitySpawned.Invoke(spawner, spawnedEntity);
     }
 
@@ -153,14 +153,27 @@ public class EntitySpawnManager : MonoBehaviour
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🔄 EntitySpawnManager : {oldEntity.name} remplacé par {newEntity.name}", this);
+        LogForEntity($"🔄 EntitySpawnManager : {oldEntity.name} remplacé par {newEntity.name}", newEntity);
         OnEntityReplaced.Invoke(oldEntity, newEntity);
     }
 
     public void NotifyEntityDestroyed(GameObject destroyedEntity)
     {
         if (destroyedEntity == null) return;
-        GameLogger.Log(GameLogger.Category.Spawn, $" EntitySpawnManager : {destroyedEntity.name} détruit", this);
+        LogForEntity($" EntitySpawnManager : {destroyedEntity.name} détruit", destroyedEntity);
         OnEntityDestroyed.Invoke(destroyedEntity);
+    }
+
+    // Journalise un événement de spawn avec l'équipe mise en cache quand elle est connue.
+    private void LogForEntity(string message, GameObject entity)
+    {
+        if (EntityRegistry.Instance != null
+            && EntityRegistry.Instance.TryGetTeamID(entity, out int teamID))
+        {
+            GameLogger.Log(GameLogger.Category.Spawn, message, this, teamID);
+            return;
+        }
+
+        GameLogger.Log(GameLogger.Category.Spawn, message, this);
     }
 }

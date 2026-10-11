@@ -8,6 +8,7 @@ public struct PathRequest
     public Vector2Int start;
     public Vector2Int end;
     public GameObject unit;
+    public Func<Vector2Int, bool> isWalkable;
     public Action<List<Vector2Int>> callback;
     public long requestId;
 }
@@ -38,11 +39,11 @@ public class PathFindingScheduler
 
         request.requestId = requestId;
         pendingRequests.Enqueue(request);
+        requestUnits[requestId] = request.unit;
 
         if (request.unit != null)
         {
             activeRequestsByUnit[request.unit] = requestId;
-            requestUnits[requestId] = request.unit;
         }
 
         return requestId;
@@ -85,10 +86,12 @@ public class PathFindingScheduler
                 activeRequestsByUnit.Remove(request.unit);
             }
 
-            if (request.unit == null)
+            if (request.unit == null && request.isWalkable == null)
                 continue;
 
-            List<Vector2Int> path = pathCalculator(request.start, request.end, request.unit);
+            List<Vector2Int> path = request.isWalkable != null
+                ? PathFinding.FindStaticPath(request.start, request.end, request.isWalkable)
+                : pathCalculator(request.start, request.end, request.unit);
             request.callback?.Invoke(path);
             processedCount++;
         }

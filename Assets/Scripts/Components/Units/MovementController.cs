@@ -8,7 +8,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
     [Header("Movement Settings")]
     private float movementSpeed = 1f;
     private int ticksPerCell = SimulationClock.TICKS_PER_SECOND;
-    private const int RETRY_INTERVAL_TICKS = SimulationClock.TICKS_PER_SECOND / 2;
+    private const int RETRY_INTERVAL_TICKS = SimulationClock.TICKS_PER_SECOND * 2;
     [SerializeField] private float detourRatioThreshold = 3f;
     [SerializeField] private float earlyYieldThreshold = 0.3f;
 
@@ -80,7 +80,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
             MidpointRounding.AwayFromZero));
 
         if (debugMovement)
-            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: {movementSpeed} cases/s -> {ticksPerCell} ticks/case", this);
+            GameLogger.Log(GameLogger.Category.Movement, $"MovementController {gameObject.name}: {movementSpeed} cases/s -> {ticksPerCell} ticks/case", this, ownerPlayerID);
     }
 
     // Initialise les champs requis par les appels pouvant survenir dès le tick de spawn.
@@ -196,8 +196,15 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
             CancelRecoveryPause();
             if (moveState == MoveState.Blocked && orderedDestination == destination)
             {
-                consecutivePathFailures = 0;
-                RequestMove(destination, false, tick);
+                if (IsOrderedDestinationCamped(destination))
+                {
+                    StartRetryToDestination(destination);
+                }
+                else
+                {
+                    consecutivePathFailures = 0;
+                    RequestMove(destination, false, tick);
+                }
             }
         }
 
@@ -206,7 +213,12 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
             Vector2Int destination = retryDestination.Value;
             CancelRetry();
             if (moveState == MoveState.Blocked && orderedDestination == destination)
-                QueueRetryPath(destination);
+            {
+                if (IsOrderedDestinationCamped(destination))
+                    StartRetryToDestination(destination);
+                else
+                    QueueRetryPath(destination);
+            }
         }
 
         if (moveState == MoveState.SteppingToAnchor || moveState == MoveState.SteppingToCenter)
@@ -789,6 +801,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
     private void WatchBlockedDestination()
     {
         ClearCellSubscriptions();
+        notificationRepathIssuedThisStep = false;
         if (orderedDestination.HasValue)
             RegisterWatchedCell(orderedDestination.Value);
     }
@@ -848,7 +861,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
         ScheduleRetry(destination);
     }
 
-    // Lance un retry déterministe après deux secondes en ticks.
+    // Maintient l'ordre bloqué ; une destination campée attend exclusivement sa notification de libération.
     private void StartRetryToDestination(Vector2Int destination)
     {
         orderedDestination = destination;
@@ -860,9 +873,15 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
         ScheduleRetry(destination);
     }
 
-    // Programme l'échéance logique du retry.
+    // Programme le filet périodique uniquement pour un blocage sans occupant immobile notifiable.
     private void ScheduleRetry(Vector2Int destination)
     {
+        if (IsOrderedDestinationCamped(destination))
+        {
+            CancelRetry();
+            return;
+        }
+
         long tick = SimulationClockManager.Instance?.CurrentTick ?? 0;
         retryDestination = destination;
         retryAtTick = tick + RETRY_INTERVAL_TICKS;
@@ -1177,7 +1196,7 @@ public class MovementController : MonoBehaviour, IEvictable, ICellListener, ITic
     private void DebugControllerState()
     {
         GameLogger.Log(GameLogger.Category.Movement,
-            $"MovementController {gameObject.name}: {moveState}, cellule={currentCell}, progression={stepProgressTicks}/{activeStepDurationTicks}", this);
+            $"MovementController {gameObject.name}: {moveState}, cellule={currentCell}, progression={stepProgressTicks}/{activeStepDurationTicks}", this, ownerPlayerID);
     }
 
     // Dessine le chemin logique dans la vue Scene.

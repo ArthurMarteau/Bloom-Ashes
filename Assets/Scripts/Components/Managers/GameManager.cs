@@ -23,6 +23,9 @@ public class GameManager : MonoBehaviour
     public MatchState CurrentMatchState { get; private set; } = MatchState.Setup;
     public MatchConfig CurrentMatchConfig { get; private set; }
 
+    [Header("UI au démarrage")]
+    [SerializeField] private GameObject[] uiRootsToActivateOnStart;
+
     [Header("Match")]
     public UnityEngine.Events.UnityEvent<MatchState> OnMatchStateChanged = new UnityEngine.Events.UnityEvent<MatchState>();
     public UnityEngine.Events.UnityEvent<int, System.Collections.Generic.IReadOnlyList<int>> OnMatchEnded = new UnityEngine.Events.UnityEvent<int, System.Collections.Generic.IReadOnlyList<int>>();
@@ -59,8 +62,30 @@ public class GameManager : MonoBehaviour
     // Point d'entrée de la session — les équipes sont déjà enregistrées par PlayerManager
     private void Start()
     {
+        ActivateConfiguredUIRoots();
+
         if (debugGame)
             GameLogger.Log(GameLogger.Category.Selection, "🎮 GameManager: Session démarrée", this);
+    }
+
+    // Réactive les racines UI volontairement masquées pour le confort d'édition de la scène.
+    private void ActivateConfiguredUIRoots()
+    {
+        if (uiRootsToActivateOnStart == null)
+            return;
+
+        foreach (GameObject uiRoot in uiRootsToActivateOnStart)
+        {
+            if (uiRoot == null || uiRoot.activeSelf)
+                continue;
+
+            uiRoot.SetActive(true);
+            if (GameLogger.IsEnabled(GameLogger.Category.UI))
+            {
+                GameLogger.Log(GameLogger.Category.UI,
+                    $"GameManager : racine UI '{uiRoot.name}' réactivée au démarrage.", this);
+            }
+        }
     }
 
     // Termine le setup et démarre les systèmes déterministes du match.

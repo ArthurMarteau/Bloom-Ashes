@@ -21,6 +21,7 @@ public class GridManager : MonoBehaviour
 
     [Header("Debug")]
     [SerializeField] private Vector2Int debugCell;
+    [SerializeField] private bool includeUnitOccupancy;
 
     // Instance singleton
     public static GridManager Instance { get; private set; }
@@ -191,6 +192,13 @@ public class GridManager : MonoBehaviour
         return GridSystem.IsInBounds(coordinates.x, coordinates.y, gridWidth, gridHeight);
     }
 
+    // Retourne uniquement le blocage statique logique d'une case, sans tenir compte des unités.
+    public bool IsStaticBlocked(Vector2Int coordinates)
+    {
+        return !IsInBounds(coordinates)
+            || staticBlockedGrid != null && staticBlockedGrid[coordinates.x, coordinates.y];
+    }
+
     // Méthode principale pour PathFinding - détermine si une case est accessible pour une unité
     // Combine les règles d'occupation (unités), obstacles et terrain selon les capacités de l'unité
     // Interface unique pour toute la logique d'accessibilité via système de tags
@@ -292,10 +300,11 @@ public class GridManager : MonoBehaviour
             GameLogger.Log(GameLogger.Category.Grid, $"Terrain {gridPosition} défini comme {groundType.GetDisplayName()}", this);
     }
 
+    // Usage clic/diagnostic uniquement — jamais en logique de simulation.
     // Retourne l'unité présente sur une position de grille via Collider2D (null si aucune)
     // ATTENTION : Ne détecte que les unités dont transform.position est au centre de la case
     // Peut échouer si l'unité est en plein Lerp entre deux cases
-    // Pour PathFinding, utiliser GetUnitAtLogical() à la place
+    // En simulation, utiliser EntityRegistry.GetUnitAtLogicalPosition à la place.
     public GameObject GetUnitAt(Vector2Int gridPosition)
     {
         Vector3 worldPosition = GridToWorld(gridPosition);
@@ -303,6 +312,7 @@ public class GridManager : MonoBehaviour
         return unitCollider?.gameObject;
     }
 
+    // Usage clic/diagnostic uniquement — jamais en logique de simulation.
     // Retourne l'obstacle présent sur une position de grille (null si aucun)
     // Utilisé pour identifier quel obstacle occupe une case spécifique
     // Utile pour interactions, destruction et gestion d'effets
@@ -313,9 +323,10 @@ public class GridManager : MonoBehaviour
         return obstacleCollider?.gameObject;
     }
 
+    // Usage clic/diagnostic uniquement — jamais en logique de simulation.
     // Retourne le bâtiment de faction présent sur une position de grille (null si aucun)
     // Utilise le layer Buildings — le Nexus (Environment_Walkable) n'est PAS détecté ici
-    // Appelé par IsWalkableFor() pour bloquer le passage à travers les bâtiments de faction
+    // En simulation, utiliser EntityRegistry.GetBuildingAtLogicalPosition à la place.
     public GameObject GetBuildingAt(Vector2Int gridPosition)
     {
         if (buildingLayer.value == 0)
@@ -328,8 +339,10 @@ public class GridManager : MonoBehaviour
         return buildingCollider?.gameObject;
     }
 
+    // Usage clic/diagnostic uniquement — jamais en logique de simulation.
     // Retourne le Nexus présent sur une position de grille (null si aucun)
     // Utilise le layer Environment_Walkable car le Nexus n'est pas sur le layer Buildings
+    // En simulation, utiliser EntityRegistry.GetNexusAtLogicalPosition à la place.
     public GameObject GetNexusAt(Vector2Int gridPosition)
     {
         Vector3 worldPosition = GridToWorld(gridPosition);
@@ -353,6 +366,55 @@ public class GridManager : MonoBehaviour
     public float GetCellSize()
     {
         return cellSize;
+    }
+
+    // Affiche une carte ASCII complète de la walkability statique, du haut vers le bas.
+    [ContextMenu("Debug: Dump Walkability Map")]
+    private void DumpWalkabilityMap()
+    {
+        int yLabelWidth = Mathf.Max(1, (gridHeight - 1).ToString().Length);
+        System.Text.StringBuilder map =
+            new System.Text.StringBuilder((gridWidth + yLabelWidth + 4) * (gridHeight + 2));
+
+        map.Append(' ', yLabelWidth);
+        map.Append(" | ");
+        for (int x = 0; x < gridWidth; x++)
+            map.Append(x % 10);
+        map.AppendLine();
+
+        EntityRegistry registry = EntityRegistry.Instance;
+        for (int y = gridHeight - 1; y >= 0; y--)
+        {
+            map.Append(y.ToString().PadLeft(yLabelWidth));
+            map.Append(" | ");
+            for (int x = 0; x < gridWidth; x++)
+                map.Append(GetWalkabilityDebugCharacter(new Vector2Int(x, y), registry));
+            map.AppendLine();
+        }
+
+        GameLogger.Log(GameLogger.Category.Grid,
+            $"Walkability map ({gridWidth}x{gridHeight}) — # obstacle, N Nexus, ~ non marchable, u unité, . libre\\n{map}",
+            this);
+    }
+
+    // Résout le caractère de debug d'une cellule selon une priorité stable.
+    private char GetWalkabilityDebugCharacter(Vector2Int cell, EntityRegistry registry)
+    {
+        if (!IsInBounds(cell))
+            return 'X';
+        if (staticBlockedGrid != null && staticBlockedGrid[cell.x, cell.y])
+            return '#';
+        if (registry != null && registry.GetNexusAtLogicalPosition(cell) != null)
+            return 'N';
+        if (includeUnitOccupancy && registry != null
+            && registry.GetUnitAtLogicalPosition(cell) != null)
+        {
+            return 'u';
+        }
+        if (!UnitTypeHelper.CanWalkOnGround(UnitMovementType.Ground, GetGroundTypeAt(cell)))
+            return '~';
+
+        return '.';
     }
 
     // Affiche la grille dans l'éditeur et en jeu avec coloration selon le terrain

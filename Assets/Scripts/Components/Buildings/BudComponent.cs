@@ -93,14 +93,39 @@ public class BudComponent : MonoBehaviour, ITickable
         if (elapsedTicks < buildTimeTicks)
             return;
 
-        isProductionActive = false;
-
         if (unitInProduction == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production — unitInProduction null, spawn final impossible", this);
+            isProductionActive = false;
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production — unitInProduction null, spawn final impossible", this, teamID);
             DespawnBud(0f, true);
             return;
         }
+
+        EntityRegistry registry = EntityRegistry.Instance;
+        if (registry == null)
+        {
+            if (elapsedTicks == buildTimeTicks)
+            {
+                GameLogger.Warn(GameLogger.Category.Match,
+                    $"BudComponent {gameObject.name} : éclosion reportée, EntityRegistry indisponible", this, teamID);
+            }
+            return;
+        }
+
+        // Le Bud compte déjà comme une unité : son remplacement est neutre à la limite exacte.
+        if (registry.CountUnitsForTeam(teamID) > MatchRules.MAX_UNITS_PER_PLAYER)
+        {
+            if (elapsedTicks == buildTimeTicks)
+            {
+                GameLogger.Warn(GameLogger.Category.Match,
+                    $"BudComponent {gameObject.name} : éclosion reportée, limite de {MatchRules.MAX_UNITS_PER_PLAYER} unités atteinte pour l'équipe {teamID}", this, teamID);
+                if (PlayerManager.Instance != null && PlayerManager.Instance.IsLocalPlayer(teamID))
+                    ToastUI.Instance?.Show($"Limite d'unités atteinte ({MatchRules.MAX_UNITS_PER_PLAYER})", ToastUI.UnitLimitColor);
+            }
+            return;
+        }
+
+        isProductionActive = false;
 
         SpawnFinalUnit();
     }
@@ -116,14 +141,14 @@ public class BudComponent : MonoBehaviour, ITickable
 
         if (unitInProduction.unitPrefab == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — unitPrefab null pour {unitInProduction.unitName}", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — unitPrefab null pour {unitInProduction.unitName}", this, teamID);
             DespawnBud(0f, true);
             return;
         }
 
         if (EntitySpawnManager.Instance == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, spawn final impossible", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, spawn final impossible", this, teamID);
             DespawnBud(0f, true);
             return;
         }
@@ -150,11 +175,11 @@ public class BudComponent : MonoBehaviour, ITickable
         });
         if (spawnedUnit == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — remplacement impossible", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : SpawnFinalUnit — remplacement impossible", this, teamID);
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})", this);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : ✅ {unitInProduction.unitName} éclos (équipe {teamID})", this, teamID);
 
     }
 
@@ -183,7 +208,7 @@ public class BudComponent : MonoBehaviour, ITickable
 
         if (EntitySpawnManager.Instance == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, restitution impossible", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : EntitySpawnManager introuvable, restitution impossible", this, teamID);
             DespawnBud(0f, true);
             return;
         }
@@ -209,11 +234,11 @@ public class BudComponent : MonoBehaviour, ITickable
         });
         if (respawned == null)
         {
-            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : Cancel — restitution impossible", this);
+            GameLogger.Warn(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : Cancel — restitution impossible", this, teamID);
             return;
         }
 
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)", this);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : production annulée — {respawned.name} restitué ({budCurrentHP} HP)", this, teamID);
 
     }
 
@@ -273,6 +298,6 @@ public class BudComponent : MonoBehaviour, ITickable
         }
 
         float elapsedSeconds = (float)elapsedTicks / SimulationClock.TICKS_PER_SECOND;
-        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedSeconds:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}", this);
+        GameLogger.Log(GameLogger.Category.Spawn, $"🌱 BudComponent {gameObject.name} : {unitInProduction.unitName} | Équipe {teamID} | Progression {Progress * 100f:F0}% ({elapsedSeconds:F1}s / {productionBuildTime:F1}s) | Annulé : {isCancelled}", this, teamID);
     }
 }

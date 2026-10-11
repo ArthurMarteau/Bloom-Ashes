@@ -260,7 +260,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
             return;
         }
 
-        int spawnTeamID = teamComponent != null ? teamComponent.GetTeamID() : 0;
+        int spawnTeamID = AllianceSystem.NEUTRAL_ALLIANCE;
         if (EntitySpawnManager.Instance == null)
         {
             GameLogger.Warn(GameLogger.Category.Spawn,
@@ -411,7 +411,7 @@ public class BuildingStatsComponent : MonoBehaviour, IDamageable, IMultiTile, IS
         if (WatersapManager.Instance == null || !WatersapManager.Instance.CanSpend(teamID, cost))
             return false;
 
-        WatersapManager.Instance.SpendWatersap(teamID, cost);
+        WatersapManager.Instance.SpendWatersap(teamID, cost, SpendReason.Upgrade);
         currentTier++;
         OnTierUpgraded.Invoke();
 

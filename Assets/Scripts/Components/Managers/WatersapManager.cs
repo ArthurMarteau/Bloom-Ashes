@@ -30,6 +30,7 @@ public class WatersapManager : MonoBehaviour, ITickable
     // Événement déclenché à chaque changement de watersap → (teamID, newAmount)
     public UnityEvent<int, int> OnWatersapChanged = new UnityEvent<int, int>();
     public UnityEvent<int, int> OnWatersapAdded = new UnityEvent<int, int>();
+    public UnityEvent<int, int, SpendReason> OnWatersapSpent = new UnityEvent<int, int, SpendReason>();
 
     // Initialise le singleton
     private void Awake()
@@ -178,7 +179,7 @@ public class WatersapManager : MonoBehaviour, ITickable
     }
 
     // Tente de dépenser du watersap — retourne false si le solde est insuffisant
-    public bool SpendWatersap(int teamID, int amount)
+    public bool SpendWatersap(int teamID, int amount, SpendReason reason = SpendReason.Other)
     {
         if (!watersapByTeam.TryGetValue(teamID, out int current))
         {
@@ -199,6 +200,7 @@ public class WatersapManager : MonoBehaviour, ITickable
             GameLogger.Log(GameLogger.Category.Watersap, $"💧 WatersapManager : équipe {teamID} -{amount} watersap → {newAmount}/{watersapData.maxWatersap}", this);
 
         OnWatersapChanged.Invoke(teamID, newAmount);
+        OnWatersapSpent.Invoke(teamID, amount, reason);
         return true;
     }
 

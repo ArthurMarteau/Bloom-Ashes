@@ -58,6 +58,24 @@ public class OrderManager : MonoBehaviour
 
         // Clic droit = ordre de mouvement, d'attaque ou de chase selon la cible
         inputManager.OnRightClickDown.AddListener(HandleRightClickOrder);
+
+        if (selectionManager != null)
+        {
+            selectionManager.OnUnitsSelected.AddListener(ResetTargetCacheOnUnitsSelected);
+            selectionManager.OnSelectionCleared.AddListener(ResetTargetCache);
+        }
+    }
+
+    // Invalide la dernière cible lorsqu'une nouvelle sélection devient active.
+    private void ResetTargetCache()
+    {
+        lastTargetUnit = null;
+    }
+
+    // Adapte l'événement de sélection d'unités à l'invalidation du cache cible.
+    private void ResetTargetCacheOnUnitsSelected(List<GameObject> selectedUnits)
+    {
+        ResetTargetCache();
     }
 
     // Traite les ordres de mouvement, chase ou attaque via clic droit
@@ -78,8 +96,8 @@ public class OrderManager : MonoBehaviour
         if (GameLogger.IsEnabled(GameLogger.Category.Selection))
             GameLogger.Log(GameLogger.Category.Selection, $"🎯 OrderManager: clic monde {worldPosition} → case {debugCell}, collider détecté: {(targetCollider != null ? targetCollider.gameObject.name : "aucun")}", this);
 
-        // Un ordre groupé sur n'importe quelle case d'une Foundation reste un ordre de mouvement.
-        if (selectionManager.GetSelectedUnitCount() > 1 && EntityRegistry.Instance?.GetFoundationAt(debugCell) != null)
+        // Un ordre sur n'importe quelle case d'une Foundation reste un ordre de mouvement.
+        if (EntityRegistry.Instance?.GetFoundationAt(debugCell) != null)
         {
             HandleSimpleMovementOrder(worldPosition);
             return;
@@ -440,6 +458,12 @@ public class OrderManager : MonoBehaviour
         if (inputManager != null)
         {
             inputManager.OnRightClickDown.RemoveListener(HandleRightClickOrder);
+        }
+
+        if (selectionManager != null)
+        {
+            selectionManager.OnUnitsSelected.RemoveListener(ResetTargetCacheOnUnitsSelected);
+            selectionManager.OnSelectionCleared.RemoveListener(ResetTargetCache);
         }
     }
 }

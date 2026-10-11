@@ -65,7 +65,10 @@ public class TransformationController : MonoBehaviour, ITickable
 
         int teamID = ownTeam.GetTeamID();
         bool isRootborn = GetComponent<RootbornStockComponent>() != null;
-        Vector2Int unitCell = movementController.GetCurrentGridPosition();
+        // Le registre est déjà synchronisé lors d'un remplacement, avant l'initialisation du MovementController.
+        Vector2Int unitCell;
+        if (!EntityRegistry.Instance.TryGetLogicalPosition(gameObject, out unitCell))
+            unitCell = movementController.GetCurrentGridPosition();
         Vector2Int[] offsets = RangeOffsets.GetOffsets(1);
 
         foreach (Vector2Int offset in offsets)
@@ -132,7 +135,10 @@ public class TransformationController : MonoBehaviour, ITickable
             return null;
         }
 
-        Vector2Int myCell = movementController.GetCurrentGridPosition();
+        // Privilégie la position logique canonique, avec repli pour les entités non enregistrées.
+        Vector2Int myCell;
+        if (EntityRegistry.Instance == null || !EntityRegistry.Instance.TryGetLogicalPosition(gameObject, out myCell))
+            myCell = movementController.GetCurrentGridPosition();
         GameObject foundationObject = EntityRegistry.Instance?.GetFoundationAt(myCell);
         FoundationComponent foundation = foundationObject != null ? foundationObject.GetComponent<FoundationComponent>() : null;
 
@@ -202,11 +208,20 @@ public class TransformationController : MonoBehaviour, ITickable
         if (!CanTransform(unitData))
         {
             Log($"ExecuteTransform refuse - batiment compatible absent ou Watersap insuffisant pour {unitData.unitName}");
+            if (!WatersapManager.Instance.CanSpend(teamID, unitData.watersapCost)
+                && PlayerManager.Instance != null && PlayerManager.Instance.IsLocalPlayer(teamID))
+            {
+                ToastUI.Instance?.Show("Watersap insuffisant", ToastUI.InsufficientWatersapColor);
+            }
             return;
         }
 
-        if (!WatersapManager.Instance.SpendWatersap(teamID, unitData.watersapCost))
+        if (!WatersapManager.Instance.SpendWatersap(teamID, unitData.watersapCost, SpendReason.Production))
+        {
+            if (PlayerManager.Instance != null && PlayerManager.Instance.IsLocalPlayer(teamID))
+                ToastUI.Instance?.Show("Watersap insuffisant", ToastUI.InsufficientWatersapColor);
             return;
+        }
 
         UnitFreezer.Freeze(gameObject, disableComponents: true, freezeAnimator: false);
 

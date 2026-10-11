@@ -64,6 +64,17 @@ public class PathFindingManager : MonoBehaviour
         return scheduler.Enqueue(request);
     }
 
+    // Ajoute un chemin statique au même budget, sans remplacer la requête d'une unité.
+    public long RequestStaticPath(
+        Vector2Int start, Vector2Int end, Func<Vector2Int, bool> isWalkable,
+        Action<List<Vector2Int>> callback)
+    {
+        return scheduler.Enqueue(new PathRequest
+        {
+            start = start, end = end, isWalkable = isWalkable, callback = callback
+        });
+    }
+
     // Annule une demande de chemin encore en attente
     public void CancelRequest(long requestId)
     {

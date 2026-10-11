@@ -15,6 +15,7 @@ using UnityEngine;
 //   └── Slot3 (ProductionSlotUI)
 public class ActionPanelUI : MonoBehaviour
 {
+    private bool spectatorMode;
     [Header("Références")]
     [Tooltip("4 slots assignés dans l'Inspector, index 0 à 3")]
     [SerializeField] private List<ProductionSlotUI> slots;
@@ -701,12 +702,20 @@ public class ActionPanelUI : MonoBehaviour
     // Active ce GameObject et lance l'animation de scale X 0 → 1
     private void ShowPanel()
     {
+        if (spectatorMode) { HidePanel(); return; }
         gameObject.SetActive(true);
 
         if (showAnimationCoroutine != null)
             selectionManager.StopCoroutine(showAnimationCoroutine);
 
         showAnimationCoroutine = selectionManager.StartCoroutine(AnimateShow());
+    }
+
+    // Verrouille l'UI d'actions pendant une observation en lecture seule.
+    public void SetSpectatorMode(bool active)
+    {
+        spectatorMode = active;
+        if (active) HidePanel();
     }
 
     // Masque ce GameObject et remet le scale X à 0 instantanément

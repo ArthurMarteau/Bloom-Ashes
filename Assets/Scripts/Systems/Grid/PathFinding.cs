@@ -84,7 +84,8 @@ public static class PathFinding
             }
 
             // Lance le calcul A* et retourne le résultat
-            List<Vector2Int> calculatedPath = ExecuteAStar(startPosition, endPosition, unit);
+            List<Vector2Int> calculatedPath = ExecuteAStar(startPosition, endPosition,
+                cell => GridManager.Instance.IsWalkableFor(cell, unit), unit.GetInstanceID());
 
             if (GameLogger.IsEnabled(GameLogger.Category.Movement))
                 GameLogger.Log(GameLogger.Category.Movement, $"Chemin calculé pour {UnitTypeHelper.GetDisplayName(unit)} : {startPosition} -> {endPosition}, {calculatedPath.Count} étapes", null);
@@ -96,13 +97,29 @@ public static class PathFinding
         }
     }
 
+    // Calcule un chemin de terrain déterministe, sans unité ni occupation temporaire.
+    public static List<Vector2Int> FindStaticPath(
+        Vector2Int startPosition, Vector2Int endPosition, Func<Vector2Int, bool> isWalkable)
+    {
+        try
+        {
+            if (isWalkable == null || !isWalkable(endPosition))
+                return new List<Vector2Int>();
+            return ExecuteAStar(startPosition, endPosition, isWalkable, 0);
+        }
+        finally
+        {
+            ReleaseAll();
+        }
+    }
+
     // Implémentation A* avec MinHeap pour extraction O(log n) du nœud optimal
     // openList (MinHeap) : extraction du meilleur nœud en O(log n) au lieu de O(n)
     // openDict (Dictionary) : lookup d'un nœud existant par position en O(1) au lieu de O(n)
-    private static List<Vector2Int> ExecuteAStar(Vector2Int startPosition, Vector2Int endPosition, GameObject unit)
+    private static List<Vector2Int> ExecuteAStar(
+        Vector2Int startPosition, Vector2Int endPosition,
+        Func<Vector2Int, bool> isWalkable, int tieBreakSeed)
     {
-        int tieBreakSeed = unit != null ? unit.GetInstanceID() : 0;
-
         // Crée le nœud de départ et l'ajoute aux deux structures
         PathNode startNode = Rent(startPosition, tieBreakSeed);
         startNode.hCost = CalculateHCost(startPosition, endPosition);
@@ -130,7 +147,7 @@ public static class PathFinding
             {
                 Vector2Int neighborPosition = currentNode.position + direction;
 
-                if (!GridManager.Instance.IsWalkableFor(neighborPosition, unit))
+                if (!isWalkable(neighborPosition))
                     continue;
 
                 // Ignore les nœuds déjà traités définitivement
@@ -164,7 +181,7 @@ public static class PathFinding
 
         // Aucun chemin trouvé après exploration complète
         if (GameLogger.IsEnabled(GameLogger.Category.Movement))
-            GameLogger.Warn(GameLogger.Category.Movement, $"Aucun chemin trouvé entre {startPosition} et {endPosition} pour {UnitTypeHelper.GetDisplayName(unit)}", null);
+            GameLogger.Warn(GameLogger.Category.Movement, $"Aucun chemin trouvé entre {startPosition} et {endPosition}", null);
         return new List<Vector2Int>();
     }
 

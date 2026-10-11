@@ -263,6 +263,13 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Applique une transition de sélection unique ou unité depuis clic ou API externe
     private void ApplySelection(SelectionType selectionType, GameObject entity, Vector2Int gridPosition, Vector3? worldClickPosition, bool additive)
     {
+        if (entity != null && SpectatorController.Instance != null && !SpectatorController.Instance.CanObserveEntity(entity))
+        {
+            state.Clear();
+            SynchronizeSelectionVisuals(null);
+            FireSelectionEvent();
+            return;
+        }
         switch (selectionType)
         {
             case SelectionType.Units:
@@ -328,6 +335,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Remplace la sélection par une liste d'unités issue du rectangle
     private void ApplyUnitListSelection(List<GameObject> units)
     {
+        if (SpectatorController.Instance != null)
+            units.RemoveAll(unit => !SpectatorController.Instance.CanObserveEntity(unit));
         ClearSelectionAnchor();
         state.SetUnits(units);
         SynchronizeSelectionVisuals(null);
@@ -510,7 +519,9 @@ public class SelectionManager : MonoBehaviour, ICellListener
         if (bestHit != null)
         {
             SelectionType selectionType = SelectionResolver.Classify(bestHit, out GameObject entity);
-            ApplySelection(selectionType, entity, Vector2Int.zero, lastPosition, false);
+            Vector2Int? fallbackCell = TryWorldToGridCell(lastPosition);
+            SetManualSelectionAnchor(fallbackCell);
+            ApplySelection(selectionType, entity, fallbackCell ?? Vector2Int.zero, lastPosition, false);
             GameLogger.Log(GameLogger.Category.Selection, $" SelectionManager : Fallback vers {bestHit.name} après destruction", this);
             return;
         }
@@ -721,6 +732,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Réagit à l'arrivée d'une unité sur la cellule suivie.
     public void OnUnitEntered(Vector2Int cell, GameObject unit)
     {
+        if (IsForeignPlayerEntity(unit))
+            return;
         if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(unit))
             return;
         if (!watchedSelectionCells.Contains(cell))
@@ -734,6 +747,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Réagit au départ d'une unité depuis la cellule suivie.
     public void OnUnitLeft(Vector2Int cell, GameObject unit)
     {
+        if (IsForeignPlayerEntity(unit))
+            return;
         if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(unit))
             return;
         if (!watchedSelectionCells.Contains(cell))
@@ -747,7 +762,7 @@ public class SelectionManager : MonoBehaviour, ICellListener
             return;
         }
 
-        ResolveWatchedCellSelection(selectionAnchorCell.HasValue ? selectionAnchorCell.Value : cell);
+        ResolveWatchedCellSelection(cell);
     }
 
     // Indique si l'unité sortante est l'unique unité sélectionnée, auquel cas la sélection la suit.
@@ -868,6 +883,18 @@ public class SelectionManager : MonoBehaviour, ICellListener
             return;
         }
 
+        if (IsForeignPlayerEntity(spawnedEntity))
+            return;
+
+        if (state.Contains(spawnedEntity))
+        {
+            SetManualSelectionAnchor(
+                TryGetEntityCell(spawnedEntity, out Vector2Int selectedSpawnCell)
+                    ? selectedSpawnCell
+                    : (Vector2Int?)null);
+            return;
+        }
+
         if (state.Contains(spawner))
         {
             SetManualSelectionAnchor(TryGetEntityCell(spawnedEntity, out Vector2Int spawnedCell) ? spawnedCell : (Vector2Int?)null);
@@ -918,16 +945,28 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Réagit à tout spawn sur l'ancre suivie ou dans le voisinage de la sélection.
     private void HandleEntitySpawnCompleted(GameObject spawnedEntity)
     {
+        if (IsForeignPlayerEntity(spawnedEntity))
+            return;
         if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(spawnedEntity))
             return;
         if (spawnedEntity == null || !TryGetEntityCell(spawnedEntity, out Vector2Int spawnedCell))
+            return;
+        if (state.Contains(spawnedEntity))
             return;
 
         bool isWatchedCell = watchedSelectionCells.Contains(spawnedCell)
             || (selectionAnchorCell.HasValue && selectionAnchorCell.Value == spawnedCell);
         if (isWatchedCell)
         {
-            ResolveWatchedCellSelection(selectionAnchorCell.HasValue ? selectionAnchorCell.Value : spawnedCell);
+            GameObject resolved = SelectionResolver.ResolveAtCell(spawnedCell);
+            if (resolved == spawnedEntity)
+            {
+                SetManualSelectionAnchor(spawnedCell);
+                SelectGameObject(spawnedEntity);
+                return;
+            }
+
+            ResolveWatchedCellSelection(spawnedCell);
             return;
         }
 
@@ -950,6 +989,8 @@ public class SelectionManager : MonoBehaviour, ICellListener
     // Re-résout l'ancre quand l'entité retirée était la sélection courante.
     private void HandleEntityDespawned(GameObject despawnedEntity)
     {
+        if (IsForeignPlayerEntity(despawnedEntity))
+            return;
         if (EntitySpawnManager.Instance != null && EntitySpawnManager.Instance.IsBeingReplaced(despawnedEntity))
             return;
         if (despawnedEntity == null || !state.Contains(despawnedEntity))
@@ -1060,6 +1101,40 @@ public class SelectionManager : MonoBehaviour, ICellListener
         }
 
         SelectionType selectionType = SelectionResolver.Classify(unit, out GameObject entity);
-        ApplySelection(selectionType, entity, Vector2Int.zero, unit.transform.position, false);
+        Vector2Int gridPosition = Vector2Int.zero;
+        Vector3? worldPosition = unit.transform.position;
+        if (TryGetEntityCell(entity, out Vector2Int entityCell))
+        {
+            gridPosition = entityCell;
+            SetManualSelectionAnchor(entityCell);
+            if (GridManager.Instance != null)
+                worldPosition = GridManager.Instance.GridToWorld(entityCell);
+        }
+        else
+        {
+            ClearSelectionAnchor();
+        }
+
+        ApplySelection(selectionType, entity, gridPosition, worldPosition, false);
+    }
+
+    // Indique si une entité appartient explicitement à un autre joueur que le joueur local.
+    private static bool IsForeignPlayerEntity(GameObject entity)
+    {
+        if (entity == null || EntityRegistry.Instance == null || PlayerManager.Instance == null)
+            return false;
+
+        return EntityRegistry.Instance.TryGetTeamID(entity, out int teamID)
+            && !PlayerManager.Instance.IsLocalPlayer(teamID);
+    }
+
+    // Vide la sélection locale et notifie les panneaux dépendants.
+    public void ClearSelection()
+    {
+        state.Clear();
+        SynchronizeSelectionVisuals(null);
+        FireSelectionEvent();
+        ClearSelectionAnchor();
+        UpdateWatchedSelectionCell(null);
     }
 }

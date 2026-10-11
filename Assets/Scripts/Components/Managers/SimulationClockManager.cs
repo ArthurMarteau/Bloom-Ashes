@@ -13,6 +13,7 @@ public class SimulationClockManager : MonoBehaviour
 
     public long CurrentTick => clock.CurrentTick;
     public SimulationClock SimulationRandom => clock;
+    public PendingDamageResolver PendingDamage => pendingDamageResolver;
     public float InterpolationAlpha => Mathf.Clamp01(
         (Time.time - lastFixedUpdateTime) / Mathf.Max(Time.fixedDeltaTime, 0.0001f));
 

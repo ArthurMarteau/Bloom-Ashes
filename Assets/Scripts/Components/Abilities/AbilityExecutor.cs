@@ -52,12 +52,16 @@ public abstract class AbilityExecutor : IAbility
             if (!WatersapManager.Instance.CanSpend(team.GetTeamID(), abilityData.watersapCost))
             {
                 GameLogger.Log(GameLogger.Category.UI, $"💧 Watersap insuffisant pour {abilityData.abilityName} (coût : {abilityData.watersapCost})", null);
+                HandleInsufficientWatersap(team.GetTeamID());
                 return false;
             }
         }
 
         return true;
     }
+
+    // Laisse une ability spécialisée présenter un feedback local sans modifier la validation.
+    protected virtual void HandleInsufficientWatersap(int teamID) { }
 
     // Exécute l'ability avec une validation unique, puis mémorise le cooldown en cas de succès.
     public bool Execute(GameObject caster)
@@ -69,7 +73,7 @@ public abstract class AbilityExecutor : IAbility
         {
             TeamComponent team = caster.GetComponent<TeamComponent>();
             if (team != null)
-                WatersapManager.Instance.SpendWatersap(team.GetTeamID(), abilityData.watersapCost);
+                WatersapManager.Instance.SpendWatersap(team.GetTeamID(), abilityData.watersapCost, SpendReason.Ability);
         }
 
         if (!ExecuteAbility(caster))

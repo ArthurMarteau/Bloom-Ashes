@@ -12,6 +12,20 @@ public class SpawnRootbornExecutor : AbilityExecutor
         System.Action<long> recordLastUsedTick)
         : base(data, lastUsedTick, recordLastUsedTick) { }
 
+    // Ignore strictement toute commande supplémentaire tant que le Nexus porte déjà une intention.
+    public override bool CanExecute(GameObject caster)
+    {
+        NexusController nexus = caster != null ? caster.GetComponent<NexusController>() : null;
+        return nexus != null && !nexus.HasPendingSpawn && base.CanExecute(caster);
+    }
+
+    // Affiche le refus Watersap uniquement pour le joueur propriétaire local du Nexus.
+    protected override void HandleInsufficientWatersap(int teamID)
+    {
+        if (PlayerManager.Instance != null && PlayerManager.Instance.IsLocalPlayer(teamID))
+            ToastUI.Instance?.Show("Watersap insuffisant", ToastUI.InsufficientWatersapColor);
+    }
+
     protected override bool ExecuteAbility(GameObject caster)
     {
         NexusController nexus = caster.GetComponent<NexusController>();
@@ -22,7 +36,7 @@ public class SpawnRootbornExecutor : AbilityExecutor
         }
 
         // Le Nexus débite le coût porté par son AbilityData afin de servir aussi la commande directe.
-        bool success = nexus.TrySpawnRootborn();
+        bool success = nexus.ExecuteSpawnCommand();
 
         if (success)
             GameLogger.Log(GameLogger.Category.Spawn, $"✅ {abilityData.abilityName} : Rootborn spawné avec succès", null);

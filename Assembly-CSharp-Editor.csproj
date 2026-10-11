@@ -1080,9 +1080,9 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="Assembly-CSharp.csproj">
-      <Project>{800b8109-178d-96df-a09f-83133b71980f}</Project>
-      <Name>Assembly-CSharp</Name>
+    <ProjectReference Include="BloomAndAshes.csproj">
+      <Project>{aeb1865c-ba1b-e53b-f0ea-d5e3177f8c53}</Project>
+      <Name>BloomAndAshes</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

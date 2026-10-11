@@ -60,3 +60,10 @@ Hybride couche archi + sous-dossiers feature (Data/Units/, Systems/Grid/, Compon
 
 - **GDD.md** → Game design, factions, mécaniques, unités, règles Netcode (Lockstep)
 - **ARCHITECTURE.md** → Carte du projet et points d'entrée canoniques
+
+## Flux Menu → Game
+
+- `MenuManager` est le point d'entrée de navigation de la scène Menu ; `SetupPanelUI` construit et valide la `MatchConfig`.
+- `MatchConfigCarrier` transporte cette configuration entre scènes, séparément du `MatchRecordCarrier` réservé au résultat.
+- `MatchBootstrapper` résout `mapID` dans sa liste sérialisée de `MapData` puis appelle `MatchInitializer.StartMatch` ; `DevMatchLauncher` ne sert de fallback que sans lancement issu du Menu.
+- `PlayerSlot.aiDifficulty` (`Easy`, `Normal`, `Hard`, défaut `Normal`) est une donnée déterministe encore inerte jusqu'à l'implémentation de l'IA.

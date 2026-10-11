@@ -13,7 +13,6 @@ MonoBehaviour:
   m_Name: SpawnRootborn_Ability
   m_EditorClassIdentifier: Assembly-CSharp::SpawnRootbornAbility
   abilityName: Spawn Rootborn
-  icon: {fileID: 21300000, guid: 4cc7c168ed252d74e96ad1ee0456ee19, type: 3}
   watersapCost: 40
   cooldownDuration: 0
   vfxOnExecute: {fileID: 0}
